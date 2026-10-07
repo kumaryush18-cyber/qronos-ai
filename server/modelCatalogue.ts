@@ -40,6 +40,32 @@ const claude = (id: string, displayName: string, inputUsdPerMillion: number, out
 
 export const TOKENFORGE_MODEL_CATALOGUE = [
   {
+    id: "claude-opus-5.5",
+    displayName: "Claude Opus 5.5",
+    description: "Next-generation Anthropic frontier model featuring deep reasoning, exceptional code synthesis, and autonomous multi-step problem solving.",
+    providerSlug: TOKENROUTER_PROVIDER_SLUG,
+    providerName: "Claude",
+    capabilities: ["reasoning", "coding", "streaming", "thinking"],
+    inputUsdPerMillion: 15.0,
+    outputUsdPerMillion: 75.0,
+    pricingSource: "TokenForge Claude Opus 5.5 pricing",
+    pricingUrl: PRICING_URL,
+    isPremium: true,
+  },
+  {
+    id: "gpt-6-sol",
+    displayName: "GPT 6 Sol",
+    description: "Next-generation OpenAI frontier reasoning model featuring Sol high-velocity inference, autonomous software engineering, and extended chain-of-thought.",
+    providerSlug: TOKENROUTER_PROVIDER_SLUG,
+    providerName: "OpenAI",
+    capabilities: ["reasoning", "coding", "streaming", "thinking"],
+    inputUsdPerMillion: 15.0,
+    outputUsdPerMillion: 75.0,
+    pricingSource: "TokenForge GPT 6 Sol pricing",
+    pricingUrl: PRICING_URL,
+    isPremium: true,
+  },
+  {
     id: "gpt-6-astra",
     displayName: "GPT-6 Astra",
     description: "Next-generation OpenAI frontier reasoning model featuring ultra-deep Astra chain-of-thought, code synthesis, and multimodal capability.",
@@ -341,6 +367,16 @@ export function normalizeModelIdentifier(raw: string | unknown): string {
   }
   if (dashed === "glm" || dashed === "glm-5" || dashed === "glm5") {
     if (modelById.has("glm-5.3")) return "glm-5.3";
+  }
+
+  // Claude Opus 5.5 aliases
+  if (dashed === "claude-opus-5.5" || dashed === "claude-5.5-opus" || dashed === "opus-5.5" || dashed === "opus5.5" || dashed === "anthropic/claude-opus-5.5") {
+    if (modelById.has("claude-opus-5.5")) return "claude-opus-5.5";
+  }
+
+  // GPT-6 Sol aliases
+  if (dashed === "gpt-6-sol" || dashed === "gpt6-sol" || dashed === "gpt-6sol" || dashed === "sol" || dashed === "gpt-sol" || dashed === "openai/gpt-6-sol") {
+    if (modelById.has("gpt-6-sol")) return "gpt-6-sol";
   }
 
   // Claude Opus aliases

@@ -35,7 +35,7 @@ export function AccountRow({
 }) {
   const utils = trpc.useUtils();
   const [creditAmount, setCreditAmount] = useState("");
-  const [creditTarget, setCreditTarget] = useState<"bundle" | "payg">("payg");
+  const [creditTarget, setCreditTarget] = useState<"bundle" | "payg" | "tokens">("payg");
   const [creditAction, setCreditAction] = useState<"add" | "set">("add");
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteConfirmation, setDeleteConfirmation] = useState("");
@@ -70,7 +70,11 @@ export function AccountRow({
         utils.admin.accounts.invalidate(),
         utils.admin.activity.invalidate(),
       ]);
-      if (result.balanceType === "payg") {
+      if (result.balanceType === "tokens") {
+        const addedM = (result as any).amountTokens ? ((result as any).amountTokens / 1_000_000).toLocaleString() : ((result.amountNanos ?? 0) / 1_000_000).toLocaleString();
+        const totalM = (((result as any).codingPlanTokens ?? 0) / 1_000_000).toLocaleString();
+        toast.success(`${addedM}M coding tokens added; balance is now ${totalM}M tokens`);
+      } else if (result.balanceType === "payg") {
         toast.success(
           `$${((result.amountNanos ?? 0) / 1_000_000_000).toFixed(2)} PAYG balance added; PAYG balance is now $${(((result as any).paygBalanceNanos ?? 0) / 1_000_000_000).toFixed(2)}`
         );
@@ -89,12 +93,16 @@ export function AccountRow({
         utils.admin.accounts.invalidate(),
         utils.admin.activity.invalidate(),
       ]);
-      const targetFormatted = `$${(result.targetAmountNanos / 1_000_000_000).toFixed(2)}`;
-      if (result.balanceType === "payg") {
+      if (result.balanceType === "tokens") {
+        const targetM = (result as any).targetTokens ? ((result as any).targetTokens / 1_000_000).toLocaleString() : ((result.targetAmountNanos ?? 0) / 1_000_000).toLocaleString();
+        toast.success(`Coding tokens set to ${targetM}M tokens for ${account.name || account.email}`);
+      } else if (result.balanceType === "payg") {
+        const targetFormatted = `$${(result.targetAmountNanos / 1_000_000_000).toFixed(2)}`;
         toast.success(
           `PAYG balance set to ${targetFormatted} for ${account.name || account.email}`
         );
       } else {
+        const targetFormatted = `$${(result.targetAmountNanos / 1_000_000_000).toFixed(2)}`;
         toast.success(
           `Bundle credits set to ${targetFormatted} for ${account.name || account.email}`
         );
@@ -263,15 +271,21 @@ export function AccountRow({
         </div>
       </div>
       <div>
-        <div className="flex items-center justify-between gap-1">
+        <div className="grid grid-cols-3 gap-1.5 pb-1 border-b border-white/5">
           <div>
-            <p className="text-[10px] uppercase tracking-[.12em] text-[#77798b]">Bundle credit</p>
-            <p className="mt-0.5 text-xs font-bold font-mono text-[#c9ff73]">{formatCredits(account.balanceNanos)}</p>
+            <p className="text-[9px] uppercase tracking-[.10em] text-[#77798b]">Bundle ($)</p>
+            <p className="mt-0.5 text-[11px] font-bold font-mono text-[#c9ff73]">{formatCredits(account.balanceNanos)}</p>
+          </div>
+          <div className="text-center">
+            <p className="text-[9px] uppercase tracking-[.10em] text-rose-400 font-semibold">PAYG ($)</p>
+            <p className="mt-0.5 text-[11px] font-bold font-mono text-rose-300">
+              {formatCredits(account.paygBalanceNanos ?? 0)}
+            </p>
           </div>
           <div className="text-right">
-            <p className="text-[10px] uppercase tracking-[.12em] text-rose-400 font-semibold">PAYG balance</p>
-            <p className="mt-0.5 text-xs font-bold font-mono text-rose-300">
-              {formatCredits(account.paygBalanceNanos ?? 0)}
+            <p className="text-[9px] uppercase tracking-[.10em] text-cyan-400 font-semibold">Coding (M)</p>
+            <p className="mt-0.5 text-[11px] font-bold font-mono text-cyan-300">
+              {((account.codingPlanTokens ?? 0) / 1_000_000).toLocaleString()}M
             </p>
           </div>
         </div>
@@ -288,7 +302,7 @@ export function AccountRow({
             <button
               type="button"
               onClick={() => setCreditTarget("payg")}
-              className={`flex-1 py-0.5 text-[9px] font-bold rounded transition-all cursor-pointer ${
+              className={`flex-1 py-0.5 text-[8.5px] font-bold rounded transition-all cursor-pointer ${
                 creditTarget === "payg"
                   ? "bg-rose-500/25 text-rose-300 border border-rose-500/40 shadow-sm"
                   : "text-neutral-400 hover:text-white"
@@ -299,13 +313,24 @@ export function AccountRow({
             <button
               type="button"
               onClick={() => setCreditTarget("bundle")}
-              className={`flex-1 py-0.5 text-[9px] font-bold rounded transition-all cursor-pointer ${
+              className={`flex-1 py-0.5 text-[8.5px] font-bold rounded transition-all cursor-pointer ${
                 creditTarget === "bundle"
                   ? "bg-[#c9ff73]/25 text-[#c9ff73] border border-[#c9ff73]/40 shadow-sm"
                   : "text-neutral-400 hover:text-white"
               }`}
             >
-              Bundle
+              Bundle ($)
+            </button>
+            <button
+              type="button"
+              onClick={() => setCreditTarget("tokens")}
+              className={`flex-1 py-0.5 text-[8.5px] font-bold rounded transition-all cursor-pointer ${
+                creditTarget === "tokens"
+                  ? "bg-cyan-500/25 text-cyan-300 border border-cyan-500/40 shadow-sm"
+                  : "text-neutral-400 hover:text-white"
+              }`}
+            >
+              Coding (M)
             </button>
           </div>
 
@@ -337,38 +362,41 @@ export function AccountRow({
 
         <div className="mt-1.5 flex gap-1">
           <Input
-            aria-label={`${creditTarget === "payg" ? "PAYG" : "Bundle"} ${creditAction === "set" ? "set" : "add"} amount in USD`}
+            aria-label={`${creditTarget === "tokens" ? "Coding Tokens" : creditTarget === "payg" ? "PAYG" : "Bundle"} ${creditAction === "set" ? "set" : "add"} amount`}
             type="number"
             min={creditAction === "set" ? "0" : "0.01"}
-            step="0.01"
+            step={creditTarget === "tokens" ? "1" : "0.01"}
             inputMode="decimal"
             value={creditAmount}
             onChange={(event) => setCreditAmount(event.target.value)}
             placeholder={
               creditAction === "set"
-                ? `Set ${creditTarget === "payg" ? "PAYG" : "Bundle"} ($)`
-                : `+ ${creditTarget === "payg" ? "PAYG" : "Bundle"} ($)`
+                ? `Set ${creditTarget === "tokens" ? "Tokens (M)" : creditTarget === "payg" ? "PAYG ($)" : "Bundle ($)"}`
+                : `+ ${creditTarget === "tokens" ? "Tokens (M)" : creditTarget === "payg" ? "PAYG ($)" : "Bundle ($)"}`
             }
             className={`h-8 min-w-0 bg-black/15 px-2 text-[10px] ${
               creditAction === "set"
                 ? "border-amber-500/30 text-amber-300 placeholder:text-amber-400/50"
+                : creditTarget === "tokens"
+                ? "border-cyan-500/30 text-cyan-300 placeholder:text-cyan-400/50"
                 : creditTarget === "payg"
                 ? "border-rose-500/30 text-rose-300 placeholder:text-rose-400/50"
                 : "border-[#c9ff73]/20 text-[#c9ff73] placeholder:text-[#c9ff73]/50"
             }`}
-            disabled={isCurrentAdmin || addCredit.isPending || setCredit.isPending}
+            disabled={addCredit.isPending || setCredit.isPending}
           />
           <Button
             size="sm"
             className={`h-8 shrink-0 px-2 text-[10px] cursor-pointer ${
               creditAction === "set"
                 ? "bg-amber-500 text-black hover:bg-amber-400 font-semibold"
+                : creditTarget === "tokens"
+                ? "bg-cyan-500 text-black hover:bg-cyan-400 font-semibold"
                 : creditTarget === "payg"
                 ? "bg-rose-500 text-white hover:bg-rose-600 font-semibold"
                 : "bg-[#c9ff73] text-[#17210d] hover:bg-[#d8ff91] font-semibold"
             }`}
             disabled={
-              isCurrentAdmin ||
               addCredit.isPending ||
               setCredit.isPending ||
               creditAmount === "" ||
@@ -396,9 +424,9 @@ export function AccountRow({
             {addCredit.isPending || setCredit.isPending ? (
               "…"
             ) : creditAction === "set" ? (
-              `Set ${creditTarget === "payg" ? "PAYG" : "Bundle"}`
+              `Set ${creditTarget === "tokens" ? "Tokens (M)" : creditTarget === "payg" ? "PAYG" : "Bundle"}`
             ) : (
-              `Add ${creditTarget === "payg" ? "PAYG" : "Bundle"}`
+              `+ Add ${creditTarget === "tokens" ? "Tokens (M)" : creditTarget === "payg" ? "PAYG" : "Bundle"}`
             )}
           </Button>
           <Button

@@ -153,14 +153,28 @@ async function getGitHubIdentity(accessToken: string) {
   return { providerUserId: String(profile.id), email, name: profile.name?.trim() || profile.login?.trim() || null, accountCreatedAt: profile.created_at };
 }
 
+function escapeHtml(str: string): string {
+  return String(str ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
 function renderOAuthError(res: Response, errorKey: string, heading: string, detail: string) {
+  const safeHeading = escapeHtml(heading);
+  const safeDetail = escapeHtml(detail);
+  const safeErrorKey = escapeHtml(errorKey);
+
+  res.setHeader("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'");
   res.status(200).send(`<!DOCTYPE html>
 <html>
 <head><title>GitHub Sign-In Notice</title></head>
 <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #12131a; color: #f2f5ee; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0;">
   <div style="text-align: center; padding: 24px; max-width: 440px;">
-    <p style="font-size: 16px; font-weight: bold; color: #ef929b; margin-bottom: 8px;">${heading}</p>
-    <p style="font-size: 13px; color: #a8a9b6; line-height: 1.5; margin-bottom: 20px;">${detail}</p>
+    <p style="font-size: 16px; font-weight: bold; color: #ef929b; margin-bottom: 8px;">${safeHeading}</p>
+    <p style="font-size: 13px; color: #a8a9b6; line-height: 1.5; margin-bottom: 20px;">${safeDetail}</p>
     <div>
       <a href="/signin?github=${encodeURIComponent(errorKey)}" style="display: inline-block; padding: 8px 20px; border-radius: 9999px; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); color: #e2e1ea; font-size: 13px; text-decoration: none; font-weight: 500;">Return to Sign In</a>
     </div>
@@ -168,7 +182,7 @@ function renderOAuthError(res: Response, errorKey: string, heading: string, deta
       (function() {
         if (window.opener && !window.opener.closed) {
           try {
-            window.opener.postMessage({ type: 'OAUTH_AUTH_ERROR', error: ${JSON.stringify(errorKey)} }, '*');
+            window.opener.postMessage({ type: 'OAUTH_AUTH_ERROR', error: ${JSON.stringify(safeErrorKey)} }, window.location.origin);
             setTimeout(function() {
               try { window.close(); } catch(e) {}
             }, 500);
@@ -344,6 +358,7 @@ export function registerGitHubOAuthRoutes(app: Express) {
         isNewUser: result.kind === "created",
       });
 
+      res.setHeader("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'");
       res.status(200).send(`<!DOCTYPE html>
 <html>
 <head><title>GitHub Sign-In Success</title></head>
@@ -359,7 +374,7 @@ export function registerGitHubOAuthRoutes(app: Express) {
         var notified = false;
         if (window.opener && !window.opener.closed) {
           try {
-            window.opener.postMessage({ type: 'OAUTH_AUTH_SUCCESS', token: ${JSON.stringify(sessionToken)} }, '*');
+            window.opener.postMessage({ type: 'OAUTH_AUTH_SUCCESS' }, window.location.origin);
             notified = true;
           } catch (e) {}
         }

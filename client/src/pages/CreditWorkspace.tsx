@@ -5,7 +5,7 @@ import { TOKENFORGE_MODELS } from "@/lib/modelCatalogue";
 import { calculateSettledUsagePricingBreakdownNanos } from "@shared/usagePricing";
 import { trpc } from "@/lib/trpc";
 import { Link } from "wouter";
-import { ArrowDownLeft, ArrowUpRight, CalendarCheck, CalendarDays, CheckCircle2, ChevronDown, CircleDollarSign, Clock3, Coins, Filter, KeyRound, Loader2, Percent, ReceiptText, RotateCcw, ShieldCheck, Sparkles, WalletCards, Zap } from "lucide-react";
+import { ArrowDownLeft, ArrowUpRight, CalendarCheck, CalendarDays, CheckCircle2, ChevronDown, CircleDollarSign, Clock3, Code2, Coins, Filter, KeyRound, Loader2, Percent, ReceiptText, RotateCcw, ShieldCheck, Sparkles, WalletCards, Zap } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { SolanaPayButton } from "@/components/SolanaPayButton";
@@ -41,8 +41,7 @@ export function PaygHero({ compact = false }: { compact?: boolean }) {
   const [checkoutRail, setCheckoutRail] = useState<"card" | "upi" | "crypto">("upi");
   const [checkoutAmount, setCheckoutAmount] = useState<number>(25);
 
-  if (wallet.isLoading) return null;
-  if (wallet.error || !wallet.data) return null;
+  if (wallet.isLoading || wallet.error || !wallet.data) return null;
 
   const data = wallet.data;
   const paygBalanceNanos = (data as any).paygBalanceNanos ?? 0;
@@ -63,55 +62,53 @@ export function PaygHero({ compact = false }: { compact?: boolean }) {
   return (
     <>
       <section
-        className={`relative overflow-hidden rounded-2xl border border-white/10 bg-[#0e1015] p-5 sm:p-6 shadow-xl text-white ${
-          compact ? "p-4 sm:p-5" : ""
-        }`}
+        className="relative overflow-hidden rounded-3xl border border-rose-500/30 bg-gradient-to-br from-rose-950/30 via-[#100d12] to-black/80 p-5 sm:p-6 shadow-xl text-white flex flex-col justify-between transition-all duration-200 hover:border-rose-500/40"
         aria-label="Pay-As-You-Go Wallet"
       >
-        <div className="absolute top-0 right-0 h-40 w-40 rounded-full bg-rose-500/5 blur-3xl pointer-events-none" />
-        <div className="absolute bottom-0 left-0 h-40 w-40 rounded-full bg-emerald-500/5 blur-3xl pointer-events-none" />
+        <div className="absolute top-0 right-0 h-36 w-36 rounded-full bg-rose-500/10 blur-3xl pointer-events-none" />
 
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-5">
-          <div className="space-y-2">
+        <div className="relative z-10 space-y-3">
+          <div className="flex items-center justify-between gap-2 flex-wrap">
             <div className="flex items-center gap-2">
               <span className="flex h-2 w-2 rounded-full bg-rose-500 animate-pulse" />
-              <span className="text-[11px] font-bold uppercase tracking-wider text-rose-300/90 font-mono">
-                PAYG Compute Balance
-              </span>
-              <span className="ml-1 inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/15 border border-emerald-500/30 text-emerald-300">
-                +100% Match Bonus
+              <span className="text-[11px] font-bold uppercase tracking-wider text-rose-300 font-mono">
+                Tier 1: PAYG Compute
               </span>
             </div>
+            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/20 border border-rose-500/30 text-rose-200 font-mono">
+              +100% Bonus (2x)
+            </span>
+          </div>
 
+          <div>
             <div className="flex items-baseline gap-2">
               <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-white font-mono">
                 {paygAmount}
               </h2>
               <span className="text-xs text-neutral-400 font-mono">USD</span>
             </div>
-
-            <p className="text-xs text-neutral-400">
+            <p className="text-xs text-neutral-300 mt-1.5 leading-relaxed">
               Zero-markup official provider rates · Funds never expire
             </p>
           </div>
+        </div>
 
-          <div className="flex flex-wrap items-center gap-2.5 shrink-0">
-            <Button
-              type="button"
-              onClick={() => setPaygModalOpen(true)}
-              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold bg-rose-500 hover:bg-rose-600 text-white shadow-lg shadow-rose-500/20 transition-all cursor-pointer"
-            >
-              <Zap size={14} />
-              <span>Top Up Balance</span>
-            </Button>
+        <div className="relative z-10 pt-4 mt-2 border-t border-white/10 flex items-center gap-2 flex-wrap">
+          <Button
+            type="button"
+            onClick={() => setPaygModalOpen(true)}
+            className="flex-1 min-w-[120px] inline-flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-bold bg-rose-500 hover:bg-rose-600 text-white shadow-lg shadow-rose-500/20 transition-all cursor-pointer h-auto"
+          >
+            <Zap size={14} />
+            <span>Top Up Balance</span>
+          </Button>
 
-            <Link href="/dashboard/pricing">
-              <span className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-xl text-xs font-semibold text-neutral-300 hover:text-white bg-white/[0.05] hover:bg-white/[0.1] border border-white/10 transition-all cursor-pointer">
-                <span>View Rates</span>
-                <ArrowUpRight size={13} />
-              </span>
-            </Link>
-          </div>
+          <Link href="/dashboard/pricing" className="shrink-0">
+            <span className="inline-flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl text-xs font-semibold text-neutral-300 hover:text-white bg-white/[0.06] hover:bg-white/[0.12] border border-white/10 transition-all cursor-pointer">
+              <span>Rates</span>
+              <ArrowUpRight size={13} />
+            </span>
+          </Link>
         </div>
       </section>
 
@@ -135,7 +132,69 @@ export function PaygHero({ compact = false }: { compact?: boolean }) {
   );
 }
 
-function WalletHero({ compact = false }: { compact?: boolean }) {
+export function CodingTokensHero({ compact = false }: { compact?: boolean }) {
+  const wallet = trpc.developer.wallet.useQuery();
+  if (wallet.isLoading || wallet.error || !wallet.data) return null;
+
+  const data = wallet.data;
+  const codingPlanTokens = Number((data as any)?.codingPlanTokens ?? 0);
+  const formattedTokens = codingPlanTokens >= 1_000_000
+    ? `${(codingPlanTokens / 1_000_000).toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 2 })}M`
+    : codingPlanTokens.toLocaleString();
+
+  return (
+    <section
+      className="relative overflow-hidden rounded-3xl border border-cyan-500/30 bg-gradient-to-br from-cyan-950/30 via-[#0a1118] to-black/80 p-5 sm:p-6 shadow-xl text-white flex flex-col justify-between transition-all duration-200 hover:border-cyan-500/40"
+      aria-label="Dedicated Coding Plan Tokens"
+    >
+      <div className="absolute top-0 right-0 h-36 w-36 rounded-full bg-cyan-500/10 blur-3xl pointer-events-none" />
+
+      <div className="relative z-10 space-y-3">
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <div className="flex items-center gap-2">
+            <span className="flex h-2 w-2 rounded-full bg-cyan-400 animate-pulse" />
+            <span className="text-[11px] font-bold uppercase tracking-wider text-cyan-300 font-mono flex items-center gap-1.5">
+              <Code2 size={13} className="text-cyan-400" />
+              <span>Tier 2: Coding Tokens</span>
+            </span>
+          </div>
+          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-cyan-500/20 border border-cyan-500/30 text-cyan-200 font-mono">
+            10M / $1
+          </span>
+        </div>
+
+        <div>
+          <div className="flex items-baseline gap-2">
+            <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-white font-mono">
+              {formattedTokens}
+            </h2>
+            <span className="text-xs font-mono text-cyan-400 font-semibold uppercase tracking-wider">
+              {codingPlanTokens >= 1_000_000 ? "Tokens Quota" : "Tokens"}
+            </span>
+          </div>
+          <p className="text-xs text-neutral-300 mt-1.5 leading-relaxed">
+            Claude Opus 5 & GLM 5.3 dedicated allocation · Instant settlement
+          </p>
+        </div>
+      </div>
+
+      <div className="relative z-10 pt-4 mt-2 border-t border-white/10 flex items-center gap-2 flex-wrap">
+        <Link href="/dashboard/pricing" className="flex-1">
+          <Button
+            type="button"
+            className="w-full inline-flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-bold text-black bg-gradient-to-r from-cyan-400 to-teal-400 hover:from-cyan-300 hover:to-teal-300 shadow-lg shadow-cyan-500/20 transition-all cursor-pointer h-auto"
+          >
+            <Code2 size={14} />
+            <span>Get Coding Tokens</span>
+            <ArrowUpRight size={13} />
+          </Button>
+        </Link>
+      </div>
+    </section>
+  );
+}
+
+export function WalletHero({ compact = false }: { compact?: boolean }) {
   const wallet = trpc.developer.wallet.useQuery();
   const creditsEnabled = useIsCreditsEnabled(wallet.data?.creditsEnabled);
 
@@ -143,50 +202,50 @@ function WalletHero({ compact = false }: { compact?: boolean }) {
 
   const data = wallet.data;
   return (
-    <section className={`credit-hero${compact ? " credit-hero--compact" : ""}`} aria-label="TokenForge promotional credit balance">
-      <div className="credit-hero__grid" aria-hidden="true" />
-      <div className="credit-hero__signal credit-hero__signal--one" aria-hidden="true" />
-      <div className="credit-hero__signal credit-hero__signal--two" aria-hidden="true" />
-      <div className="credit-hero__main">
-        <p className="credit-kicker"><WalletCards size={13} /> Promotional credit wallet</p>
-        <span className="credit-hero__label">Available to build with</span>
-        <h2>{formatCreditWhole(data.balanceNanos)}</h2>
-        <p className="credit-hero__description">Non-withdrawable platform credit. Successful requests settle from provider-reported usage at the published TokenForge credit rate, including the 3.5× platform charge.</p>
-        <div className="pt-3 flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-2.5 sm:gap-3 w-full">
-          <SolanaPayButton
-            amount={10}
-            initialRail="card"
-            userId={(data as any).userId}
-            buttonText="Pay with Card"
-            className="w-full sm:w-auto"
-          />
-          <SolanaPayButton
-            amount={10}
-            initialRail="upi"
-            userId={(data as any).userId}
-            buttonText="Buy with UPI"
-            className="w-full sm:w-auto"
-          />
-          <SolanaPayButton
-            amount={10}
-            currency="SOL"
-            initialRail="crypto"
-            userId={(data as any).userId}
-            buttonText="Buy with Solana"
-            className="w-full sm:w-auto"
-          />
-          <Link href="/dashboard/pricing" className="w-full sm:w-auto">
-            <span className="inline-flex items-center justify-center w-full sm:w-auto gap-1.5 px-4 py-3 sm:py-2.5 rounded-full text-xs font-semibold text-[#c8ff74] hover:text-[#dcffa6] bg-[#c8ff74]/10 hover:bg-[#c8ff74]/20 border border-[#c8ff74]/25 transition-all cursor-pointer">
-              <Zap size={13} />
-              <span>View Pricing Plans</span>
-              <ArrowUpRight size={13} />
+    <section
+      className="relative overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-[#121c10]/40 via-[#0e120d] to-black/80 p-5 sm:p-6 shadow-xl text-white flex flex-col justify-between transition-all duration-200 hover:border-white/20"
+      aria-label="TokenForge promotional credit balance"
+    >
+      <div className="absolute top-0 right-0 h-36 w-36 rounded-full bg-[#befe6c]/10 blur-3xl pointer-events-none" />
+
+      <div className="relative z-10 space-y-3">
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <div className="flex items-center gap-2">
+            <span className="flex h-2 w-2 rounded-full bg-[#c8ff74] animate-pulse" />
+            <span className="text-[11px] font-bold uppercase tracking-wider text-[#c8ff74] font-mono flex items-center gap-1.5">
+              <WalletCards size={13} />
+              <span>Tier 3: Credit Wallet</span>
             </span>
-          </Link>
+          </div>
+          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#c8ff74]/15 border border-[#c8ff74]/30 text-[#c8ff74] font-mono">
+            Fixed Bundles
+          </span>
+        </div>
+
+        <div>
+          <div className="flex items-baseline gap-2">
+            <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-white font-mono">
+              {formatCreditWhole(data.balanceNanos)}
+            </h2>
+            <span className="text-xs text-neutral-400 font-mono">USD</span>
+          </div>
+          <p className="text-xs text-neutral-300 mt-1.5 leading-relaxed">
+            Platform compute credits · Settle from usage at standard rates
+          </p>
         </div>
       </div>
-      <div className="credit-hero__stats" aria-label="Credit reward details">
-        <div><span><Sparkles size={14} /> Starting credit</span><b>$50.00</b><small>for a new wallet</small></div>
-        <div><span><CalendarCheck size={14} /> Daily reward</span><b>Up to $2.00</b><small>random daily bonus (try your luck!)</small></div>
+
+      <div className="relative z-10 pt-4 mt-2 border-t border-white/10 flex items-center gap-2 flex-wrap">
+        <Link href="/dashboard/pricing" className="flex-1">
+          <Button
+            type="button"
+            className="w-full inline-flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-bold text-black bg-[#c8ff74] hover:bg-[#d8ff91] shadow-lg shadow-[#c8ff74]/20 transition-all cursor-pointer h-auto"
+          >
+            <Zap size={14} className="text-black" />
+            <span>Buy Credits & Plans</span>
+            <ArrowUpRight size={13} className="text-black" />
+          </Button>
+        </Link>
       </div>
     </section>
   );
@@ -197,9 +256,12 @@ export function CreditOverview() {
   const creditsEnabled = useIsCreditsEnabled(wallet.data?.creditsEnabled);
 
   return (
-    <div className="space-y-4 mb-6">
-      {/* Tier 1 Pay-As-You-Go & Tier 2 Promotional Credits (only if enabled) */}
+    <div className={`grid grid-cols-1 ${creditsEnabled ? "md:grid-cols-2 lg:grid-cols-3" : "md:grid-cols-2"} gap-4 mb-6`}>
+      {/* Tier 1: Pay-As-You-Go */}
       <PaygHero compact />
+      {/* Tier 2: Dedicated Coding Plan Tokens */}
+      <CodingTokensHero compact />
+      {/* Tier 3: Promotional Credits Wallet (when enabled) */}
       {creditsEnabled && <WalletHero compact />}
     </div>
   );

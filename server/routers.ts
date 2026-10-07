@@ -1,3 +1,12 @@
+import {
+  isCacheDebugEnabled,
+  setCacheDebugEnabled,
+  clearCacheDebugEntries,
+  getCacheDebugSummaries,
+  getCacheDebugEntry,
+  computeCacheDiffBetweenEntries,
+  exportCacheDebugJsonl,
+} from "./cacheDebugger";
 import { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
@@ -20,6 +29,7 @@ import {
   setModelMinTier,
   setModelIsPayg,
   setModelIsBundle,
+  setModelIsTokenPlan,
   setModelAccess,
   setProviderEnabled,
   setProviderSupportsVision,
@@ -156,6 +166,12 @@ import { getOrcaRouterCredentialPoolStatus, getOrcaRouterSlotRequestCounts, inva
 import { buildSpecialReferralCampaignUrl } from "../shared/referrals";
 import { listUserDodoPayments, listAllDodoPayments, syncDodoPaymentsFromApi } from "./dodoPaymentsGateway";
 import { getAllEffectiveModelPricing } from "./creditPricing";
+import {
+  getUniversalModelProviderSettings,
+  updateUniversalModelProviderSettings,
+  listUniversalConfiguredModels,
+  getUniversalModelKeyMetricGroup,
+} from "./universalModelProviders";
 
 const apiKeyLabel = z
   .string()
@@ -185,13 +201,13 @@ const adminPreProvisionAccountInput = z.object({
 const permanentAccountDeleteInput = z.object({ userId: z.number().int().positive(), confirmation: z.string().trim().max(64).optional() });
 const adminCreditGrantInput = z.object({
   userId: z.number().int().positive(),
-  amountUsd: z.number().finite().positive().max(100_000).refine(value => Math.round(value * 100) === value * 100, "Use an amount with no more than two decimal places"),
-  balanceType: z.enum(["bundle", "payg"]).default("bundle").optional(),
+  amountUsd: z.number().finite().positive().max(10_000_000).refine(value => Math.round(value * 100) === value * 100, "Use an amount with no more than two decimal places"),
+  balanceType: z.enum(["bundle", "payg", "tokens"]).default("bundle").optional(),
 });
 const setAccountCreditInput = z.object({
   userId: z.number().int().positive(),
-  targetAmountUsd: z.number().finite().min(0, "Credit amount cannot be negative").max(100_000, "Amount cannot exceed $100,000").refine(value => Math.round(value * 100) === value * 100, "Use an amount with no more than two decimal places"),
-  balanceType: z.enum(["bundle", "payg"]).default("bundle").optional(),
+  targetAmountUsd: z.number().finite().min(0, "Amount cannot be negative").max(10_000_000, "Amount exceeds limit").refine(value => Math.round(value * 100) === value * 100, "Use an amount with no more than two decimal places"),
+  balanceType: z.enum(["bundle", "payg", "tokens"]).default("bundle").optional(),
   note: z.string().trim().max(256, "Note must be 256 characters or fewer").optional(),
 });
 const setAllUsersCreditInput = z.object({
@@ -242,6 +258,7 @@ const claudeFable5ProviderGroupInput = z.object({
   bypassCooldown: z.boolean().optional(),
   supportsVision: z.boolean().optional(),
   pinnedUserEmails: z.array(z.string().trim().max(320)).max(500).optional(),
+  reasoningEffort: z.enum(["low", "medium", "high", "xhigh", "max"]).optional().nullable(),
 }).transform(input => ({
   ...input,
   removeSlots: input.removeSlots ?? input.removedSlots,
@@ -249,7 +266,7 @@ const claudeFable5ProviderGroupInput = z.object({
 
 const claudeFable5ProviderSettingsInput = z.union([
   z.object({ providers: z.array(claudeFable5ProviderGroupInput).min(1, "Keep at least one Claude Fable 5.1 provider").max(100, "At most 100 Claude Fable 5.1 providers may be configured") }),
-  z.object({ baseUrl: z.string().trim().url("Enter a valid HTTPS base URL").max(512).optional(), model: z.string().trim().min(1, "Enter a model ID").max(256).optional(), apiKeys: z.array(z.string().trim().max(512)).max(50).optional(), apiKeyEnabled: z.array(z.boolean()).max(50).optional(), removeSlots: z.array(z.number().int().positive()).max(50).optional(), removedSlots: z.array(z.number().int().positive()).max(50).optional(), maxInputTokens: z.number().int().min(1).max(10_000_000).optional().nullable(), maxOutputTokens: z.number().int().min(1).max(10_000_000).optional().nullable(), disableIdentityPrompt: z.boolean().optional(), bypassCooldown: z.boolean().optional(), supportsVision: z.boolean().optional(), pinnedUserEmails: z.array(z.string().trim().max(320)).max(500).optional() }).refine(input => input.baseUrl !== undefined || input.model !== undefined || input.apiKeys !== undefined || input.apiKeyEnabled !== undefined || input.removeSlots !== undefined || input.removedSlots !== undefined || input.maxInputTokens !== undefined || input.maxOutputTokens !== undefined || input.disableIdentityPrompt !== undefined || input.bypassCooldown !== undefined || input.supportsVision !== undefined || input.pinnedUserEmails !== undefined, "Provide at least one setting to update").transform(input => ({ ...input, removeSlots: input.removeSlots ?? input.removedSlots })),
+  z.object({ baseUrl: z.string().trim().url("Enter a valid HTTPS base URL").max(512).optional(), model: z.string().trim().min(1, "Enter a model ID").max(256).optional(), apiKeys: z.array(z.string().trim().max(512)).max(50).optional(), apiKeyEnabled: z.array(z.boolean()).max(50).optional(), removeSlots: z.array(z.number().int().positive()).max(50).optional(), removedSlots: z.array(z.number().int().positive()).max(50).optional(), maxInputTokens: z.number().int().min(1).max(10_000_000).optional().nullable(), maxOutputTokens: z.number().int().min(1).max(10_000_000).optional().nullable(), disableIdentityPrompt: z.boolean().optional(), bypassCooldown: z.boolean().optional(), supportsVision: z.boolean().optional(), pinnedUserEmails: z.array(z.string().trim().max(320)).max(500).optional(), reasoningEffort: z.enum(["low", "medium", "high", "xhigh", "max"]).optional().nullable() }).refine(input => input.baseUrl !== undefined || input.model !== undefined || input.apiKeys !== undefined || input.apiKeyEnabled !== undefined || input.removeSlots !== undefined || input.removedSlots !== undefined || input.maxInputTokens !== undefined || input.maxOutputTokens !== undefined || input.disableIdentityPrompt !== undefined || input.bypassCooldown !== undefined || input.supportsVision !== undefined || input.pinnedUserEmails !== undefined || input.reasoningEffort !== undefined, "Provide at least one setting to update").transform(input => ({ ...input, removeSlots: input.removeSlots ?? input.removedSlots })),
 ]);
 
 const claudeOpus5ProviderSettingsInput = z.object({
@@ -269,7 +286,9 @@ const claudeOpus5ProviderSettingsInput = z.object({
     disableIdentityPrompt: z.boolean().optional(),
     bypassCooldown: z.boolean().optional(),
     supportsVision: z.boolean().optional(),
+    supportsDocuments: z.boolean().optional(),
     pinnedUserEmails: z.array(z.string().trim().max(320)).max(500).optional(),
+    reasoningEffort: z.enum(["low", "medium", "high", "xhigh", "max"]).optional().nullable(),
     modelPool: z.array(z.object({
       id: z.string().trim().regex(/^[a-z0-9][a-z0-9_-]{0,63}$/i, "Use letters, numbers, hyphens, or underscores for the model entry ID"),
       model: z.string().trim().min(1, "Enter a model ID").max(256),
@@ -280,6 +299,32 @@ const claudeOpus5ProviderSettingsInput = z.object({
     ...provider,
     removeSlots: provider.removeSlots ?? provider.removedSlots,
   }))).min(1, "Keep at least one Claude Opus 5 provider").max(100, "At most 100 Claude Opus 5 providers may be configured"),
+});
+
+const universalModelProviderSettingsInput = z.object({
+  modelId: z.string().trim().min(1, "Enter a valid model ID"),
+  providers: z.array(z.object({
+    id: z.string().trim().regex(/^[a-z0-9][a-z0-9_-]{0,63}$/i, "Use letters, numbers, hyphens, or underscores for the provider ID"),
+    label: z.string().trim().min(1, "Enter a provider label").max(80),
+    enabled: z.boolean().optional(),
+    baseUrl: z.string().trim().url("Enter a valid HTTPS base URL").max(512),
+    model: z.string().trim().min(1, "Enter a model ID").max(256),
+    apiKeys: z.array(z.string().trim().max(512)).max(50, "A provider pool can contain at most 50 API keys"),
+    apiKeyEnabled: z.array(z.boolean()).max(50, "A provider pool can contain at most 50 API key states").optional(),
+    removeSlots: z.array(z.number().int().positive()).max(50).optional(),
+    removedSlots: z.array(z.number().int().positive()).max(50).optional(),
+    maxOutputTokens: z.number().int().min(1, "Output token limit must be at least 1").max(10_000_000, "Output token limit cannot exceed 10,000,000").optional().nullable(),
+    maxInputTokens: z.number().int().min(1, "Input token limit must be at least 1").max(10_000_000, "Input token limit cannot exceed 10,000,000").optional().nullable(),
+    disableIdentityPrompt: z.boolean().optional(),
+    bypassCooldown: z.boolean().optional(),
+    supportsVision: z.boolean().optional(),
+    supportsDocuments: z.boolean().optional(),
+    pinnedUserEmails: z.array(z.string().trim().max(320)).max(500).optional(),
+    reasoningEffort: z.enum(["low", "medium", "high", "xhigh", "max"]).optional().nullable(),
+  }).transform(provider => ({
+    ...provider,
+    removeSlots: provider.removeSlots ?? provider.removedSlots,
+  }))).min(1, "Keep at least one provider").max(100, "At most 100 providers may be configured"),
 });
 const claudeOpus5QwenModelDeleteInput = z.object({
   providerId: z.string().trim().regex(/^[a-z0-9][a-z0-9_-]{0,63}$/i),
@@ -322,6 +367,7 @@ const glm53ProviderGroupInput = z.object({
   bypassCooldown: z.boolean().optional(),
   supportsVision: z.boolean().optional(),
   pinnedUserEmails: z.array(z.string().trim().max(320)).max(500).optional(),
+  reasoningEffort: z.enum(["low", "medium", "high", "xhigh", "max"]).optional().nullable(),
 }).transform(input => ({
   ...input,
   removeSlots: input.removeSlots ?? input.removedSlots,
@@ -329,7 +375,7 @@ const glm53ProviderGroupInput = z.object({
 
 const glm53ProviderSettingsInput = z.union([
   z.object({ providers: z.array(glm53ProviderGroupInput).min(1, "Keep at least one GLM 5.3 provider").max(100, "At most 100 GLM 5.3 providers may be configured") }),
-  z.object({ baseUrl: z.string().trim().url("Enter a valid HTTPS base URL").max(512).optional(), model: z.string().trim().min(1, "Enter a model ID").max(256).optional(), apiKeys: z.array(z.string().trim().max(512)).max(50).optional(), apiKeyEnabled: z.array(z.boolean()).max(50).optional(), removeSlots: z.array(z.number().int().positive()).max(50).optional(), removedSlots: z.array(z.number().int().positive()).max(50).optional(), maxInputTokens: z.number().int().min(1).max(10_000_000).optional().nullable(), maxOutputTokens: z.number().int().min(1).max(10_000_000).optional().nullable(), disableIdentityPrompt: z.boolean().optional(), bypassCooldown: z.boolean().optional(), supportsVision: z.boolean().optional(), pinnedUserEmails: z.array(z.string().trim().max(320)).max(500).optional() }).refine(input => input.baseUrl !== undefined || input.model !== undefined || input.apiKeys !== undefined || input.apiKeyEnabled !== undefined || input.removeSlots !== undefined || input.removedSlots !== undefined || input.maxInputTokens !== undefined || input.maxOutputTokens !== undefined || input.disableIdentityPrompt !== undefined || input.bypassCooldown !== undefined || input.supportsVision !== undefined || input.pinnedUserEmails !== undefined, "Provide at least one setting to update").transform(input => ({ ...input, removeSlots: input.removeSlots ?? input.removedSlots })),
+  z.object({ baseUrl: z.string().trim().url("Enter a valid HTTPS base URL").max(512).optional(), model: z.string().trim().min(1, "Enter a model ID").max(256).optional(), apiKeys: z.array(z.string().trim().max(512)).max(50).optional(), apiKeyEnabled: z.array(z.boolean()).max(50).optional(), removeSlots: z.array(z.number().int().positive()).max(50).optional(), removedSlots: z.array(z.number().int().positive()).max(50).optional(), maxInputTokens: z.number().int().min(1).max(10_000_000).optional().nullable(), maxOutputTokens: z.number().int().min(1).max(10_000_000).optional().nullable(), disableIdentityPrompt: z.boolean().optional(), bypassCooldown: z.boolean().optional(), supportsVision: z.boolean().optional(), pinnedUserEmails: z.array(z.string().trim().max(320)).max(500).optional(), reasoningEffort: z.enum(["low", "medium", "high", "xhigh", "max"]).optional().nullable() }).refine(input => input.baseUrl !== undefined || input.model !== undefined || input.apiKeys !== undefined || input.apiKeyEnabled !== undefined || input.removeSlots !== undefined || input.removedSlots !== undefined || input.maxInputTokens !== undefined || input.maxOutputTokens !== undefined || input.disableIdentityPrompt !== undefined || input.bypassCooldown !== undefined || input.supportsVision !== undefined || input.pinnedUserEmails !== undefined || input.reasoningEffort !== undefined, "Provide at least one setting to update").transform(input => ({ ...input, removeSlots: input.removeSlots ?? input.removedSlots })),
 ]);
 
 const deepseekV4ProProviderGroupInput = z.object({
@@ -347,6 +393,7 @@ const deepseekV4ProProviderGroupInput = z.object({
   bypassCooldown: z.boolean().optional(),
   supportsVision: z.boolean().optional(),
   pinnedUserEmails: z.array(z.string().trim().max(320)).max(500).optional(),
+  reasoningEffort: z.enum(["low", "medium", "high", "xhigh", "max"]).optional().nullable(),
 }).transform(input => ({
   ...input,
   removeSlots: input.removeSlots ?? input.removedSlots,
@@ -368,7 +415,8 @@ const deepseekV4ProProviderSettingsInput = z.union([
     bypassCooldown: z.boolean().optional(),
     supportsVision: z.boolean().optional(),
     pinnedUserEmails: z.array(z.string().trim().max(320)).max(500).optional(),
-  }).refine(input => input.baseUrl !== undefined || input.model !== undefined || input.apiKeys !== undefined || input.apiKeyEnabled !== undefined || input.removeSlots !== undefined || input.removedSlots !== undefined || input.maxInputTokens !== undefined || input.disableIdentityPrompt !== undefined || input.bypassCooldown !== undefined || input.supportsVision !== undefined || input.pinnedUserEmails !== undefined, "Provide at least one setting to update").transform(input => ({
+    reasoningEffort: z.enum(["low", "medium", "high", "xhigh", "max"]).optional().nullable(),
+  }).refine(input => input.baseUrl !== undefined || input.model !== undefined || input.apiKeys !== undefined || input.apiKeyEnabled !== undefined || input.removeSlots !== undefined || input.removedSlots !== undefined || input.maxInputTokens !== undefined || input.disableIdentityPrompt !== undefined || input.bypassCooldown !== undefined || input.supportsVision !== undefined || input.pinnedUserEmails !== undefined || input.reasoningEffort !== undefined, "Provide at least one setting to update").transform(input => ({
     ...input,
     removeSlots: input.removeSlots ?? input.removedSlots,
   })),
@@ -390,6 +438,7 @@ const sonnet46ProviderSettingsInput = z.object({
     bypassCooldown: z.boolean().optional(),
     supportsVision: z.boolean().optional(),
     pinnedUserEmails: z.array(z.string().trim().max(320)).max(500).optional(),
+    reasoningEffort: z.enum(["low", "medium", "high", "xhigh", "max"]).optional().nullable(),
   }).transform(provider => ({
     ...provider,
     removeSlots: provider.removeSlots ?? provider.removedSlots,
@@ -524,6 +573,11 @@ export const appRouter = router({
       return { sessionToken };
     }),
     logout: publicProcedure.mutation(({ ctx }) => {
+      const token = (ctx.req.cookies as Record<string, string>)?.[COOKIE_NAME] ||
+        (ctx.req.headers.authorization?.startsWith("Bearer ") ? ctx.req.headers.authorization.slice(7) : null);
+      if (token) {
+        sdk.revokeSessionToken(token);
+      }
       const cookieOptions = getSessionCookieOptions(ctx.req);
       ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
       return { success: true } as const;
@@ -784,24 +838,30 @@ export const appRouter = router({
       return gift;
     }),
     createApiKey: verifiedDeveloperProcedure
-      .input(z.object({ label: apiKeyLabel, keyGroup: z.enum(["payg", "bundle"]).default("bundle") }))
+      .input(z.object({ label: apiKeyLabel, keyGroup: z.enum(["payg", "bundle", "token_plan", "tokens", "coding_plan"]).default("token_plan") }))
       .mutation(async ({ ctx, input }) => {
         try {
           return await createApiKey(ctx.user.id, input.label, input.keyGroup);
         } catch (error) {
+          const message = error instanceof Error ? error.message : "TokenForge could not create this key";
           throw new TRPCError({
-            code: "INTERNAL_SERVER_ERROR",
-            message: error instanceof Error ? error.message : "TokenForge could not create this key",
+            code: message.includes("Maximum limit of 10") ? "BAD_REQUEST" : "INTERNAL_SERVER_ERROR",
+            message,
           });
         }
       }),
     revokeApiKey: verifiedDeveloperProcedure.input(z.object({ apiKeyId: z.number().int().positive() })).mutation(async ({ ctx, input }) => {
       const revoked = await revokeApiKey(ctx.user.id, input.apiKeyId);
-      if (!revoked) throw new TRPCError({ code: "NOT_FOUND", message: "This active API key was not found" });
+      if (!revoked) throw new TRPCError({ code: "NOT_FOUND", message: "This active API key was not found or has already been deleted." });
+      return { success: true } as const;
+    }),
+    deleteApiKey: verifiedDeveloperProcedure.input(z.object({ apiKeyId: z.number().int().positive() })).mutation(async ({ ctx, input }) => {
+      const deleted = await revokeApiKey(ctx.user.id, input.apiKeyId);
+      if (!deleted) throw new TRPCError({ code: "NOT_FOUND", message: "This API key was not found or has already been deleted." });
       return { success: true } as const;
     }),
     rotateApiKey: verifiedDeveloperProcedure
-      .input(z.object({ apiKeyId: z.number().int().positive(), label: apiKeyLabel, keyGroup: z.enum(["payg", "bundle"]).optional() }))
+      .input(z.object({ apiKeyId: z.number().int().positive(), label: apiKeyLabel, keyGroup: z.enum(["payg", "bundle", "token_plan", "tokens", "coding_plan"]).optional() }))
       .mutation(async ({ ctx, input }) => {
         const result = await rotateApiKey(ctx.user.id, input.apiKeyId, input.label, input.keyGroup);
         if (!result) throw new TRPCError({ code: "NOT_FOUND", message: "This active API key was not found" });
@@ -897,12 +957,17 @@ export const appRouter = router({
       const result = await claimDailyCheckin(ctx.user.id);
       return result;
     }),
+    claimDailyCheckin: verifiedDeveloperProcedure.mutation(async ({ ctx }) => {
+      const result = await claimDailyCheckin(ctx.user.id);
+      return result;
+    }),
     playground: verifiedDeveloperProcedure
       .input(z.object({
         model: tokenForgeModelId,
         messages: z.array(playgroundMessage).min(1).max(100),
-        maxOutputTokens: z.number().int().min(64).max(8_192).optional(),
+        maxOutputTokens: z.number().int().min(64).max(65_536).optional(),
         temperature: z.number().min(0).max(2).optional(),
+        reasoningEffort: z.enum(["default", "low", "medium", "high", "xhigh", "max"]).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         try {
@@ -912,6 +977,7 @@ export const appRouter = router({
             messages: input.messages,
             maxOutputTokens: input.maxOutputTokens,
             temperature: input.temperature,
+            reasoningEffort: input.reasoningEffort,
             sourceIpHash: tokenForgeRequestIpHash(ctx.req),
           });
         } catch (error) {
@@ -949,6 +1015,11 @@ export const appRouter = router({
       return { unlocked: true, alreadyAdmin: false, sessionVersion } as const;
     }),
     signOut: adminProcedure.mutation(async ({ ctx }) => {
+      const token = (ctx.req.cookies as Record<string, string>)?.[COOKIE_NAME] ||
+        (ctx.req.headers.authorization?.startsWith("Bearer ") ? ctx.req.headers.authorization.slice(7) : null);
+      if (token) {
+        sdk.revokeSessionToken(token);
+      }
       ctx.res.clearCookie(COOKIE_NAME, getSessionCookieOptions(ctx.req));
       await writeAuditEvent({ actorUserId: ctx.user.id, targetUserId: ctx.user.id, action: "admin.self_revoked", entityType: "account", entityId: String(ctx.user.id) });
       return { success: true } as const;
@@ -1315,26 +1386,29 @@ export const appRouter = router({
       return { success: true } as const;
     }),
     addAccountCredit: adminProcedure.input(adminCreditGrantInput).mutation(async ({ ctx, input }) => {
-      const amountNanos = Math.round(input.amountUsd * 1_000_000_000);
       const balanceType = input.balanceType ?? "bundle";
-      const result = await grantAdminAccountCredit({ userId: input.userId, amountNanos, actorUserId: ctx.user.id, balanceType });
+      const amountNanos = balanceType === "tokens" ? 0 : Math.round(input.amountUsd * 1_000_000_000);
+      const amountTokens = balanceType === "tokens" ? Math.round(input.amountUsd * 1_000_000) : undefined;
+      const result = await grantAdminAccountCredit({ userId: input.userId, amountNanos, amountTokens, actorUserId: ctx.user.id, balanceType });
       if (!result) throw new TRPCError({ code: "NOT_FOUND", message: "This account no longer exists" });
       await writeAuditEvent({
         actorUserId: ctx.user.id,
         targetUserId: input.userId,
-        action: balanceType === "payg" ? "account.payg_balance_granted" : "account.credit_granted",
+        action: balanceType === "tokens" ? "account.coding_tokens_granted" : balanceType === "payg" ? "account.payg_balance_granted" : "account.credit_granted",
         entityType: "account",
         entityId: String(input.userId),
-        metadata: { amountNanos: result.amountNanos, balanceType, balanceNanos: result.balanceNanos, paygBalanceNanos: result.paygBalanceNanos },
+        metadata: { amountNanos: result.amountNanos, amountTokens: (result as any).amountTokens, balanceType, balanceNanos: result.balanceNanos, paygBalanceNanos: result.paygBalanceNanos, codingPlanTokens: (result as any).codingPlanTokens },
       });
       return result;
     }),
     setAccountCredit: adminProcedure.input(setAccountCreditInput).mutation(async ({ ctx, input }) => {
-      const targetAmountNanos = Math.round(input.targetAmountUsd * 1_000_000_000);
       const balanceType = input.balanceType ?? "bundle";
+      const targetAmountNanos = balanceType === "tokens" ? 0 : Math.round(input.targetAmountUsd * 1_000_000_000);
+      const targetTokens = balanceType === "tokens" ? Math.round(input.targetAmountUsd * 1_000_000) : undefined;
       const result = await setAdminAccountCredit({
         userId: input.userId,
         targetAmountNanos,
+        targetTokens,
         actorUserId: ctx.user.id,
         balanceType,
         note: input.note,
@@ -1343,16 +1417,19 @@ export const appRouter = router({
       await writeAuditEvent({
         actorUserId: ctx.user.id,
         targetUserId: input.userId,
-        action: balanceType === "payg" ? "account.payg_balance_set" : "account.credit_set",
+        action: balanceType === "tokens" ? "account.coding_tokens_set" : balanceType === "payg" ? "account.payg_balance_set" : "account.credit_set",
         entityType: "account",
         entityId: String(input.userId),
         metadata: {
           targetAmountUsd: input.targetAmountUsd,
           targetAmountNanos: result.targetAmountNanos,
+          targetTokens: (result as any).targetTokens,
           diffNanos: result.diffNanos,
+          diffTokens: (result as any).diffTokens,
           balanceType,
           balanceNanos: result.balanceNanos,
           paygBalanceNanos: result.paygBalanceNanos,
+          codingPlanTokens: (result as any).codingPlanTokens,
           note: input.note,
         },
       });
@@ -1616,6 +1693,42 @@ export const appRouter = router({
       return settings;
     }),
     kimiK3FailureLogs: adminProcedure.query(async () => (await getRecentKimiK3FailureLogs(200)).map(entry => ({ ...entry, publicMessage: PUBLIC_PROVIDER_ERROR_MESSAGE }))),
+    universalModelProviderSettings: adminProcedure
+      .input(z.object({ modelId: z.string().trim().min(1) }))
+      .query(async ({ input }) => getUniversalModelProviderSettings(input.modelId)),
+    updateUniversalModelProviderSettings: adminProcedure
+      .input(universalModelProviderSettingsInput)
+      .mutation(async ({ ctx, input }) => {
+        try {
+          const settings = await updateUniversalModelProviderSettings(input, ctx.user.id);
+          await writeAuditEvent({
+            actorUserId: ctx.user.id,
+            action: "universal_model_provider_settings_updated",
+            entityType: "provider",
+            entityId: input.modelId,
+            metadata: { providerCount: input.providers.length, modelId: input.modelId },
+          });
+          return settings;
+        } catch (error) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: error instanceof Error ? error.message : "TokenForge could not save universal model provider settings",
+          });
+        }
+      }),
+    listUniversalModels: adminProcedure.query(async () => listUniversalConfiguredModels()),
+    universalModelKeyMetrics: adminProcedure
+      .input(z.object({ modelId: z.string().trim().min(1) }))
+      .query(async ({ input }) => getUniversalModelKeyMetricGroup(input.modelId)),
+    universalModelFailureLogs: adminProcedure
+      .input(z.object({
+        modelId: z.string().trim().min(1),
+        limit: z.number().int().min(1).max(200).default(100),
+      }))
+      .query(async ({ input }) => {
+        const logs = await getRecentModelFailureLogs(input.modelId, input.limit);
+        return logs.map(entry => ({ ...entry, publicMessage: PUBLIC_PROVIDER_ERROR_MESSAGE }));
+      }),
     updateClaudeOpus5ProviderSettings: adminProcedure.input(claudeOpus5ProviderSettingsInput).mutation(async ({ ctx, input }) => {
       try {
         const settings = await updateClaudeOpus5ProviderSettings(input, ctx.user.id);
@@ -1781,7 +1894,7 @@ export const appRouter = router({
       }),
     setModelIsPayg: adminProcedure
       .input(z.object({
-        modelId: tokenForgeModelId,
+        modelId: z.string().trim().min(1),
         isPayg: z.boolean(),
       }))
       .mutation(async ({ ctx, input }) => {
@@ -1798,7 +1911,7 @@ export const appRouter = router({
       }),
     setModelIsBundle: adminProcedure
       .input(z.object({
-        modelId: tokenForgeModelId,
+        modelId: z.string().trim().min(1),
         isBundle: z.boolean(),
       }))
       .mutation(async ({ ctx, input }) => {
@@ -1813,23 +1926,41 @@ export const appRouter = router({
         });
         return { success: true, modelId: input.modelId, isBundle: input.isBundle } as const;
       }),
-    setModelAccess: adminProcedure
+    setModelIsTokenPlan: adminProcedure
       .input(z.object({
-        modelId: tokenForgeModelId,
-        isPayg: z.boolean().optional(),
-        isBundle: z.boolean().optional(),
+        modelId: z.string().trim().min(1),
+        isTokenPlan: z.boolean(),
       }))
       .mutation(async ({ ctx, input }) => {
-        const updated = await setModelAccess(input.modelId, { isPayg: input.isPayg, isBundle: input.isBundle });
+        const updated = await setModelIsTokenPlan(input.modelId, input.isTokenPlan);
+        if (!updated) throw new TRPCError({ code: "NOT_FOUND", message: "Model configuration not found" });
+        await writeAuditEvent({
+          actorUserId: ctx.user.id,
+          action: input.isTokenPlan ? "model.token_plan_access.enabled" : "model.token_plan_access.disabled",
+          entityType: "model",
+          entityId: input.modelId,
+          metadata: { isTokenPlan: input.isTokenPlan },
+        });
+        return { success: true, modelId: input.modelId, isTokenPlan: input.isTokenPlan } as const;
+      }),
+    setModelAccess: adminProcedure
+      .input(z.object({
+        modelId: z.string().trim().min(1),
+        isPayg: z.boolean().optional(),
+        isBundle: z.boolean().optional(),
+        isTokenPlan: z.boolean().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const updated = await setModelAccess(input.modelId, { isPayg: input.isPayg, isBundle: input.isBundle, isTokenPlan: input.isTokenPlan });
         if (!updated) throw new TRPCError({ code: "NOT_FOUND", message: "Model configuration not found" });
         await writeAuditEvent({
           actorUserId: ctx.user.id,
           action: "model.access.updated",
           entityType: "model",
           entityId: input.modelId,
-          metadata: { isPayg: input.isPayg, isBundle: input.isBundle },
+          metadata: { isPayg: input.isPayg, isBundle: input.isBundle, isTokenPlan: input.isTokenPlan },
         });
-        return { success: true, modelId: input.modelId, isPayg: input.isPayg, isBundle: input.isBundle } as const;
+        return { success: true, modelId: input.modelId, isPayg: input.isPayg, isBundle: input.isBundle, isTokenPlan: input.isTokenPlan } as const;
       }),
     setProviderEnabled: adminProcedure.input(z.object({ slug: z.enum([FXQIDIAN_PROVIDER_SLUG, CLUSTER_PROTOCOL_PROVIDER_SLUG, TOKENHARBOR_PROVIDER_SLUG, CLAUDE_OPUS5_PROVIDER_SLUG, TOKENROUTER_PROVIDER_SLUG]), enabled: z.boolean() })).mutation(async ({ ctx, input }) => {
       const result = await setProviderEnabled(input.slug, input.enabled);
@@ -1875,6 +2006,43 @@ export const appRouter = router({
         const logs = await getRecentModelFailureLogs(input.modelId, input.limit);
         return logs.map(entry => ({ ...entry, publicMessage: PUBLIC_PROVIDER_ERROR_MESSAGE }));
       }),
+    getCacheDebugStatus: adminProcedure.query(() => ({
+      enabled: isCacheDebugEnabled(),
+      count: getCacheDebugSummaries().length,
+    })),
+    setCacheDebugStatus: adminProcedure
+      .input(z.object({ enabled: z.boolean() }))
+      .mutation(({ input }) => {
+        setCacheDebugEnabled(input.enabled);
+        return { enabled: isCacheDebugEnabled() };
+      }),
+    getCacheDebugRequests: adminProcedure.query(() => getCacheDebugSummaries()),
+    getCacheDebugRequestDetail: adminProcedure
+      .input(z.object({ id: z.string() }))
+      .query(({ input }) => {
+        const entry = getCacheDebugEntry(input.id);
+        if (!entry) throw new TRPCError({ code: "NOT_FOUND", message: "Debug entry not found" });
+        return entry;
+      }),
+    diffCacheDebugRequests: adminProcedure
+      .input(z.object({
+        reqAId: z.string(),
+        reqBId: z.string(),
+        field: z.enum(["upstream_body", "incoming_body"]).default("upstream_body"),
+      }))
+      .query(({ input }) => {
+        const entryA = getCacheDebugEntry(input.reqAId);
+        const entryB = getCacheDebugEntry(input.reqBId);
+        if (!entryA || !entryB) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "One or both debug requests were not found." });
+        }
+        return computeCacheDiffBetweenEntries(entryA, entryB, input.field);
+      }),
+    clearCacheDebugRequests: adminProcedure.mutation(() => {
+      clearCacheDebugEntries();
+      return { success: true };
+    }),
+    exportCacheDebugJsonl: adminProcedure.query(() => exportCacheDebugJsonl()),
 
   }),
 });

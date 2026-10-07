@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { Toggle } from "../common/AdminCommon";
 import { ManagedProviderKeyMetricGroup } from "../types";
+import { Layers } from "lucide-react";
 import {
   AllProviderKeyMetricsOverviewPanel,
   ClaudeFable5ProviderBalancerPanel,
@@ -19,6 +20,7 @@ import {
   Sonnet46ProviderBalancerPanel,
 } from "./ProvidersSection";
 import { OrcaRouterCredentialPanel } from "./OrcaRouterCredentialPanel";
+import { UniversalModelProviderBalancer } from "./UniversalModelProviderBalancer";
 
 export function PinnedUserRoutingPolicyCard() {
   const utils = trpc.useUtils();
@@ -89,6 +91,7 @@ export function PinnedUserRoutingPolicyCard() {
 }
 
 export type ManagedProviderTabId =
+  | "universal"
   | "opus"
   | "fable"
   | "sonnet46"
@@ -115,6 +118,19 @@ export function ManagedProviderSelector({
       <PinnedUserRoutingPolicyCard />
 
       <div className="dashboard-card flex flex-wrap gap-2 p-2">
+        <Button
+          size="sm"
+          variant={activeTab === "universal" ? "default" : "ghost"}
+          onClick={() => setActiveTab("universal")}
+          className={
+            activeTab === "universal"
+              ? "bg-[#c9ff73] text-[#17210d] hover:bg-[#d8ff91] font-semibold flex items-center gap-1.5"
+              : "text-[#b7b8c7] hover:bg-white/8 hover:text-white flex items-center gap-1.5"
+          }
+        >
+          <Layers size={13} />
+          Universal Model Hub
+        </Button>
         <Button
           size="sm"
           variant={activeTab === "opus" ? "default" : "ghost"}
@@ -249,6 +265,9 @@ export function ManagedProviderSelector({
         </Button>
       </div>
 
+      {activeTab === "universal" && (
+        <UniversalModelProviderBalancer />
+      )}
       {activeTab === "opus" && (
         <ClaudeOpus5ProviderBalancerPanelWrapper metrics={metricFor("claude-opus-5")} />
       )}

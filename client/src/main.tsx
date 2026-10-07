@@ -116,10 +116,38 @@ const trpcClient = trpc.createClient({
         let lastError: any;
         for (let attempt = 0; attempt < 3; attempt++) {
           try {
-            return await globalThis.fetch(input, {
+            const res = await globalThis.fetch(input, {
               ...(init ?? {}),
               credentials: "include",
             });
+
+            // If the response is HTML (e.g. gateway 502/503 during restart or custom error page),
+            // prevent JSON.parse/superjson from throwing "Unexpected token '<', <!doctype..."
+            const contentType = res.headers.get("content-type") || "";
+            if (!contentType.includes("application/json") && !contentType.includes("text/json")) {
+              if (attempt < 2) {
+                await new Promise((resolve) => setTimeout(resolve, 300 * (attempt + 1)));
+                continue;
+              }
+              // Return a structured JSON error response that tRPC client can parse safely
+              return new Response(
+                JSON.stringify([
+                  {
+                    error: {
+                      message: `Service temporarily unavailable (received ${res.status || 503} non-JSON response). Retrying in a moment.`,
+                      code: -32000,
+                      data: { httpStatus: res.status >= 400 ? res.status : 503 },
+                    },
+                  },
+                ]),
+                {
+                  status: res.status >= 400 ? res.status : 503,
+                  headers: { "Content-Type": "application/json" },
+                }
+              );
+            }
+
+            return res;
           } catch (err: any) {
             lastError = err;
             const isNetworkError =

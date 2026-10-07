@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { PLAYGROUND_FEATURED_MODEL_IDS, prioritizePlaygroundModels, TOKENFORGE_MODELS } from "@/lib/modelCatalogue";
 import { trpc } from "@/lib/trpc";
-import { AlertTriangle, ChevronDown, CircleDollarSign, Cpu, Radio, RotateCcw, Search, ShieldCheck, SlidersHorizontal, Sparkles, Thermometer, WandSparkles, X } from "lucide-react";
+import { AlertTriangle, Brain, ChevronDown, CircleDollarSign, Cpu, Radio, RotateCcw, Search, ShieldCheck, SlidersHorizontal, Sparkles, Thermometer, WandSparkles, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import "./playground-control-pane.css";
 
@@ -36,6 +36,7 @@ export default function Playground() {
   const [showParameters, setShowParameters] = useState(false);
   const [maxOutputTokens, setMaxOutputTokens] = useState(1024);
   const [temperature, setTemperature] = useState(0.7);
+  const [reasoningEffort, setReasoningEffort] = useState<"default" | "low" | "medium" | "high" | "xhigh" | "max">("default");
   const [stream, setStream] = useState(true);
   const [isStreaming, setIsStreaming] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -78,7 +79,7 @@ export default function Playground() {
         method: "POST",
         credentials: "same-origin",
         headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
-        body: JSON.stringify({ model, messages: requestMessages, maxOutputTokens, temperature }),
+        body: JSON.stringify({ model, messages: requestMessages, maxOutputTokens, temperature, reasoningEffort }),
       });
       if (!response.ok || !response.body) {
         const payload = await response.json().catch(() => null) as { error?: { message?: string } } | null;
@@ -157,7 +158,7 @@ export default function Playground() {
       return;
     }
     setMessages(previous => [...previous, userMessage]);
-    complete.mutate({ model, messages: requestMessages, maxOutputTokens, temperature });
+    complete.mutate({ model, messages: requestMessages, maxOutputTokens, temperature, reasoningEffort });
   };
 
   const activeModel = TOKENFORGE_MODELS.find(candidate => candidate.id === model) ?? TOKENFORGE_MODELS[0];
@@ -286,8 +287,42 @@ export default function Playground() {
               <span><SlidersHorizontal size={14} /><b>Response controls</b><em>{stream ? "streaming" : "standard"}</em></span><ChevronDown size={15} className={showParameters ? "rotate-180 transition-transform" : "transition-transform"} />
             </button>
             {showParameters && <div className="playground-parameters">
-              <label><span>Max output</span><select value={maxOutputTokens} onChange={event => setMaxOutputTokens(Number(event.target.value))} disabled={complete.isPending || isStreaming}><option value={256}>256 tokens</option><option value={512}>512 tokens</option><option value={1024}>1,024 tokens</option><option value={2048}>2,048 tokens</option><option value={4096}>4,096 tokens</option><option value={8192}>8,192 tokens</option></select></label>
+              <label>
+                <span>Max output</span>
+                <select
+                  value={maxOutputTokens}
+                  onChange={event => setMaxOutputTokens(Number(event.target.value))}
+                  disabled={complete.isPending || isStreaming}
+                >
+                  <option value={256}>256 tokens</option>
+                  <option value={512}>512 tokens</option>
+                  <option value={1024}>1,024 tokens (1k)</option>
+                  <option value={2048}>2,048 tokens (2k)</option>
+                  <option value={4096}>4,096 tokens (4k)</option>
+                  <option value={8192}>8,192 tokens (8k)</option>
+                  <option value={16384}>16,384 tokens (16k)</option>
+                  <option value={32768}>32,768 tokens (32k)</option>
+                  <option value={65536}>65,536 tokens (64k)</option>
+                </select>
+              </label>
               <label><span><Thermometer size={13} /> Temperature <b>{temperature.toFixed(1)}</b></span><input type="range" min="0" max="2" step="0.1" value={temperature} onChange={event => setTemperature(Number(event.target.value))} disabled={complete.isPending || isStreaming} /></label>
+              <label>
+                <span>
+                  <Brain size={13} /> Reasoning Effort <b>{reasoningEffort === "default" ? "Standard" : reasoningEffort.toUpperCase()}</b>
+                </span>
+                <select
+                  value={reasoningEffort}
+                  onChange={event => setReasoningEffort(event.target.value as any)}
+                  disabled={complete.isPending || isStreaming}
+                >
+                  <option value="default">Default (Model standard)</option>
+                  <option value="low">Low (Fast response)</option>
+                  <option value="medium">Medium (Balanced reasoning)</option>
+                  <option value="high">High (Deep reasoning)</option>
+                  <option value="xhigh">X-High (Extended chain-of-thought)</option>
+                  <option value="max">Max (Maximum effort budget)</option>
+                </select>
+              </label>
               <button type="button" className={stream ? "playground-stream-toggle playground-stream-toggle--active" : "playground-stream-toggle"} onClick={() => setStream(value => !value)} disabled={complete.isPending || isStreaming}><span><Radio size={14} /> <b>Stream response</b></span><i aria-hidden="true" /></button>
               <p>Streaming paints output as it arrives. TokenForge still meters the completed provider-reported token total.</p>
             </div>}

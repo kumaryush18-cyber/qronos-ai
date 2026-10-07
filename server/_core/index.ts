@@ -123,7 +123,7 @@ async function startServer() {
   app.use("/api/solana-pay/price", solanaPriceRateLimit);
 
   // Inference endpoints IP rate limit (60 req/min)
-  app.use(["/v1/chat/completions", "/v1/messages"], inferenceIpRateLimit);
+  app.use(["/v1/chat/completions", "/v1/messages", "/api/playground/chat/completions"], inferenceIpRateLimit);
 
   registerStorageProxy(app);
   registerOAuthRoutes(app);
@@ -149,22 +149,48 @@ async function startServer() {
     })
   );
   // development mode uses Vite, production mode uses static files
-  if (process.env.NODE_ENV === "development") {
+  if (process.env.NODE_ENV !== "production") {
     await setupVite(app, server);
   } else {
     serveStatic(app);
   }
 
-  try {
-    await Promise.all([ensureCatalogue(), clearLegacyAdministratorRoles(), loadAndCacheModelPricingOverrides()]);
-  } catch (error) {
-    console.error("[TokenForge] Startup access and catalogue warmup failed; requests will retry catalogue initialization on demand", error);
-  }
+  const port = parseInt(process.env.PORT || "3000", 10);
 
-  const port = 3000;
+  server.on("error", (err: NodeJS.ErrnoException) => {
+    if (err.code === "EADDRINUSE") {
+      console.warn(`[TokenForge] Port ${port} is in use, retrying in 1 second...`);
+      setTimeout(() => {
+        try {
+          server.close();
+        } catch {
+          // ignore
+        }
+        server.listen(port, "0.0.0.0");
+      }, 1000);
+    } else {
+      console.error("[TokenForge] Server error:", err);
+    }
+  });
 
   server.listen(port, "0.0.0.0", () => {
     console.log(`Server running on http://0.0.0.0:${port}/`);
+  });
+
+  const shutdown = () => {
+    try {
+      server.close(() => {
+        process.exit(0);
+      });
+    } catch {
+      process.exit(0);
+    }
+  };
+  process.on("SIGTERM", shutdown);
+  process.on("SIGINT", shutdown);
+
+  Promise.all([ensureCatalogue(), clearLegacyAdministratorRoles(), loadAndCacheModelPricingOverrides()]).catch(error => {
+    console.error("[TokenForge] Startup access and catalogue warmup failed; requests will retry catalogue initialization on demand", error);
   });
 }
 

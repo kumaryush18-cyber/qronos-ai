@@ -5,7 +5,7 @@ import { creditAccountFromSolanaPay, getDb } from "./db";
 import { sql } from "drizzle-orm";
 import { sdk } from "./_core/sdk";
 import { createStrictCors } from "./_core/cors";
-import { CRYPTO_TIERS } from "../shared/paymentTiers";
+import { CRYPTO_TIERS, CODING_PLAN_TIERS, getCodingPlanTier } from "../shared/paymentTiers";
 
 // ==============================================================================
 // Production Configuration (Mainnet-Beta)
@@ -34,6 +34,9 @@ export interface SolanaPayOrder {
   currency: "SOL";
   creditsNanos: number;
   isPayg?: boolean;
+  isCodingPlan?: boolean;
+  codingTokens?: number;
+  planName?: string;
   referencePubkey: string;
   merchantPubkey: string;
   solanaPayUrl: string;
@@ -341,20 +344,27 @@ export function registerSolanaPayGateway(app: Express) {
         usd_amount,
         package_usd,
         amount_sol,
+        tier_id,
+        tierId,
         label = "TokenForge",
         message = "API Credits",
         is_payg,
         isPayg,
+        is_coding_plan,
+        isCodingPlan,
       } = req.body || {};
 
       const isPaygDeposit = Boolean(is_payg || isPayg);
+      const isCoding = Boolean(is_coding_plan || isCodingPlan || (tier_id && String(tier_id).startsWith("coding_")) || (tierId && String(tierId).startsWith("coding_")));
       const solUsdPrice = await getSolPriceUsd();
 
+      const matchedCodingTier = isCoding ? getCodingPlanTier(tier_id || tierId || package_usd || usd_amount || 25) : undefined;
+
       // Determine USD value: accept usd_amount, package_usd, or convert from amount_sol
-      let targetUsd = Number(usd_amount || package_usd || 25);
+      let targetUsd = matchedCodingTier ? matchedCodingTier.amountUsd : Number(usd_amount || package_usd || 25);
       let targetSol: number;
 
-      if (Number.isFinite(Number(amount_sol)) && Number(amount_sol) > 0) {
+      if (Number.isFinite(Number(amount_sol)) && Number(amount_sol) > 0 && !matchedCodingTier) {
         targetSol = Math.round(Number(amount_sol) * 100000) / 100000;
         targetUsd = Math.round(targetSol * solUsdPrice * 100) / 100;
       } else {
@@ -375,9 +385,10 @@ export function registerSolanaPayGateway(app: Express) {
       const orderId = `tf_sol_${randomBytes(16).toString("hex")}`;
       const now = new Date();
       const expiresAt = new Date(now.getTime() + ORDER_EXPIRY_MS);
-      // Compute credit amount based on CRYPTO_TIERS or 240 credits/USD rate
-      const matchedTier = CRYPTO_TIERS.find((t) => t.usd === targetUsd);
+      // Compute credit amount based on CRYPTO_TIERS or 240 credits/USD rate or CODING_PLAN_TIERS
+      const matchedTier = matchedCodingTier ? undefined : CRYPTO_TIERS.find((t) => t.usd === targetUsd);
       const creditsNanos =
+        matchedCodingTier?.tokens ??
         matchedTier?.creditsNanos ?? Math.trunc(targetUsd * 240 * 1_000_000_000);
       const credits = Math.trunc(creditsNanos / 1_000_000_000);
 
@@ -386,8 +397,8 @@ export function registerSolanaPayGateway(app: Express) {
         merchantPubkey: SOLANA_MERCHANT_WALLET,
         amountSol: targetSol,
         referencePubkey,
-        label,
-        message,
+        label: matchedCodingTier ? `TokenForge Coding Plan` : label,
+        message: matchedCodingTier ? `${matchedCodingTier.tokensMillions}M Coding Tokens ($${matchedCodingTier.amountUsd})` : message,
       });
 
       const parsedUserId = authUser.id;
@@ -405,6 +416,9 @@ export function registerSolanaPayGateway(app: Express) {
         currency: "SOL",
         creditsNanos,
         isPayg: isPaygDeposit,
+        isCodingPlan: Boolean(matchedCodingTier || isCoding),
+        codingTokens: matchedCodingTier?.tokens,
+        planName: matchedCodingTier?.name,
         referencePubkey,
         merchantPubkey: SOLANA_MERCHANT_WALLET,
         solanaPayUrl,
@@ -668,17 +682,22 @@ export function registerSolanaPayGateway(app: Express) {
 
       // Immediately increment user credit balance if userId is present
       let updatedBalanceNanos: number | null = null;
+      let updatedCodingTokens: number | null = null;
       if (order.userId) {
         try {
           const creditResult = await creditAccountFromSolanaPay({
             userId: order.userId,
-            amountNanos: order.isPayg ? Math.round(order.usdAmount * 1_000_000_000) : order.creditsNanos,
+            amountNanos: order.isPayg ? Math.round(order.usdAmount * 1_000_000_000) : (order.isCodingPlan ? (order.codingTokens || order.creditsNanos) : order.creditsNanos),
             orderId: order.orderId,
             signature: targetSigInfo.signature,
-            assetLabel: order.isPayg ? `Solana Pay PAYG Deposit ($${order.usdAmount.toFixed(2)})` : `${order.solAmount} SOL ($${order.usdAmount.toFixed(2)} - ${Math.trunc(order.creditsNanos / 1_000_000_000).toLocaleString()} credits)`,
+            assetLabel: order.isCodingPlan ? `Coding Plan: ${order.planName || "Coding Plan"} (${Math.round((order.codingTokens || 0) / 1_000_000)}M Tokens)` : order.isPayg ? `Solana Pay PAYG Deposit ($${order.usdAmount.toFixed(2)})` : `${order.solAmount} SOL ($${order.usdAmount.toFixed(2)} - ${Math.trunc(order.creditsNanos / 1_000_000_000).toLocaleString()} credits)`,
             isPayg: order.isPayg,
+            isCodingPlan: order.isCodingPlan,
+            codingPlanTokens: order.codingTokens,
+            planName: order.planName,
           });
           updatedBalanceNanos = creditResult?.balanceNanos ?? null;
+          updatedCodingTokens = creditResult?.codingPlanTokens ?? null;
         } catch (dbError) {
           console.error(
             `[Solana Pay] Failed to update credit account for user ${order.userId}:`,
@@ -714,11 +733,16 @@ export function registerSolanaPayGateway(app: Express) {
         currency: order.currency,
         credits: Math.trunc(order.creditsNanos / 1_000_000_000),
         credits_nanos: order.creditsNanos,
+        is_coding_plan: Boolean(order.isCodingPlan),
+        coding_tokens: order.codingTokens,
         updated_balance_nanos: updatedBalanceNanos,
+        updated_coding_tokens: updatedCodingTokens,
         signature: targetSigInfo.signature,
         explorer_url: `https://explorer.solana.com/tx/${targetSigInfo.signature}`,
         completed_at: order.completedAt.toISOString(),
-        message: "Payment successfully verified on Solana Mainnet-Beta. Account credited.",
+        message: order.isCodingPlan
+          ? `Payment successfully verified on Solana Mainnet-Beta. ${Math.round((order.codingTokens || 0) / 1_000_000)}M Coding Tokens added to account.`
+          : "Payment successfully verified on Solana Mainnet-Beta. Account credited.",
       });
     } catch (error: any) {
       console.error("[Solana Pay] Error verifying order:", error);

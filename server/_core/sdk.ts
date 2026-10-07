@@ -3,10 +3,25 @@ import { ForbiddenError } from "@shared/_core/errors";
 import axios, { type AxiosInstance } from "axios";
 import { parse as parseCookieHeader } from "cookie";
 import type { Request } from "express";
+import { createHash } from "node:crypto";
 import { SignJWT, jwtVerify } from "jose";
 import type { User } from "../../drizzle/schema";
 import * as db from "../db";
 import { ENV } from "./env";
+
+const revokedTokenHashes = new Set<string>();
+
+export function revokeSessionToken(token: string | undefined | null) {
+  if (!token || typeof token !== "string") return;
+  const hash = createHash("sha256").update(token.trim()).digest("hex");
+  revokedTokenHashes.add(hash);
+}
+
+export function isSessionTokenRevoked(token: string | undefined | null): boolean {
+  if (!token || typeof token !== "string") return false;
+  const hash = createHash("sha256").update(token.trim()).digest("hex");
+  return revokedTokenHashes.has(hash);
+}
 import type {
   ExchangeTokenRequest,
   ExchangeTokenResponse,
@@ -291,6 +306,10 @@ class SDKServer {
 
     if (!session) {
       throw ForbiddenError("Invalid session cookie");
+    }
+
+    if (isSessionTokenRevoked(sessionToken)) {
+      throw ForbiddenError("Session has been revoked");
     }
 
     if (session.openId.startsWith(CRON_OPEN_ID_PREFIX)) {

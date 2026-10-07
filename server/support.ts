@@ -1,6 +1,7 @@
 import { eq, desc, and, sql, asc, inArray } from "drizzle-orm";
 import { getDb } from "./db";
 import { supportMessages, users } from "../drizzle/schema";
+import { cached, bustCache } from "./memoryCache";
 
 // Each user has their own independent support message thread
 function getTargetUserIds(userId: number): number[] {
@@ -36,6 +37,8 @@ export async function sendSupportMessage(userId: number, content: string) {
       isRead: false,
     });
   }
+  bustCache(`support_unread:${userId}`);
+  bustCache("support_admin_conversations");
   return true;
 }
 
@@ -53,45 +56,50 @@ export async function markUserMessagesAsRead(userId: number) {
   await db.update(supportMessages)
     .set({ isRead: true })
     .where(and(inArray(supportMessages.userId, userIds), eq(supportMessages.senderRole, "admin")));
+  bustCache(`support_unread:${userId}`);
   return true;
 }
 
 export async function getUserUnreadCount(userId: number) {
-  const db = await getDb();
-  if (!db) return 0;
-  const userIds = getTargetUserIds(userId);
-  const rows = await db.select({ count: sql<number>`count(*)` })
-    .from(supportMessages)
-    .where(and(inArray(supportMessages.userId, userIds), eq(supportMessages.senderRole, "admin"), eq(supportMessages.isRead, false)));
-  return Number(rows[0]?.count ?? 0);
+  return cached(`support_unread:${userId}`, 30_000, async () => {
+    const db = await getDb();
+    if (!db) return 0;
+    const userIds = getTargetUserIds(userId);
+    const rows = await db.select({ count: sql<number>`count(*)` })
+      .from(supportMessages)
+      .where(and(inArray(supportMessages.userId, userIds), eq(supportMessages.senderRole, "admin"), eq(supportMessages.isRead, false)));
+    return Number(rows[0]?.count ?? 0);
+  });
 }
 
 export async function getAdminConversations() {
-  const db = await getDb();
-  if (!db) return [];
-  
-  const userChats = await db.selectDistinct({ userId: supportMessages.userId }).from(supportMessages);
-  
-  const conversations = [];
-  for (const { userId } of userChats) {
-    const user = (await db.select().from(users).where(eq(users.id, userId)).limit(1))[0];
-    if (!user) continue;
+  return cached("support_admin_conversations", 15_000, async () => {
+    const db = await getDb();
+    if (!db) return [];
     
-    const unreadCountRow = await db.select({ count: sql<number>`count(*)` })
-      .from(supportMessages)
-      .where(and(eq(supportMessages.userId, userId), eq(supportMessages.senderRole, "user"), eq(supportMessages.isRead, false)));
+    const userChats = await db.selectDistinct({ userId: supportMessages.userId }).from(supportMessages);
+    
+    const conversations = [];
+    for (const { userId } of userChats) {
+      const user = (await db.select().from(users).where(eq(users.id, userId)).limit(1))[0];
+      if (!user) continue;
       
-    const latestMsg = (await db.select().from(supportMessages).where(eq(supportMessages.userId, userId)).orderBy(desc(supportMessages.createdAt)).limit(1))[0];
+      const unreadCountRow = await db.select({ count: sql<number>`count(*)` })
+        .from(supportMessages)
+        .where(and(eq(supportMessages.userId, userId), eq(supportMessages.senderRole, "user"), eq(supportMessages.isRead, false)));
+        
+      const latestMsg = (await db.select().from(supportMessages).where(eq(supportMessages.userId, userId)).orderBy(desc(supportMessages.createdAt)).limit(1))[0];
+      
+      conversations.push({
+        user: { id: user.id, name: user.name, email: user.email },
+        unreadCount: Number(unreadCountRow[0].count),
+        latestMessageAt: latestMsg ? latestMsg.createdAt : new Date(0),
+        latestMessagePreview: latestMsg ? latestMsg.content.substring(0, 50) : "",
+      });
+    }
     
-    conversations.push({
-      user: { id: user.id, name: user.name, email: user.email },
-      unreadCount: Number(unreadCountRow[0].count),
-      latestMessageAt: latestMsg ? latestMsg.createdAt : new Date(0),
-      latestMessagePreview: latestMsg ? latestMsg.content.substring(0, 50) : "",
-    });
-  }
-  
-  return conversations.sort((a, b) => b.latestMessageAt.getTime() - a.latestMessageAt.getTime());
+    return conversations.sort((a, b) => b.latestMessageAt.getTime() - a.latestMessageAt.getTime());
+  });
 }
 
 export async function markAdminMessagesAsRead(userId: number) {
@@ -100,6 +108,8 @@ export async function markAdminMessagesAsRead(userId: number) {
   await db.update(supportMessages)
     .set({ isRead: true })
     .where(and(eq(supportMessages.userId, userId), eq(supportMessages.senderRole, "user")));
+  bustCache(`support_unread:${userId}`);
+  bustCache("support_admin_conversations");
   return true;
 }
 
@@ -113,6 +123,8 @@ export async function sendAdminReply(userId: number, content: string) {
     content,
     isRead: false,
   });
+  bustCache(`support_unread:${userId}`);
+  bustCache("support_admin_conversations");
   return true;
 }
 
@@ -145,5 +157,7 @@ export async function deleteAdminMessage(messageId: number) {
   }
 
   await db.delete(supportMessages).where(eq(supportMessages.id, messageId));
+  bustCache(`support_unread:${msg.userId}`);
+  bustCache("support_admin_conversations");
   return { success: true, deletedId: messageId, userId: msg.userId };
 }

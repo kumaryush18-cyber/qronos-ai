@@ -1,4 +1,4 @@
-import { ArrowRight, Braces, CheckCircle2, ChevronLeft, CircleDollarSign, Cpu, ExternalLink, Lock, Play, Radio, Route, ShieldCheck } from "lucide-react";
+import { ArrowRight, Braces, CheckCircle2, ChevronLeft, CircleDollarSign, Code2, Cpu, ExternalLink, Lock, Play, Radio, Route, ShieldCheck } from "lucide-react";
 import { Link } from "wouter";
 import { useMemo, useState } from "react";
 import { PUBLIC_ORIGIN } from "@shared/const";
@@ -27,7 +27,13 @@ export function DashboardModels({ modelId }: { modelId?: string }) {
     return new Map(
       modelAvailability.data?.map(item => [
         item.modelId,
-        { available: item.available, minTier: (item as any).minTier ?? "free" },
+        {
+          available: item.available,
+          minTier: (item as any).minTier ?? "free",
+          isTokenPlan: (item as any).isTokenPlan ?? false,
+          isPayg: (item as any).isPayg ?? false,
+          isBundle: (item as any).isBundle !== false,
+        },
       ]) ?? []
     );
   }, [modelAvailability.data]);
@@ -38,9 +44,9 @@ export function DashboardModels({ modelId }: { modelId?: string }) {
   return <ModelList modelMetaMap={modelMetaMap} userTier={userTier} />;
 }
 
-function ModelList({ modelMetaMap, userTier }: { modelMetaMap: Map<string, { available: boolean; minTier: string }>; userTier: string }) {
+function ModelList({ modelMetaMap, userTier }: { modelMetaMap: Map<string, { available: boolean; minTier: string; isTokenPlan?: boolean }>; userTier: string }) {
   const { getRates } = useDynamicModelPricing();
-  const [filter, setFilter] = useState<"all" | "free" | "paid" | "accessible">("all");
+  const [filter, setFilter] = useState<"all" | "free" | "paid" | "token_plan" | "accessible">("all");
 
   const userRank = TIER_ORDER[userTier] ?? 0;
   const activeCount = TOKENFORGE_MODELS.filter(model => modelMetaMap.get(model.id)?.available === true).length;
@@ -52,12 +58,14 @@ function ModelList({ modelMetaMap, userTier }: { modelMetaMap: Map<string, { ava
       const modelRank = TIER_ORDER[minTier] ?? 0;
       if (filter === "free") return minTier === "free";
       if (filter === "paid") return minTier !== "free";
+      if (filter === "token_plan") return meta?.isTokenPlan === true;
       if (filter === "accessible") return userRank >= modelRank;
       return true;
     });
   }, [modelMetaMap, filter, userRank]);
 
   const freeCount = TOKENFORGE_MODELS.filter(m => (modelMetaMap.get(m.id)?.minTier ?? "free") === "free").length;
+  const tokenPlanCount = TOKENFORGE_MODELS.filter(m => modelMetaMap.get(m.id)?.isTokenPlan === true).length;
   const accessibleCount = TOKENFORGE_MODELS.filter(m => userRank >= (TIER_ORDER[modelMetaMap.get(m.id)?.minTier ?? "free"] ?? 0)).length;
 
   return (
@@ -133,6 +141,19 @@ function ModelList({ modelMetaMap, userTier }: { modelMetaMap: Map<string, { ava
           >
             <Lock size={13} className="text-amber-400" /> Paid Tiers ({TOKENFORGE_MODELS.length - freeCount})
           </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={filter === "token_plan"}
+            onClick={() => setFilter("token_plan")}
+            className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors flex items-center gap-1.5 ${
+              filter === "token_plan"
+                ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40"
+                : "text-[#9ea0af] hover:text-cyan-300 border border-transparent"
+            }`}
+          >
+            <Code2 size={13} className="text-cyan-400" /> Token Plan ({tokenPlanCount})
+          </button>
         </div>
         <span className="text-xs text-[#9ea0af]">Showing {filteredModels.length} models</span>
       </div>
@@ -145,6 +166,7 @@ function ModelList({ modelMetaMap, userTier }: { modelMetaMap: Map<string, { ava
           const modelRank = TIER_ORDER[minTier] ?? 0;
           const isUnlocked = userRank >= modelRank;
           const isFree = minTier === "free";
+          const isTokenPlan = meta?.isTokenPlan === true;
 
           const label = available === undefined ? "Checking" : available ? "Available" : "Temporarily unavailable";
           const offlineStyle = available === false ? { background: "rgba(250,169,92,.10)", color: "#ffc477" } : undefined;
@@ -157,8 +179,13 @@ function ModelList({ modelMetaMap, userTier }: { modelMetaMap: Map<string, { ava
                 <ProviderMark provider={model.provider} fallback={model.providerMark} size={28} />
               </span>
               <div className="dashboard-model-row__main">
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <p>{model.eyebrow}</p>
+                  {isTokenPlan && (
+                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-cyan-500/15 text-cyan-300 border border-cyan-500/30">
+                      <Code2 size={11} className="text-cyan-400" /> Token Plan
+                    </span>
+                  )}
                   {isFree ? (
                     <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
                       <ShieldCheck size={11} /> Free Tier
@@ -195,13 +222,14 @@ function ModelList({ modelMetaMap, userTier }: { modelMetaMap: Map<string, { ava
   );
 }
 
-function ModelDetail({ model, meta, userTier }: { model: CatalogueModel; meta?: { available: boolean; minTier: string }; userTier: string }) {
+function ModelDetail({ model, meta, userTier }: { model: CatalogueModel; meta?: { available: boolean; minTier: string; isTokenPlan?: boolean }; userTier: string }) {
   const { getRates } = useDynamicModelPricing();
   const available = meta?.available;
   const minTier = meta?.minTier ?? "free";
   const userRank = TIER_ORDER[userTier] ?? 0;
   const modelRank = TIER_ORDER[minTier] ?? 0;
   const isUnlocked = userRank >= modelRank;
+  const isTokenPlan = meta?.isTokenPlan === true;
 
   if (model.id === "glm-5.3") return <Glm53ModelDetail model={model} available={available} minTier={minTier} isUnlocked={isUnlocked} userTier={userTier} />;
   
@@ -215,19 +243,24 @@ function ModelDetail({ model, meta, userTier }: { model: CatalogueModel; meta?: 
       <Link href="/dashboard/models" className="dashboard-model-back"><ChevronLeft size={15} /> Back to models</Link>
       <header className="dashboard-model-detail__hero">
         <div className="dashboard-model-detail__hero-copy">
-          <div className="dashboard-model-detail__name">
+          <div className="dashboard-model-detail__name flex-wrap gap-2">
             <h1>{model.name}</h1>
             <span style={offlineStyle}><i style={offlineDotStyle} /> {statusLabel}</span>
+            {isTokenPlan && (
+              <span className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs font-bold bg-cyan-500/15 text-cyan-300 border border-cyan-500/30">
+                <Code2 size={13} className="text-cyan-400" /> Token Plan Enabled
+              </span>
+            )}
             {minTier === "free" ? (
-              <span className="ml-2 inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs font-semibold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+              <span className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs font-semibold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
                 <ShieldCheck size={13} /> Free Tier
               </span>
             ) : isUnlocked ? (
-              <span className="ml-2 inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs font-semibold bg-blue-500/15 text-blue-300 border border-blue-500/30 uppercase">
+              <span className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs font-semibold bg-blue-500/15 text-blue-300 border border-blue-500/30 uppercase">
                 <ShieldCheck size={13} /> {minTier}+ (Unlocked)
               </span>
             ) : (
-              <span className="ml-2 inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs font-semibold bg-amber-500/15 text-amber-300 border border-amber-500/30 uppercase">
+              <span className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs font-semibold bg-amber-500/15 text-amber-300 border border-amber-500/30 uppercase">
                 <Lock size={13} /> Requires {minTier}+ Tier
               </span>
             )}

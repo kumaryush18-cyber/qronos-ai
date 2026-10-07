@@ -120,9 +120,13 @@ export type ProviderScopedFailureModel =
 export function ProviderScopedFailureHistory({
   model,
   title,
+  customProviders,
+  metrics,
 }: {
   model: ProviderScopedFailureModel;
   title: string;
+  customProviders?: Array<{ id: string; label: string; enabled?: boolean }>;
+  metrics?: { providers?: Array<{ id: string; label: string; slots?: Array<{ failureCount?: number; lastFailureAt?: string | Date | null }> }> };
 }) {
   const dynamicModelLogs = trpc.admin.modelFailureLogs.useQuery(
     { modelId: model },
@@ -206,6 +210,24 @@ export function ProviderScopedFailureHistory({
     refetchIntervalInBackground: false,
   });
 
+  const isDedicatedModel =
+    model === "claude-opus-5" ||
+    model === "claude-fable-5.1" ||
+    model === "glm-5.3" ||
+    model === "claude-sonnet-4.6" ||
+    model === "qwen3.8-max" ||
+    model === "gpt-6-astra" ||
+    model === "kimi-k3" ||
+    model === "deepseek-v4-pro";
+
+  const universalSettings = trpc.admin.universalModelProviderSettings.useQuery(
+    { modelId: model },
+    {
+      refetchInterval: 5_000,
+      refetchIntervalInBackground: false,
+    }
+  );
+
   const query =
     model === "claude-opus-5"
       ? opus
@@ -224,13 +246,18 @@ export function ProviderScopedFailureHistory({
       : deepseek;
 
   const entries = useMemo(() => {
-    if (dynamicModelLogs.data && dynamicModelLogs.data.length > 0) {
+    if (Array.isArray(dynamicModelLogs.data)) {
       return dynamicModelLogs.data as ClaudeOpus5FailureLog[];
     }
     return (query.data ?? []) as ClaudeOpus5FailureLog[];
   }, [dynamicModelLogs.data, query.data]);
-  const settings =
-    model === "claude-opus-5"
+
+  const settings = useMemo(() => {
+    // If universalSettings has providers configured in DB, prefer it
+    if (universalSettings.data?.providers && universalSettings.data.providers.length > 0) {
+      return universalSettings.data;
+    }
+    return model === "claude-opus-5"
       ? opusSettings.data
       : model === "claude-fable-5.1"
       ? fableSettings.data
@@ -246,10 +273,38 @@ export function ProviderScopedFailureHistory({
       ? kimiSettings.data
       : model === "deepseek-v4-pro"
       ? deepseekSettings.data
-      : null;
+      : universalSettings.data;
+  }, [
+    universalSettings.data,
+    model,
+    opusSettings.data,
+    fableSettings.data,
+    glmSettings.data,
+    sonnetSettings.data,
+    qwenSettings.data,
+    gpt6AstraSettings.data,
+    kimiSettings.data,
+    deepseekSettings.data,
+  ]);
 
-  const configuredProviders = ((settings as ClaudeOpus5SettingsData | undefined)?.providers ??
-    []) as ClaudeOpus5ProviderSettingsData[];
+  const configuredProviders = useMemo(() => {
+    if (customProviders && customProviders.length > 0) {
+      return customProviders.map((p) => ({
+        id: p.id,
+        label: p.label,
+        enabled: p.enabled !== false,
+        configured: true,
+      }));
+    }
+    const sourceProviders = ((settings as ClaudeOpus5SettingsData | undefined)?.providers ??
+      []) as ClaudeOpus5ProviderSettingsData[];
+    return sourceProviders.map((p) => ({
+      id: p.id,
+      label: p.label,
+      enabled: p.enabled !== false,
+      configured: true,
+    }));
+  }, [customProviders, settings]);
 
   const specificTabs = configuredProviders.length
     ? configuredProviders.map((provider) => ({
@@ -262,9 +317,73 @@ export function ProviderScopedFailureHistory({
         .sort((left, right) => left.localeCompare(right))
         .map((label) => ({ id: label, label, enabled: true, configured: false }));
 
+  const isEntryForProvider = (
+    entry: ClaudeOpus5FailureLog,
+    provider: { id: string; label: string; configured: boolean }
+  ) => {
+    if (provider.id === "all") return true;
+    if (provider.id.startsWith("removed_")) {
+      const sLabel = (entry.sourceLabel ?? "").toLowerCase().trim();
+      const targetLabel = provider.label.replace(/\s*\(Removed\)$/i, "").toLowerCase().trim();
+      return sLabel === targetLabel || sLabel.startsWith(targetLabel) || targetLabel.startsWith(sLabel);
+    }
+    if (!provider.configured) {
+      return entry.sourceLabel === provider.id;
+    }
+    if (entry.sourceType !== "provider") return false;
+    const sourceId = (entry.sourceId ?? "").toLowerCase();
+    const sourceLabel = (entry.sourceLabel ?? "").toLowerCase().trim();
+    const targetId = provider.id.toLowerCase();
+    const targetLabel = provider.label.toLowerCase().trim();
+
+    // Direct ID exact match or prefix
+    if (sourceId === targetId || sourceId.startsWith(`${targetId}:`) || sourceId.startsWith(`${targetId}-`)) {
+      return true;
+    }
+
+    // Direct label match
+    if (sourceLabel === targetLabel || sourceLabel.startsWith(`${targetLabel} `) || sourceLabel.startsWith(`${targetLabel}·`) || sourceLabel.startsWith(`${targetLabel}:`)) {
+      return true;
+    }
+
+    // Normalized label match (stripping version numbers like _5.5, -5.5, spaces, underscores)
+    const normSource = sourceLabel.replace(/[_\s-]+(v?\d+(\.\d+)?)$/i, "").replace(/[_\s-]+/g, " ").trim();
+    const normTarget = targetLabel.replace(/[_\s-]+(v?\d+(\.\d+)?)$/i, "").replace(/[_\s-]+/g, " ").trim();
+    if (normSource && normTarget && (normSource === normTarget || normSource.includes(normTarget) || normTarget.includes(normSource))) {
+      return true;
+    }
+
+    return false;
+  };
+
+  // Identify distinct removed providers that have recorded logs but aren't currently configured
+  const removedTabs = useMemo(() => {
+    if (!configuredProviders.length) return [];
+    const list: Array<{ id: string; label: string; enabled: boolean; configured: boolean }> = [];
+    const seenLabels = new Set<string>();
+    for (const entry of entries) {
+      const isMatched = configuredProviders.some((p) => isEntryForProvider(entry, p));
+      if (!isMatched && entry.sourceLabel) {
+        const cleanLabel = entry.sourceLabel.trim();
+        const key = cleanLabel.toLowerCase();
+        if (!seenLabels.has(key)) {
+          seenLabels.add(key);
+          list.push({
+            id: `removed_${key.replace(/[^a-z0-9_-]/g, "_")}`,
+            label: `${cleanLabel} (Removed)`,
+            enabled: false,
+            configured: false,
+          });
+        }
+      }
+    }
+    return list;
+  }, [entries, configuredProviders]);
+
   const providerTabs = [
     { id: "all", label: "All providers", enabled: true, configured: false },
     ...specificTabs,
+    ...removedTabs,
   ];
 
   const [activeProviderId, setActiveProviderId] = useState("all");
@@ -281,50 +400,34 @@ export function ProviderScopedFailureHistory({
 
   const activeProvider = providerTabs.find((provider) => provider.id === activeProviderId);
 
-  const isEntryForProvider = (
-    entry: ClaudeOpus5FailureLog,
-    provider: { id: string; label: string; configured: boolean }
-  ) => {
-    if (provider.id === "all") return true;
-    if (!provider.configured) {
-      return entry.sourceLabel === provider.id;
-    }
-    if (entry.sourceType !== "provider") return false;
-    const sourceId = entry.sourceId ?? "";
-    const sourceLabel = (entry.sourceLabel ?? "").toLowerCase();
-    const targetId = provider.id.toLowerCase();
-    const targetLabel = provider.label.toLowerCase();
-
-    return (
-      sourceId === provider.id ||
-      sourceId.toLowerCase().startsWith(`${targetId}:`) ||
-      sourceId.toLowerCase().startsWith(`${targetId}-`) ||
-      sourceLabel === targetLabel ||
-      sourceLabel.startsWith(`${targetLabel} `) ||
-      sourceLabel.startsWith(`${targetLabel}·`) ||
-      sourceLabel.startsWith(`${targetLabel} ·`) ||
-      sourceLabel.startsWith(`${targetLabel}:`) ||
-      sourceLabel.includes(targetLabel) ||
-      sourceLabel.includes(targetId)
-    );
-  };
-
   const visibleEntries = activeProvider
     ? entries.filter((entry) => isEntryForProvider(entry, activeProvider))
     : [];
+
+  const activeProviderSlotFailures = useMemo(() => {
+    if (!metrics?.providers || !activeProvider || activeProvider.id === "all") return 0;
+    const targetNorm = activeProvider.label.toLowerCase().replace(/[_\s-]+(v?\d+(\.\d+)?)$/i, "").replace(/[_\s-]+/g, " ").trim();
+    const found = metrics.providers.find((p) => {
+      if (p.id === activeProvider.id) return true;
+      const pNorm = p.label.toLowerCase().replace(/[_\s-]+(v?\d+(\.\d+)?)$/i, "").replace(/[_\s-]+/g, " ").trim();
+      return pNorm === targetNorm;
+    });
+    if (!found?.slots) return 0;
+    return found.slots.reduce((acc, slot) => acc + (slot.failureCount ?? 0), 0);
+  }, [metrics, activeProvider]);
 
   return (
     <section className="dashboard-card">
       <SectionHeader
         icon={<AlertTriangle size={17} />}
         title={`${title} provider diagnostics`}
-        detail="Every saved provider has its own live tab. Redacted upstream details remain administrator-only beside the exact neutral caller message."
+        detail="Every saved and active provider has its own live tab. Redacted upstream details remain administrator-only beside the exact neutral caller message."
       />
       <div className="mt-4 rounded-xl border border-amber-300/15 bg-amber-300/5 px-3 py-2 text-[10px] leading-5 text-amber-100">
         Recovered attempts remain visible in the provider that failed before failover. Caller responses never contain
         these diagnostics.
       </div>
-      {query.isLoading ? (
+      {dynamicModelLogs.isLoading && !entries.length ? (
         <div className="grid min-h-40 place-items-center">
           <Loader2 className="animate-spin text-[#c9ff73]" size={18} />
         </div>
@@ -372,6 +475,21 @@ export function ProviderScopedFailureHistory({
           <div className="mt-4 h-[32rem] space-y-2 overflow-y-auto overscroll-contain pr-2">
             {visibleEntries.length ? (
               visibleEntries.map((entry) => <ProviderFailureLogEntry key={entry.id} entry={entry} />)
+            ) : activeProviderSlotFailures > 0 ? (
+              <div className="rounded-xl border border-amber-500/25 bg-amber-500/5 p-5 text-center">
+                <div className="mx-auto flex h-9 w-9 items-center justify-center rounded-full bg-amber-400/10 text-amber-300">
+                  <AlertTriangle size={18} />
+                </div>
+                <h4 className="mt-2 text-xs font-semibold text-amber-200">
+                  {activeProviderSlotFailures} Failures Recorded in Provider Key Pool
+                </h4>
+                <p className="mt-1 text-[11px] text-[#a9aab8]">
+                  Upstream requests to {activeProvider?.label ?? "this provider"} failed during load balancer rotation or stream completion.
+                </p>
+                <p className="mt-2 text-[10px] text-[#858697]">
+                  Detailed HTTP payloads appear here as raw responses are captured. The provider key pool maintains real-time health, request counters, and circuit cooldowns above.
+                </p>
+              </div>
             ) : (
               <div className="grid min-h-28 place-items-center rounded-xl border border-dashed border-white/10 px-5 text-center text-[10px] text-[#858697]">
                 No credential-redacted failures have been recorded for this provider.

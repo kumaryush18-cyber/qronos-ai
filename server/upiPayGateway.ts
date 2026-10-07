@@ -4,7 +4,7 @@ import { creditAccountFromUPIPay, getDb } from "./db";
 import { sql } from "drizzle-orm";
 import { sdk } from "./_core/sdk";
 import { createStrictCors } from "./_core/cors";
-import { UPI_TIERS, USD_TO_INR_RATE, UPI_INTERNAL_SURCHARGE_USD, UPI_INTERNAL_SURCHARGE_INR } from "../shared/paymentTiers";
+import { UPI_TIERS, CODING_PLAN_TIERS, getCodingPlanTier, USD_TO_INR_RATE, UPI_INTERNAL_SURCHARGE_USD, UPI_INTERNAL_SURCHARGE_INR } from "../shared/paymentTiers";
 
 export interface UPIOrder {
   orderId: string;
@@ -15,6 +15,9 @@ export interface UPIOrder {
   amountInr: number;
   amountUsd?: number;
   isPayg?: boolean;
+  isCodingPlan?: boolean;
+  codingTokens?: number;
+  planName?: string;
   credits: number;
   creditsNanos: number;
   upiId: string;
@@ -372,6 +375,8 @@ export function registerUpiPayGateway(app: Express) {
         amountInr,
         is_payg,
         isPayg,
+        is_coding_plan,
+        isCodingPlan,
       } = req.body || {};
 
       const rawAmount = typeof amount_inr === "number" ? amount_inr : typeof amountInr === "number" ? amountInr : 0;
@@ -379,30 +384,38 @@ export function registerUpiPayGateway(app: Express) {
       const requestedUsd = typeof amount_usd === "number" ? amount_usd : typeof amountUsd === "number" ? amountUsd : undefined;
       const isPaygDeposit = Boolean(is_payg || isPayg);
 
-      // Check tier
+      // Check tier: strictly map from server-side definitions
       const selectedTierId = String(tier_id || tierId || "").trim();
-      const matchedTier = UPI_TIERS.find(t => (selectedTierId && t.id === selectedTierId) || (requestedUsd && t.amountUsd === requestedUsd))
-        || UPI_TIERS.find(t => t.amountInr === parsedAmount || t.scanAmountInr === parsedAmount);
+      const isCoding = Boolean(is_coding_plan || isCodingPlan || (selectedTierId && selectedTierId.startsWith("coding_")));
+      const matchedCodingTier = isCoding ? getCodingPlanTier(selectedTierId || requestedUsd || 25) : undefined;
+      const matchedTier = matchedCodingTier ? undefined : (UPI_TIERS.find(t => (selectedTierId && t.id === selectedTierId) || (requestedUsd && t.amountUsd === requestedUsd))
+        || UPI_TIERS.find(t => t.amountInr === parsedAmount || t.scanAmountInr === parsedAmount));
 
-      // In Domestic UPI scanning, charge 1 dollar extra internally on all plans:
-      // - Starter: $10 displayed above -> Scanned as $11 (₹1,056 INR)
-      // - Pro: $25 displayed above -> Scanned as $26 (₹2,496 INR)
-      // - Max: $50 displayed above -> Scanned as $51 (₹4,896 INR)
-      // - Power: $100 displayed above -> Scanned as $101 (₹9,696 INR)
-      // - Ultra: $200 displayed above -> Scanned as $201 (₹19,296 INR)
       let scannedInr: number;
       let scannedUsd: number;
       let finalCredits: number;
       let finalCreditsNanos: number;
-      const finalTierId = matchedTier?.id || selectedTierId || "inr_custom";
+      const finalTierId = matchedCodingTier?.id || matchedTier?.id || (isPaygDeposit ? "inr_payg" : selectedTierId || "inr_custom");
 
-      if (matchedTier) {
+      if (matchedCodingTier) {
+        scannedInr = matchedCodingTier.scanAmountInr;
+        scannedUsd = matchedCodingTier.scanAmountUsd;
+        finalCredits = matchedCodingTier.tokensMillions;
+        finalCreditsNanos = matchedCodingTier.tokens;
+      } else if (matchedTier) {
         scannedInr = matchedTier.scanAmountInr;
         scannedUsd = matchedTier.scanAmountUsd;
         finalCredits = matchedTier.credits;
         finalCreditsNanos = matchedTier.creditsNanos;
       } else {
+        // Custom deposit requires PAYG flag and minimum deposit of ₹100 / $1
         const baseInr = parsedAmount > 0 ? parsedAmount : (requestedUsd ? requestedUsd * USD_TO_INR_RATE : 960);
+        if (baseInr < 100) {
+          return res.status(400).json({
+            error: "Minimum payment amount is ₹100.",
+            detail: "Custom deposits must be at least ₹100.",
+          });
+        }
         scannedInr = baseInr + UPI_INTERNAL_SURCHARGE_INR;
         scannedUsd = Number((scannedInr / USD_TO_INR_RATE).toFixed(2));
         finalCredits = Math.max(1, Math.floor((baseInr / USD_TO_INR_RATE) * 240));
@@ -446,8 +459,11 @@ export function registerUpiPayGateway(app: Express) {
         userName: resolvedUserName,
         tierId: finalTierId,
         amountInr: scannedInr,
-        amountUsd: matchedTier?.amountUsd ?? (requestedUsd || Number((scannedInr / USD_TO_INR_RATE).toFixed(2))),
+        amountUsd: matchedCodingTier?.amountUsd ?? matchedTier?.amountUsd ?? (requestedUsd || Number((scannedInr / USD_TO_INR_RATE).toFixed(2))),
         isPayg: isPaygDeposit,
+        isCodingPlan: Boolean(matchedCodingTier || isCoding),
+        codingTokens: matchedCodingTier?.tokens,
+        planName: matchedCodingTier?.name,
         credits: finalCredits,
         creditsNanos: finalCreditsNanos,
         upiId,
@@ -718,19 +734,35 @@ export function registerUpiPayGateway(app: Express) {
 
     let updatedBalanceNanos: number | null = null;
     let updatedPaygBalanceNanos: number | null = null;
+    let updatedCodingTokens: number | null = null;
     if (order.userId) {
       try {
         const depositUsd = order.amountUsd ?? Number((order.amountInr / USD_TO_INR_RATE).toFixed(2));
+        const matchedCodingTier = order.isCodingPlan ? getCodingPlanTier(order.tierId) : undefined;
+        const matchedTier = UPI_TIERS.find(t => t.id === order.tierId);
+        const authoritativeTokens = matchedCodingTier?.tokens ?? (order.codingTokens || 0);
+        const authoritativeNanos = matchedCodingTier
+          ? matchedCodingTier.tokens
+          : matchedTier
+          ? matchedTier.creditsNanos
+          : order.isPayg
+          ? Math.round(depositUsd * 1_000_000_000)
+          : order.creditsNanos;
+
         const creditResult = await creditAccountFromUPIPay({
           userId: order.userId,
-          amountNanos: order.isPayg ? Math.round(depositUsd * 1_000_000_000) : order.creditsNanos,
+          amountNanos: authoritativeNanos,
           orderId: order.orderId,
           utr: order.utr || "MANUAL_APPROVAL",
-          assetLabel: order.isPayg ? `UPI PAYG Deposit (₹${order.amountInr} / $${depositUsd})` : `₹${order.amountInr} UPI`,
+          assetLabel: order.isCodingPlan ? `Coding Plan: ${order.planName || order.tierId} (${Math.round((authoritativeTokens || 0) / 1_000_000)}M Tokens)` : order.isPayg ? `UPI PAYG Deposit (₹${order.amountInr} / $${depositUsd})` : `₹${order.amountInr} UPI`,
           isPayg: order.isPayg,
+          isCodingPlan: order.isCodingPlan,
+          codingPlanTokens: authoritativeTokens,
+          planName: order.planName,
         });
         updatedBalanceNanos = creditResult?.balanceNanos ?? null;
         updatedPaygBalanceNanos = creditResult?.paygBalanceNanos ?? null;
+        updatedCodingTokens = creditResult?.codingPlanTokens ?? null;
       } catch (dbErr) {
         console.error("[UPI Gateway] Error crediting account:", dbErr);
       }
@@ -742,8 +774,13 @@ export function registerUpiPayGateway(app: Express) {
       order_id: order.orderId,
       credited_user: order.userId,
       added_credits: order.credits,
+      is_coding_plan: Boolean(order.isCodingPlan),
+      coding_tokens: order.codingTokens,
       updated_balance_nanos: updatedBalanceNanos,
-      message: "Order approved successfully. Credits have been issued to the user.",
+      updated_coding_tokens: updatedCodingTokens,
+      message: order.isCodingPlan
+        ? `Order approved. ${Math.round((order.codingTokens || 0) / 1_000_000)}M Coding Tokens have been issued to the user.`
+        : "Order approved successfully. Credits have been issued to the user.",
     });
   };
   app.post("/api/admin/upi/approve", handleAdminApprove);

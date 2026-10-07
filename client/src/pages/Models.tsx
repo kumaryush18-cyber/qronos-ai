@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { formatTokenForgeCreditRatePerMillion, TOKENFORGE_MODELS } from "@/lib/modelCatalogue";
 import { useDynamicModelPricing } from "@/lib/useDynamicModelPricing";
 import { trpc } from "@/lib/trpc";
-import { Braces, ExternalLink, Gauge, Lock, MessageCircle, ShieldCheck } from "lucide-react";
+import { Braces, Code2, ExternalLink, Gauge, Lock, MessageCircle, ShieldCheck } from "lucide-react";
 import { Link } from "wouter";
 import { useState, useMemo } from "react";
 import { ThreeDButton } from "@/components/ui/3d-button";
@@ -13,7 +13,7 @@ import "./models.css";
 
 export default function Models() {
   const { getRates } = useDynamicModelPricing();
-  const [tierFilter, setTierFilter] = useState<"all" | "free" | "paid">("all");
+  const [tierFilter, setTierFilter] = useState<"all" | "free" | "paid" | "token_plan">("all");
 
   const modelAvailability = trpc.public.modelAvailability.useQuery(undefined, {
     staleTime: 30_000,
@@ -24,7 +24,13 @@ export default function Models() {
     return new Map(
       modelAvailability.data?.map(item => [
         item.modelId,
-        { available: item.available, minTier: item.minTier ?? "free" },
+        {
+          available: item.available,
+          minTier: item.minTier ?? "free",
+          isTokenPlan: (item as any).isTokenPlan ?? false,
+          isPayg: (item as any).isPayg ?? false,
+          isBundle: (item as any).isBundle !== false,
+        },
       ]) ?? []
     );
   }, [modelAvailability.data]);
@@ -35,12 +41,17 @@ export default function Models() {
       const minTier = meta?.minTier ?? "free";
       if (tierFilter === "free") return minTier === "free";
       if (tierFilter === "paid") return minTier !== "free";
+      if (tierFilter === "token_plan") return meta?.isTokenPlan === true;
       return true;
     });
   }, [modelMetaMap, tierFilter]);
 
   const freeCount = useMemo(() => {
     return TOKENFORGE_MODELS.filter(m => (modelMetaMap.get(m.id)?.minTier ?? "free") === "free").length;
+  }, [modelMetaMap]);
+
+  const tokenPlanCount = useMemo(() => {
+    return TOKENFORGE_MODELS.filter(m => modelMetaMap.get(m.id)?.isTokenPlan === true).length;
   }, [modelMetaMap]);
 
   const paidCount = TOKENFORGE_MODELS.length - freeCount;
@@ -105,6 +116,19 @@ export default function Models() {
               >
                 <Lock size={13} className="text-amber-400" /> Paid Tiers ({paidCount})
               </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={tierFilter === "token_plan"}
+                onClick={() => setTierFilter("token_plan")}
+                className={`px-3 py-1 text-xs font-semibold rounded-lg transition-colors flex items-center gap-1.5 ${
+                  tierFilter === "token_plan"
+                    ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40"
+                    : "text-[#9ea0af] hover:text-cyan-300 border border-transparent"
+                }`}
+              >
+                <Code2 size={13} className="text-cyan-400" /> Token Plan ({tokenPlanCount})
+              </button>
             </div>
           </div>
           <span className="text-xs text-[#9ea0af]">
@@ -118,12 +142,18 @@ export default function Models() {
             const isAvailable = meta?.available ?? true;
             const minTier = meta?.minTier ?? "free";
             const isFree = minTier === "free";
+            const isTokenPlan = meta?.isTokenPlan === true;
 
             return (
               <article key={model.id} className={`model-detail-card model-detail-card--${model.tone}`}>
                 <header className="model-detail-card__header">
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <span className="model-provider-name">Text model</span>
+                    {isTokenPlan && (
+                      <span className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-bold bg-cyan-500/15 text-cyan-300 border border-cyan-500/30">
+                        <Code2 size={11} className="text-cyan-400" /> Token Plan
+                      </span>
+                    )}
                     {isFree ? (
                       <span className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-semibold bg-emerald-500/10 text-emerald-300 border border-emerald-500/25">
                         <ShieldCheck size={11} /> Free Tier

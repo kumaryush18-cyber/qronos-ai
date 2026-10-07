@@ -99,7 +99,7 @@ describe("Semantic Image Distillation", () => {
 
       expect(stripped.content[0].text).toBe("Analyze this metric graph:");
       expect(stripped.content[1].type).toBe("text");
-      expect(stripped.content[1].text).toContain("[Visual Attachment (Turn #1 - 27 msgs back) - Semantic Image Distillation]:");
+      expect(stripped.content[1].text).toContain("[Visual Attachment (Turn #1) - Semantic Image Distillation]:");
       expect(stripped.content[1].text).toContain("Active MRR: $42,500");
       expect(stripped.content[1].text).toContain("Chart displays weekly active user cohort retention");
     });

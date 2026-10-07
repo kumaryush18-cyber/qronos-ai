@@ -9,13 +9,48 @@ import { TOKENFORGE_MODELS } from "@/lib/modelCatalogue";
 import { coalesceDailyUsage } from "../../../shared/usageSeries";
 import { markApiKeyRevoked, prependCreatedApiKey } from "../../../shared/apiKeyListCache";
 import { useAuth } from "@/_core/hooks/useAuth";
-import { AlertTriangle, ArrowRight, BarChart3, BookOpen, Check, Clipboard, Code2, Copy, CreditCard, Gift, KeyRound, Loader2, LockKeyhole, Plus, RefreshCw, ShieldCheck, Smartphone, Sparkles, Terminal, Trash2, Users, Wallet, X } from "lucide-react";
+import {
+  Activity,
+  AlertTriangle,
+  ArrowRight,
+  ArrowUpRight,
+  BarChart3,
+  BookOpen,
+  Check,
+  CheckCircle2,
+  Clipboard,
+  Code2,
+  Coins,
+  Copy,
+  Cpu,
+  CreditCard,
+  ExternalLink,
+  Flame,
+  Gift,
+  KeyRound,
+  Loader2,
+  LockKeyhole,
+  Play,
+  Plus,
+  RefreshCw,
+  ShieldCheck,
+  Smartphone,
+  Sparkles,
+  Terminal,
+  Trash2,
+  TrendingUp,
+  Users,
+  Wallet,
+  WalletCards,
+  X,
+  Zap,
+} from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Link } from "wouter";
 import { toast } from "sonner";
 import "../dashboard.css";
 import Playground from "./Playground";
-import { CreditOverview, Profile, UsageLogs } from "./CreditWorkspace";
+import { CreditOverview, Profile, UsageLogs, formatCreditWhole, useIsCreditsEnabled } from "./CreditWorkspace";
 import { DashboardModels } from "./DashboardModels";
 import { DashboardPricingSection } from "@/components/dashboard/DashboardPricingSection";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
@@ -52,7 +87,7 @@ function KeySecret({ value, onDismiss }: { value: string; onDismiss: () => void 
 
 type NewApiKeyResult = {
   key: string;
-  record: { id: number; label: string; prefix: string; keyGroup?: "payg" | "bundle"; status: "active" | "revoked"; createdAt: Date };
+  record: { id: number; label: string; prefix: string; keyGroup?: "payg" | "bundle" | "token_plan" | "tokens" | "coding_plan"; status: "active" | "revoked"; createdAt: Date };
 }
 
 function CurlExample({ apiKey }: { apiKey?: string }) {
@@ -98,84 +133,135 @@ function SdkQuickStart({ apiKey }: { apiKey?: string }) {
   </section>;
 }
 
-function KeyCreateForm({ onSuccess }: { onSuccess: (value: NewApiKeyResult) => void }) {
+function KeyCreateForm({ onSuccess, activeCount = 0 }: { onSuccess: (value: NewApiKeyResult) => void; activeCount?: number }) {
   const { user } = useAuth();
   const emailLower = (user?.email ?? "").trim().toLowerCase();
   const isWhitelistedUser = emailLower === "konchoor@gmail.com" || emailLower === "kumaryush18@gmail.com";
   const creditsEnabled = isWhitelistedUser || Boolean((user as any)?.creditsEnabled);
+  const isLimitReached = activeCount >= 10;
 
   const [label, setLabel] = useState("");
-  const [keyGroup, setKeyGroup] = useState<"payg" | "bundle">(creditsEnabled ? "bundle" : "payg");
-
-  useEffect(() => {
-    if (!creditsEnabled && keyGroup === "bundle") {
-      setKeyGroup("payg");
-    }
-  }, [creditsEnabled, keyGroup]);
+  const [keyGroup, setKeyGroup] = useState<"token_plan" | "payg" | "bundle">("token_plan");
 
   const create = trpc.developer.createApiKey.useMutation({
     onSuccess: (value) => {
       onSuccess(value as unknown as NewApiKeyResult);
       setLabel("");
-      toast.success(`New ${keyGroup === "payg" ? "Tier 1 (PAYG)" : "Tier 2 (Bundle)"} API key created`);
+      const typeLabel =
+        keyGroup === "token_plan"
+          ? "Tier 2 (Token Plan / Coding Tokens)"
+          : keyGroup === "payg"
+          ? "Tier 1 (PAYG)"
+          : "Tier 3 (Credit Bundle)";
+      toast.success(`New ${typeLabel} API key created`);
     },
     onError: (error) => toast.error(error.message),
   });
   const submit = (event: FormEvent) => {
     event.preventDefault();
+    if (isLimitReached) {
+      toast.error("Maximum limit of 10 active API keys reached. Please delete or revoke an existing key first.");
+      return;
+    }
     create.mutate({ label, keyGroup });
   };
 
   return (
-    <form onSubmit={submit} className="rounded-xl border border-white/10 bg-[#09090b] p-4">
-      <div className="space-y-3">
+    <form onSubmit={submit} className="rounded-2xl border border-white/10 bg-[#09090b] p-4 sm:p-5">
+      <div className="space-y-4">
+        {isLimitReached && (
+          <div className="flex items-center gap-2.5 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3.5 text-xs text-amber-200">
+            <AlertTriangle size={16} className="shrink-0 text-amber-400" />
+            <div className="flex-1">
+              <strong className="font-semibold text-amber-300">Active API Key Limit Reached (10/10):</strong> You have 10 active API keys. Please delete or revoke an existing key before generating a new one.
+            </div>
+          </div>
+        )}
+
         <div>
           <div className="flex items-center justify-between">
-            <Label className="text-xs font-semibold text-[#d7d6df]">Select Key Group & Tier</Label>
-            <span className="text-[10px] text-[#8e8fa1]">Choose billing model & model routing</span>
+            <Label className="text-xs font-semibold text-[#d7d6df]">Select Key Group & Compute Routing</Label>
+            <div className="flex items-center gap-2">
+              <Badge className={activeCount >= 10 ? "border-amber-500/40 bg-amber-500/15 text-amber-300 text-[10px]" : "border-white/10 bg-white/5 text-[#a0a1b2] text-[10px]"}>
+                {activeCount} / 10 Active Keys
+              </Badge>
+              <span className="text-[10px] text-[#8e8fa1]">Quota policy</span>
+            </div>
           </div>
-          <div className={`mt-2 grid grid-cols-1 gap-2 ${creditsEnabled ? "sm:grid-cols-2" : ""}`}>
-            {creditsEnabled && (
-              <button
-                type="button"
-                onClick={() => setKeyGroup("bundle")}
-                className={`flex flex-col items-start rounded-lg border p-3 text-left transition-all cursor-pointer ${
-                  keyGroup === "bundle"
-                    ? "border-[#befe6c]/60 bg-[#befe6c]/10 text-white shadow-[0_0_15px_rgba(190,254,108,0.1)]"
-                    : "border-white/10 bg-[#121215] text-[#9394a7] hover:border-white/20 hover:text-white"
-                }`}
-              >
-                <div className="flex w-full items-center justify-between">
-                  <span className="text-xs font-bold text-white">Tier 2: Credit Bundles</span>
-                  <Badge className={keyGroup === "bundle" ? "border-0 bg-[#befe6c]/20 text-[#befe6c] text-[9px]" : "border-0 bg-white/10 text-[#8e8fa1] text-[9px]"}>
-                    Default
-                  </Badge>
-                </div>
-                <p className="mt-1 text-[11px] leading-4 text-[#a0a1b2]">
-                  Deducts from bundled credits. Works with all bundled models.
-                </p>
-              </button>
-            )}
-
+          <div className={`mt-2.5 grid grid-cols-1 gap-2.5 ${creditsEnabled ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}>
+            {/* Option 1: Token Plan (Coding Tokens) */}
             <button
               type="button"
-              onClick={() => setKeyGroup("payg")}
-              className={`flex flex-col items-start rounded-lg border p-3 text-left transition-all cursor-pointer ${
-                keyGroup === "payg"
-                  ? "border-rose-500/60 bg-rose-500/10 text-white shadow-[0_0_15px_rgba(244,63,94,0.15)]"
+              onClick={() => setKeyGroup("token_plan")}
+              className={`flex flex-col items-start rounded-xl border p-3.5 text-left transition-all cursor-pointer ${
+                keyGroup === "token_plan"
+                  ? "border-cyan-500/60 bg-cyan-500/10 text-white shadow-[0_0_20px_rgba(6,182,212,0.15)] ring-1 ring-cyan-500/30"
                   : "border-white/10 bg-[#121215] text-[#9394a7] hover:border-white/20 hover:text-white"
               }`}
             >
               <div className="flex w-full items-center justify-between">
-                <span className="text-xs font-bold text-white">Tier 1: PAYG API Key</span>
+                <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                  <Code2 size={13} className="text-cyan-400" />
+                  <span>Tier 2: Token Plan</span>
+                </span>
+                <Badge className={keyGroup === "token_plan" ? "border-0 bg-cyan-500/20 text-cyan-300 text-[9px]" : "border-0 bg-white/10 text-[#8e8fa1] text-[9px]"}>
+                  Coding Plan
+                </Badge>
+              </div>
+              <p className="mt-1.5 text-[11px] leading-4 text-[#a0a1b2]">
+                Deducts strictly from Coding Plan token quota (Claude Opus 5.5, GPT 6 Sol, GLM-5.3, etc.).
+              </p>
+            </button>
+
+            {/* Option 2: PAYG API Key */}
+            <button
+              type="button"
+              onClick={() => setKeyGroup("payg")}
+              className={`flex flex-col items-start rounded-xl border p-3.5 text-left transition-all cursor-pointer ${
+                keyGroup === "payg"
+                  ? "border-rose-500/60 bg-rose-500/10 text-white shadow-[0_0_20px_rgba(244,63,94,0.15)] ring-1 ring-rose-500/30"
+                  : "border-white/10 bg-[#121215] text-[#9394a7] hover:border-white/20 hover:text-white"
+              }`}
+            >
+              <div className="flex w-full items-center justify-between">
+                <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                  <Zap size={13} className="text-rose-400" />
+                  <span>Tier 1: PAYG Key</span>
+                </span>
                 <Badge className={keyGroup === "payg" ? "border-0 bg-rose-500/25 text-rose-300 text-[9px]" : "border-0 bg-white/10 text-[#8e8fa1] text-[9px]"}>
                   100% Bonus
                 </Badge>
               </div>
-              <p className="mt-1 text-[11px] leading-4 text-[#a0a1b2]">
-                Deducts from PAYG balance. Exclusive routing to models tagged with PAYG.
+              <p className="mt-1.5 text-[11px] leading-4 text-[#a0a1b2]">
+                Deducts strictly from PAYG balance at official zero-markup provider rates.
               </p>
             </button>
+
+            {/* Option 3: Credit Bundles (when enabled) */}
+            {creditsEnabled && (
+              <button
+                type="button"
+                onClick={() => setKeyGroup("bundle")}
+                className={`flex flex-col items-start rounded-xl border p-3.5 text-left transition-all cursor-pointer ${
+                  keyGroup === "bundle"
+                    ? "border-[#befe6c]/60 bg-[#befe6c]/10 text-white shadow-[0_0_20px_rgba(190,254,108,0.12)] ring-1 ring-[#befe6c]/30"
+                    : "border-white/10 bg-[#121215] text-[#9394a7] hover:border-white/20 hover:text-white"
+                }`}
+              >
+                <div className="flex w-full items-center justify-between">
+                  <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                    <WalletCards size={13} className="text-[#c9ff73]" />
+                    <span>Tier 3: Bundles</span>
+                  </span>
+                  <Badge className={keyGroup === "bundle" ? "border-0 bg-[#befe6c]/20 text-[#befe6c] text-[9px]" : "border-0 bg-white/10 text-[#8e8fa1] text-[9px]"}>
+                    Fixed Credit
+                  </Badge>
+                </div>
+                <p className="mt-1.5 text-[11px] leading-4 text-[#a0a1b2]">
+                  Deducts from promotional platform credit bundles.
+                </p>
+              </button>
+            )}
           </div>
         </div>
 
@@ -188,14 +274,15 @@ function KeyCreateForm({ onSuccess }: { onSuccess: (value: NewApiKeyResult) => v
               id="key-label"
               value={label}
               onChange={(event) => setLabel(event.target.value)}
-              placeholder="e.g. production backend, cursor IDE, staging"
+              placeholder={isLimitReached ? "Revoke or delete an existing key to create a new one" : "e.g. cursor ide token-plan, coding backend, claude code"}
               maxLength={100}
-              className="border-white/12 bg-[#121215] text-white placeholder:text-[#6f7181]"
+              disabled={isLimitReached}
+              className="border-white/12 bg-[#121215] text-white placeholder:text-[#6f7181] disabled:opacity-50"
             />
             <Button
               type="submit"
-              disabled={!label.trim() || create.isPending}
-              className="shrink-0 bg-[#f0efff] text-[#18151f] hover:bg-white font-semibold"
+              disabled={!label.trim() || create.isPending || isLimitReached}
+              className="shrink-0 bg-[#f0efff] text-[#18151f] hover:bg-white font-semibold cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
             >
               {create.isPending ? <Loader2 className="animate-spin" size={15} /> : <Plus size={15} />} Create Key
             </Button>
@@ -218,8 +305,11 @@ function ApiKeyList() {
   };
   const revoke = trpc.developer.revokeApiKey.useMutation({
     onSuccess: (_, variables) => {
-      utils.developer.apiKeys.setData(undefined, (current) => markApiKeyRevoked(current, variables.apiKeyId, new Date()));
-      toast.success("API key revoked");
+      // Permanently remove from client cache
+      utils.developer.apiKeys.setData(undefined, (current) =>
+        current ? current.filter((k) => k.id !== variables.apiKeyId) : []
+      );
+      toast.success("API key deleted permanently");
     },
     onError: (error) => toast.error(error.message),
   });
@@ -227,7 +317,7 @@ function ApiKeyList() {
     onSuccess: (value, variables) => {
       const record = { ...value.record, lastUsedAt: null, revokedAt: null };
       utils.developer.apiKeys.setData(undefined, (current) =>
-        prependCreatedApiKey(markApiKeyRevoked(current, variables.apiKeyId, new Date()), record as never)
+        prependCreatedApiKey((current || []).filter((k) => k.id !== variables.apiKeyId), record as never)
       );
       setPlainTextKey(value.key);
       rememberOneTimeApiKey(value.key);
@@ -245,14 +335,20 @@ function ApiKeyList() {
     clearOneTimeApiKey();
     setPlainTextKey(null);
   };
+
+  const activeKeys = (keys.data || []).filter((k) => k.status === "active");
+  const activeCount = activeKeys.length;
+
   return (
     <div className="space-y-3">
       {plainTextKey && <KeySecret value={plainTextKey} onDismiss={dismissPlainTextKey} />}
-      <KeyCreateForm onSuccess={showNewKey} />
+      <KeyCreateForm onSuccess={showNewKey} activeCount={activeCount} />
       {keys.data?.length ? (
         <div className="overflow-hidden rounded-xl border border-white/10 bg-[#09090b]">
           {keys.data.map((key) => {
-            const isPayg = (key as any).keyGroup === "payg";
+            const rawGroup = (key as any).keyGroup;
+            const isTokenPlan = rawGroup === "token_plan" || rawGroup === "tokens" || rawGroup === "coding_plan";
+            const isPayg = rawGroup === "payg";
             return (
               <div
                 key={key.id}
@@ -264,13 +360,17 @@ function ApiKeyList() {
                 <div className="min-w-40 flex-1">
                   <div className="flex items-center gap-2">
                     <p className="text-xs font-bold text-white">{key.label}</p>
-                    {isPayg ? (
-                      <Badge className="border border-rose-500/30 bg-rose-500/15 text-rose-300 font-mono text-[9px] px-1.5 py-0.5">
-                        Tier 1: PAYG
+                    {isTokenPlan ? (
+                      <Badge className="border border-cyan-500/30 bg-cyan-500/15 text-cyan-300 font-mono text-[9px] px-1.5 py-0.5 flex items-center gap-1">
+                        <Code2 size={10} /> Tier 2: Token Plan
+                      </Badge>
+                    ) : isPayg ? (
+                      <Badge className="border border-rose-500/30 bg-rose-500/15 text-rose-300 font-mono text-[9px] px-1.5 py-0.5 flex items-center gap-1">
+                        <Zap size={10} /> Tier 1: PAYG
                       </Badge>
                     ) : (
-                      <Badge className="border border-[#befe6c]/30 bg-[#befe6c]/10 text-[#befe6c] font-mono text-[9px] px-1.5 py-0.5">
-                        Tier 2: Bundles
+                      <Badge className="border border-[#befe6c]/30 bg-[#befe6c]/10 text-[#befe6c] font-mono text-[9px] px-1.5 py-0.5 flex items-center gap-1">
+                        <WalletCards size={10} /> Tier 3: Bundles
                       </Badge>
                     )}
                   </div>
@@ -309,10 +409,14 @@ function ApiKeyList() {
                     <Button
                       variant="ghost"
                       size="sm"
-                      title="Revoke key"
+                      title="Delete / Revoke API key permanently"
                       className="text-[#d69ca6] hover:bg-red-400/10 hover:text-red-200"
                       disabled={revoke.isPending}
-                      onClick={() => revoke.mutate({ apiKeyId: key.id })}
+                      onClick={() => {
+                        if (confirm(`Are you sure you want to permanently delete API key "${key.label}"?`)) {
+                          revoke.mutate({ apiKeyId: key.id });
+                        }
+                      }}
                     >
                       <Trash2 size={14} />
                     </Button>
@@ -377,48 +481,381 @@ function PlatformUsageMetrics() {
   </section>;
 }
 
+function UnifiedBalancesPortfolio() {
+  const wallet = trpc.developer.wallet.useQuery();
+  const utils = trpc.useUtils();
+  const creditsEnabled = useIsCreditsEnabled(wallet.data?.creditsEnabled);
+
+  const claimCheckin = trpc.developer.claimDailyCheckin.useMutation({
+    onSuccess: (res) => {
+      if (res.claimed) {
+        toast.success(`🎉 Daily reward claimed: ${res.rewardFormatted} added to your balance!`);
+      } else {
+        toast.info("You have already claimed today's UTC check-in reward.");
+      }
+      void utils.developer.wallet.invalidate();
+    },
+    onError: (err) => toast.error(err.message || "Failed to claim check-in reward"),
+  });
+
+  const data = wallet.data;
+  const paygBalanceNanos = Number((data as any)?.paygBalanceNanos ?? 0);
+  const codingPlanTokens = Number((data as any)?.codingPlanTokens ?? 0);
+  const bundleBalanceNanos = Number(data?.balanceNanos ?? 0);
+
+  const formattedCodingTokens =
+    codingPlanTokens >= 1_000_000
+      ? `${(codingPlanTokens / 1_000_000).toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 2 })}M`
+      : codingPlanTokens.toLocaleString();
+
+  return (
+    <section className="rounded-3xl border border-white/10 bg-gradient-to-b from-[#131715] via-[#0d100e] to-[#080a09] p-5 sm:p-7 shadow-2xl backdrop-blur-xl relative overflow-hidden mb-6">
+      {/* Decorative gradient backdrops */}
+      <div className="absolute top-0 right-0 h-64 w-64 rounded-full bg-cyan-500/5 blur-3xl pointer-events-none" />
+      <div className="absolute bottom-0 left-0 h-64 w-64 rounded-full bg-[#c9ff73]/5 blur-3xl pointer-events-none" />
+
+      {/* Header bar of Portfolio */}
+      <div className="relative z-10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-6 border-b border-white/8">
+        <div>
+          <div className="flex items-center gap-2">
+            <span className="relative flex h-2.5 w-2.5">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-cyan-400 opacity-60" />
+              <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-cyan-400" />
+            </span>
+            <p className="text-[10px] font-bold uppercase tracking-[.18em] text-[#9ba398]">Compute & Balance Portfolio</p>
+          </div>
+          <h2 className="mt-1 text-xl sm:text-2xl font-extrabold text-white tracking-tight">Active Available Quotas</h2>
+        </div>
+
+        {/* Single Pay / Top Up Button */}
+        <div className="flex items-center gap-3 flex-wrap">
+          <Link href="/dashboard/pricing">
+            <Button
+              type="button"
+              className="px-5 py-2.5 rounded-xl text-xs font-bold text-black bg-gradient-to-r from-[#c9ff73] via-[#a8f34f] to-[#72e6db] hover:opacity-95 shadow-lg shadow-[#c9ff73]/20 transition-all cursor-pointer flex items-center gap-2 h-auto"
+            >
+              <Zap size={14} className="fill-black" />
+              <span>Add Balance & Plans</span>
+              <ArrowUpRight size={14} />
+            </Button>
+          </Link>
+        </div>
+      </div>
+
+      {/* 3 Balances Grid */}
+      <div className={`relative z-10 mt-6 grid grid-cols-1 ${creditsEnabled ? "md:grid-cols-3" : "md:grid-cols-2"} gap-4`}>
+        {/* Tier 2: Dedicated Coding Plan Tokens */}
+        <div className="group relative overflow-hidden rounded-2xl border border-cyan-500/25 bg-gradient-to-br from-cyan-950/30 via-[#0a1218]/90 to-black/90 p-5 transition-all duration-300 hover:border-cyan-500/40 hover:shadow-lg hover:shadow-cyan-500/10 flex flex-col justify-between">
+          <div className="absolute -top-12 -right-12 h-28 w-28 rounded-full bg-cyan-500/10 blur-2xl pointer-events-none group-hover:bg-cyan-500/20 transition-all" />
+
+          <div>
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-cyan-500/15 text-cyan-300 border border-cyan-500/20">
+                  <Code2 size={15} />
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-cyan-300 font-mono">Tier 2: Coding Tokens</p>
+                  <p className="text-[10px] text-neutral-400">Opus 5 & GLM 5.3 Quota</p>
+                </div>
+              </div>
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-bold bg-cyan-500/15 border border-cyan-500/30 text-cyan-200 font-mono">
+                10M / $1
+              </span>
+            </div>
+
+            <div className="mt-5">
+              <div className="flex items-baseline gap-2">
+                <span className="text-3xl sm:text-4xl font-extrabold font-mono tracking-tight text-white">
+                  {formattedCodingTokens}
+                </span>
+                <span className="text-xs font-mono font-bold text-cyan-300 uppercase tracking-wider">
+                  {codingPlanTokens >= 1_000_000 ? "Tokens Quota" : "Tokens"}
+                </span>
+              </div>
+              <p className="mt-2 text-[11px] leading-relaxed text-neutral-300">
+                Dedicated high-throughput token pool for coding assistants and CLI tools.
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-4 pt-3 border-t border-cyan-500/15 flex items-center justify-between text-[11px]">
+            <span className="text-cyan-400/80 font-medium">Auto-deducted on requests</span>
+            <Link href="/dashboard/pricing" className="text-cyan-300 hover:text-white font-semibold flex items-center gap-1 hover:underline">
+              <span>Get Tokens</span>
+              <ArrowRight size={11} />
+            </Link>
+          </div>
+        </div>
+
+        {/* Tier 1: PAYG Compute Wallet */}
+        <div className="group relative overflow-hidden rounded-2xl border border-rose-500/25 bg-gradient-to-br from-rose-950/30 via-[#140b10]/90 to-black/90 p-5 transition-all duration-300 hover:border-rose-500/40 hover:shadow-lg hover:shadow-rose-500/10 flex flex-col justify-between">
+          <div className="absolute -top-12 -right-12 h-28 w-28 rounded-full bg-rose-500/10 blur-2xl pointer-events-none group-hover:bg-rose-500/20 transition-all" />
+
+          <div>
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-rose-500/15 text-rose-300 border border-rose-500/20">
+                  <Zap size={15} />
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-rose-300 font-mono">Tier 1: PAYG Compute</p>
+                  <p className="text-[10px] text-neutral-400">Zero-Markup Direct</p>
+                </div>
+              </div>
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-bold bg-rose-500/15 border border-rose-500/30 text-rose-200 font-mono">
+                +100% Bonus (2x)
+              </span>
+            </div>
+
+            <div className="mt-5">
+              <div className="flex items-baseline gap-2">
+                <span className="text-3xl sm:text-4xl font-extrabold font-mono tracking-tight text-white">
+                  {formatCreditWhole(paygBalanceNanos)}
+                </span>
+                <span className="text-xs font-mono font-bold text-neutral-400">USD</span>
+              </div>
+              <p className="mt-2 text-[11px] leading-relaxed text-neutral-300">
+                Settles at official upstream provider rates. Balance never expires.
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-4 pt-3 border-t border-rose-500/15 flex items-center justify-between text-[11px]">
+            <span className="text-rose-400/80 font-medium">All PAYG Tagged Models</span>
+            <Link href="/dashboard/pricing" className="text-rose-300 hover:text-white font-semibold flex items-center gap-1 hover:underline">
+              <span>Deposit PAYG</span>
+              <ArrowRight size={11} />
+            </Link>
+          </div>
+        </div>
+
+        {/* Tier 3: Credit Wallet (when enabled) */}
+        {creditsEnabled && (
+          <div className="group relative overflow-hidden rounded-2xl border border-[#c9ff73]/25 bg-gradient-to-br from-[#121c10]/40 via-[#0d130d]/90 to-black/90 p-5 transition-all duration-300 hover:border-[#c9ff73]/40 hover:shadow-lg hover:shadow-[#c9ff73]/10 flex flex-col justify-between">
+            <div className="absolute -top-12 -right-12 h-28 w-28 rounded-full bg-[#c9ff73]/10 blur-2xl pointer-events-none group-hover:bg-[#c9ff73]/20 transition-all" />
+
+            <div>
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#c9ff73]/15 text-[#c9ff73] border border-[#c9ff73]/20">
+                    <WalletCards size={15} />
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-[#c9ff73] font-mono">Tier 3: Credit Wallet</p>
+                    <p className="text-[10px] text-neutral-400">Platform Compute</p>
+                  </div>
+                </div>
+                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-bold bg-[#c9ff73]/15 border border-[#c9ff73]/30 text-[#c9ff73] font-mono">
+                  Bundles
+                </span>
+              </div>
+
+              <div className="mt-5">
+                <div className="flex items-baseline gap-2">
+                  <span className="text-3xl sm:text-4xl font-extrabold font-mono tracking-tight text-white">
+                    {formatCreditWhole(bundleBalanceNanos)}
+                  </span>
+                  <span className="text-xs font-mono font-bold text-neutral-400">USD</span>
+                </div>
+                <p className="mt-2 text-[11px] leading-relaxed text-neutral-300">
+                  Fixed credit bundles for standard model calls and development.
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-4 pt-3 border-t border-[#c9ff73]/15 flex items-center justify-between text-[11px]">
+              <span className="text-[#c9ff73]/80 font-medium">Standard Bundle Models</span>
+              <Link href="/dashboard/pricing" className="text-[#c9ff73] hover:text-white font-semibold flex items-center gap-1 hover:underline">
+                <span>Buy Bundle</span>
+                <ArrowRight size={11} />
+              </Link>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Daily Check-in Claim & Quick Status Footer */}
+      <div className="relative z-10 mt-5 pt-4 border-t border-white/8 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
+        <div className="flex items-center gap-2 text-[#9da598]">
+          <ShieldCheck size={14} className="text-[#c9ff73]" />
+          <span>Real-time multi-rail settlements via UPI & Solana with zero transaction fees.</span>
+        </div>
+
+        {data?.canCheckIn ? (
+          <Button
+            size="sm"
+            onClick={() => claimCheckin.mutate()}
+            disabled={claimCheckin.isPending}
+            className="w-full sm:w-auto bg-gradient-to-r from-amber-400 to-yellow-500 text-black font-bold text-xs hover:brightness-105 shadow-md shadow-amber-500/20 cursor-pointer"
+          >
+            {claimCheckin.isPending ? <Loader2 size={13} className="animate-spin" /> : <Gift size={13} />}
+            <span>Claim Free Daily Reward ($0.01 - $2.00)</span>
+          </Button>
+        ) : (
+          <div className="flex items-center gap-1.5 text-[11px] text-[#c9ff73] bg-[#c9ff73]/10 border border-[#c9ff73]/20 px-3 py-1 rounded-full font-medium">
+            <CheckCircle2 size={13} />
+            <span>Today's UTC reward claimed</span>
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
 function Overview({ user, loading, usage }: { user: ReturnType<typeof useAuth>["user"]; loading: boolean; usage: { data?: UsageData; isLoading: boolean } }) {
   const quota = usage.data?.quota;
   if (loading || usage.isLoading) return <div className="dashboard-loading-panel"><Loader2 className="animate-spin" /></div>;
   const firstName = user?.name ? user.name.split(" ")[0] : "";
   const greetingTexts = firstName
-    ? [`Good to see you, ${firstName}.`, "Your models are ready.", "Gateway is active."]
-    : ["Good to see you.", "Your models are ready.", "Gateway is active."];
+    ? [`Good to see you, ${firstName}.`, "Your models are ready.", "High-throughput Gateway Active."]
+    : ["Good to see you.", "Your models are ready.", "High-throughput Gateway Active."];
 
-  return <>
-    <PageIntro
-      eyebrow="Workspace overview"
-      title={
-        <>
-          <span className="block text-white/90">Welcome back</span>
-          <VapourAccent
-            texts={greetingTexts}
-            color="#c9ff73"
-            fontWeight={800}
-            fontStyle="normal"
-            fontFamily="'Manrope', sans-serif"
-          />
-        </>
-      }
-      subtitle="A considered control surface for everything your TokenForge account can do."
-      action={
-        <div className="flex items-center gap-2.5 flex-wrap">
-          <UserTierBadge tier={(user as any)?.tier} showTag size="md" />
-          <Link href="/docs" className="dashboard-outline-action"><BookOpen size={15} /> API reference</Link>
+  return (
+    <>
+      {/* Top Welcome & Navigation Action Header */}
+      <PageIntro
+        eyebrow="Workspace Control Surface"
+        title={
+          <>
+            <span className="block text-white/90">Welcome back</span>
+            <VapourAccent
+              texts={greetingTexts}
+              color="#c9ff73"
+              fontWeight={800}
+              fontStyle="normal"
+              fontFamily="'Manrope', sans-serif"
+            />
+          </>
+        }
+        subtitle="Real-time multi-tier compute management, instant token allocations, and high-concurrency model routing."
+        action={
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <UserTierBadge tier={(user as any)?.tier} showTag size="md" />
+            <Link href="/dashboard/pricing" className="dashboard-outline-action border-[#c9ff73]/30 bg-[#c9ff73]/10 text-[#d9ff9d] hover:bg-[#c9ff73]/20 font-bold">
+              <Zap size={14} className="text-[#c9ff73]" /> Recharge / Pricing
+            </Link>
+            <Link href="/docs" className="dashboard-outline-action">
+              <BookOpen size={14} /> API reference
+            </Link>
+          </div>
+        }
+      />
+
+      {/* Unified Balances & Token Allocation Bento */}
+      <UnifiedBalancesPortfolio />
+
+      {/* 2-Column Command & Performance Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 mb-6">
+        {/* Left 7 Columns: Personal Activity & Gateway Status */}
+        <div className="lg:col-span-7 flex flex-col justify-between rounded-3xl border border-white/10 bg-gradient-to-br from-[#151a17] via-[#0f1311] to-[#080a09] p-6 shadow-xl">
+          <div>
+            <div className="flex items-center justify-between pb-4 border-b border-white/8">
+              <div className="flex items-center gap-2">
+                <Activity size={15} className="text-[#c9ff73]" />
+                <span className="text-[10px] font-bold uppercase tracking-wider text-[#a5b797]">Gateway Telemetry</span>
+              </div>
+              <Badge className={quota?.suspended ? "border-0 bg-red-400/10 text-red-300" : "border-0 bg-[#c9ff73]/10 text-[#cbff8b]"}>
+                {quota?.suspended ? "Suspended" : "● Operational & Active"}
+              </Badge>
+            </div>
+
+            <h3 className="mt-4 text-xl font-bold text-white tracking-tight">Zero Artificial Rate Limiting</h3>
+            <p className="mt-1 text-xs text-[#95a192] leading-relaxed">
+              TokenForge operates without per-minute or concurrent cap constraints. Every request is settled atomically against your selected balance tier.
+            </p>
+
+            <div className="mt-6 grid grid-cols-2 sm:grid-cols-3 gap-3">
+              <div className="rounded-xl border border-white/8 bg-black/40 p-3.5">
+                <p className="text-[10px] uppercase font-bold text-neutral-400 tracking-wider">Lifetime Requests</p>
+                <p className="mt-1 text-xl font-mono font-bold text-white">{(usage.data?.totalRequests ?? 0).toLocaleString()}</p>
+                <span className="text-[9px] text-[#8ea087]">Successful calls</span>
+              </div>
+
+              <div className="rounded-xl border border-white/8 bg-black/40 p-3.5">
+                <p className="text-[10px] uppercase font-bold text-cyan-400 tracking-wider">Tokens Processed</p>
+                <p className="mt-1 text-xl font-mono font-bold text-cyan-300">{(usage.data?.totalTokens ?? 0).toLocaleString()}</p>
+                <span className="text-[9px] text-cyan-500/80">Input + output</span>
+              </div>
+
+              <div className="col-span-2 sm:col-span-1 rounded-xl border border-white/8 bg-black/40 p-3.5 flex flex-col justify-between">
+                <div>
+                  <p className="text-[10px] uppercase font-bold text-[#c9ff73] tracking-wider">Direct Actions</p>
+                  <p className="mt-1 text-xs font-semibold text-white">Interactive Test</p>
+                </div>
+                <Link href="/dashboard/playground" className="mt-2 inline-flex items-center gap-1 text-[11px] font-bold text-[#c9ff73] hover:underline">
+                  <span>Open Playground</span>
+                  <ArrowRight size={12} />
+                </Link>
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-6 pt-4 border-t border-white/8 flex items-center justify-between flex-wrap gap-2 text-[11px] text-[#919c8d]">
+            <span className="flex items-center gap-1.5"><ShieldCheck size={14} className="text-[#79e8ef]" /> Keys hashed with SHA-256</span>
+            <Link href="/dashboard/keys" className="text-[#d8ff9e] hover:underline font-semibold flex items-center gap-1">
+              <span>Manage API Keys</span>
+              <ArrowRight size={11} />
+            </Link>
+          </div>
         </div>
-      }
-    />
-    <CreditOverview />
-    <section className="dashboard-command-center">
-      <div className="dashboard-allowance-card"><div className="dashboard-panel-kicker"><span><i /> GATEWAY STATUS</span><Badge className={quota?.suspended ? "border-0 bg-red-400/10 text-red-300" : "border-0 bg-[#befe6c]/10 text-[#cbff8b]"}>{quota?.suspended ? "Suspended" : "Active"}</Badge></div><h2>Request without platform caps.</h2><p>TokenForge does not apply per-minute, daily, or concurrent-request admission limits. Usage remains logged and settled against your credit balance.</p><div className="usage-ring-grid"><UsageRing label="Lifetime requests" used={usage.data?.totalRequests ?? 0} limit={Math.max(1, usage.data?.totalRequests ?? 1)} /><UsageRing label="Tokens processed" used={usage.data?.totalTokens ?? 0} limit={Math.max(1, usage.data?.totalTokens ?? 1)} tone="cyan" /></div></div>
-      <div className="dashboard-posture-card"><div className="dashboard-panel-kicker"><span><Sparkles size={12} /> GATEWAY POSTURE</span></div><h2>Built to stay legible.</h2><p>Make simultaneous requests without TokenForge request-rate or concurrency caps.</p><div className="dashboard-posture-list"><span><ShieldCheck size={15} /> Keys protected as one-way hashes</span><span><Check size={15} /> No platform request or concurrency cap</span><span><Check size={15} /> Credit balance, maintenance, and model availability still apply</span></div><Link href="/dashboard/playground" className="dashboard-primary-link">Open Playground <ArrowRight size={15} /></Link></div>
-    </section>
-    <PlatformUsageMetrics />
-    <OverviewQuickStart />
-    <section className="dashboard-usage-panel"><div className="dashboard-section-head"><div><p>REQUEST TELEMETRY</p><h2>Transparent activity</h2><span>Inspect model, source, token counts, and promotional-credit charge for each request.</span></div><Link href="/dashboard/usage" className="dashboard-outline-action">Usage logs <ArrowRight size={14} /></Link></div><UsageChart daily={usage.data?.daily ?? []} /></section>
-    <section className="dashboard-next-section"><div className="dashboard-section-head"><div><p>BUILD WITH INTENT</p><h2>Your next useful move</h2><span>Everything needed to go from a fresh account to a measured request.</span></div></div><div className="dashboard-next-grid"><Link href="/dashboard/keys" className="dashboard-next-card"><span><KeyRound size={17} /> 01</span><h3>Create a scoped key</h3><p>Label a credential for your project and see it exactly once.</p><b>Manage keys <ArrowRight size={14} /></b></Link><Link href="/dashboard/playground" className="dashboard-next-card"><span><Terminal size={17} /> 02</span><h3>Shape a first prompt</h3><p>Test GLM-5.3 or Grok 4.5 inside the protected Playground.</p><b>Open Playground <ArrowRight size={14} /></b></Link><Link href="/docs" className="dashboard-next-card"><span><Code2 size={17} /> 03</span><h3>Ship the connection</h3><p>Copy a familiar Anthropic Messages request into your client.</p><b>Read the docs <ArrowRight size={14} /></b></Link></div></section>
-    <section className="dashboard-reference-strip"><div><LockKeyhole size={18} /><span><b>Credential handling</b><small>Provider access stays server-side; plaintext user keys are shown once.</small></span></div><Link href="/legal/terms">Trust & policies <ArrowRight size={14} /></Link></section>
-  </>;
+
+        {/* Right 5 Columns: Live Global Platform Activity */}
+        <div className="lg:col-span-5 flex flex-col justify-between rounded-3xl border border-white/10 bg-gradient-to-br from-[#121614] via-[#0e1210] to-[#080a09] p-6 shadow-xl">
+          <PlatformUsageMetrics />
+        </div>
+      </div>
+
+      {/* Integration Quick Start & Code Snippets */}
+      <OverviewQuickStart />
+
+      {/* 14-Day Usage Telemetry Chart */}
+      <section className="dashboard-usage-panel">
+        <div className="dashboard-section-head">
+          <div>
+            <p>REQUEST TELEMETRY</p>
+            <h2>14-Day Throughput Activity</h2>
+            <span>Inspect daily token settlement volume and historical compute trends.</span>
+          </div>
+          <Link href="/dashboard/usage" className="dashboard-outline-action">
+            Detailed Usage logs <ArrowRight size={14} />
+          </Link>
+        </div>
+        <UsageChart daily={usage.data?.daily ?? []} />
+      </section>
+
+      {/* Useful Next Moves */}
+      <section className="dashboard-next-section">
+        <div className="dashboard-section-head">
+          <div>
+            <p>BUILD WITH INTENT</p>
+            <h2>Developer Quick Actions</h2>
+            <span>Essential entry points to integrate, test, and ship with TokenForge models.</span>
+          </div>
+        </div>
+        <div className="dashboard-next-grid">
+          <Link href="/dashboard/keys" className="dashboard-next-card">
+            <span><KeyRound size={17} /> 01</span>
+            <h3>Create API Keys</h3>
+            <p>Generate a labeled, high-security key for Cursor, Claude Code, or backend servers.</p>
+            <b>Manage keys <ArrowRight size={14} /></b>
+          </Link>
+          <Link href="/dashboard/playground" className="dashboard-next-card">
+            <span><Terminal size={17} /> 02</span>
+            <h3>Prompt Playground</h3>
+            <p>Evaluate Claude Opus 5, GLM-5.3, and DeepSeek V3 in real time.</p>
+            <b>Open Playground <ArrowRight size={14} /></b>
+          </Link>
+          <Link href="/docs" className="dashboard-next-card">
+            <span><Code2 size={17} /> 03</span>
+            <h3>API Documentation</h3>
+            <p>Explore native Anthropic Messages API compatible endpoints and SDKs.</p>
+            <b>Read the docs <ArrowRight size={14} /></b>
+          </Link>
+        </div>
+      </section>
+    </>
+  );
 }
 
 function GiveawayNotificationBanner({ enabled }: { enabled: boolean }) {

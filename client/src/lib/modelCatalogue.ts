@@ -19,6 +19,8 @@ export type CatalogueModel = {
 const model = (id: string, name: string, provider: string, providerMark: string, tone: CatalogueModel["tone"], inputUsdPerMillion: number, outputUsdPerMillion: number, eyebrow: string, description: string, capabilities: string[], pricingSource: string, pricingUrl: string, isPremium?: boolean): CatalogueModel => ({ id, name, provider, providerMark, tone, inputUsdPerMillion, outputUsdPerMillion, eyebrow, description, capabilities, pricingSource, pricingUrl, ...(isPremium ? { isPremium: true } : {}) });
 
 export const TOKENFORGE_MODELS: CatalogueModel[] = [
+  model("claude-opus-5.5", "Claude Opus 5.5", "Claude", "AI", "violet", 15, 75, "Anthropic frontier reasoning", "Next-generation Anthropic frontier model featuring deep reasoning, exceptional code synthesis, and autonomous multi-step problem solving.", ["Reasoning", "Thinking", "Streaming", "Coding"], "TokenForge Claude Opus 5.5 pricing", "PRICING_URL", true),
+  model("gpt-6-sol", "GPT 6 Sol", "OpenAI", "O", "sky", 15, 75, "Next-gen Sol frontier reasoning", "Next-generation OpenAI frontier reasoning model featuring Sol high-velocity inference, autonomous software engineering, and extended chain-of-thought.", ["Reasoning", "Thinking", "Streaming", "Coding"], "TokenForge GPT 6 Sol pricing", "PRICING_URL", true),
   model("gpt-6-astra", "GPT-6 Astra", "OpenAI", "O", "sky", 15, 75, "Next-gen frontier reasoning", "Next-generation OpenAI frontier reasoning model featuring ultra-deep Astra chain-of-thought, code synthesis, and multimodal capability.", ["Reasoning", "Thinking", "Streaming", "Coding"], "TokenForge GPT-6 Astra pricing", "PRICING_URL", true),
   model("glm-5.3", "GLM 5.3", "Z.AI", "GLM", "lime", 1.4, 4.4, "Advanced Z.AI reasoning", "A configurable Z.AI route for advanced text reasoning, coding, and streamed chat workloads.", ["Reasoning", "Streaming", "Coding"], "TokenForge provisional GLM 5.3 configured-route pricing", "PRICING_URL"),
   model("glm-5.2", "GLM-5.2", "Z.AI", "GLM", "lime", 1.4, 4.4, "Long-horizon intelligence", "A focused option for complex engineering, coding, and extended-context work where careful reasoning matters.", ["Reasoning", "Long context", "Streaming", "Coding"], "Z.AI model pricing", "https://docs.z.ai/guides/overview/pricing"),
@@ -57,7 +59,7 @@ export function prioritizePlaygroundModels<T extends { id: string }>(models: rea
 export const formatUsdPerMillion = (value: number) => `$${value.toFixed(2)}`;
 export const TOKENFORGE_PLATFORM_CHARGE_MULTIPLIER = 2.0;
 export const tokenForgeCreditRatePerMillion = (upstreamRate: number, modelId?: string) => {
-  if (modelId === "gpt-6-astra" || modelId === "claude-opus-5") return upstreamRate;
+  if (modelId === "gpt-6-astra" || modelId === "claude-opus-5" || modelId === "claude-opus-5.5" || modelId === "gpt-6-sol") return upstreamRate;
   return upstreamRate * TOKENFORGE_PLATFORM_CHARGE_MULTIPLIER;
 };
 export const formatTokenForgeCreditRatePerMillion = (upstreamRate: number, modelId?: string) => `$${tokenForgeCreditRatePerMillion(upstreamRate, modelId).toFixed(4).replace(/0+$/, "").replace(/\.$/, "")}`;

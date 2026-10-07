@@ -12,6 +12,7 @@ export type AdminAccount = {
   tokenLimit: number | null;
   balanceNanos: number;
   paygBalanceNanos?: number;
+  codingPlanTokens?: number;
   lifetimeSpendNanos: number;
   requestCount: number;
   totalTokens: number;
@@ -111,6 +112,7 @@ export type ClaudeOpus5ProviderSettingsData = {
   supportsVision?: boolean;
   supportsDocuments?: boolean;
   pinnedUserEmails?: string[];
+  reasoningEffort?: "low" | "medium" | "high" | "xhigh" | "max" | null;
 };
 
 export type ClaudeOpus5SettingsData = {
@@ -135,6 +137,7 @@ export type ClaudeOpus5ProviderDraft = {
   supportsVision?: boolean;
   supportsDocuments?: boolean;
   pinnedUserEmails?: string[];
+  reasoningEffort?: "low" | "medium" | "high" | "xhigh" | "max" | "" | null;
 };
 
 export type PinnedUserRoutingPolicy = {
@@ -285,5 +288,6 @@ export type ManagedModelOverviewItem = {
   minTier?: UserTier;
   isPayg?: boolean;
   isBundle?: boolean;
+  isTokenPlan?: boolean;
 };
 

@@ -1,6 +1,21 @@
 import { CLAUDE_OPUS5_PROVIDER_SLUG, CLUSTER_PROTOCOL_PROVIDER_SLUG, FXQIDIAN_PROVIDER_SLUG, TOKENHARBOR_PROVIDER_SLUG, TOKENROUTER_PROVIDER_SLUG } from "./modelCatalogue";
 
-export type CredentialTelemetryProvider = typeof FXQIDIAN_PROVIDER_SLUG | typeof CLUSTER_PROTOCOL_PROVIDER_SLUG | typeof TOKENHARBOR_PROVIDER_SLUG | typeof CLAUDE_OPUS5_PROVIDER_SLUG | typeof TOKENROUTER_PROVIDER_SLUG | "claude-fable-5.1" | "claude-opus-5" | "glm-5.3" | "claude-sonnet-4.6" | "deepseek-v4-pro" | "qwen3.8-max" | "gpt-6-astra" | "kimi-k3" | `claude-fable-5.1:${string}` | `claude-opus-5:${string}` | `claude-sonnet-4.6:${string}` | `deepseek-v4-pro:${string}` | `qwen3.8-max:${string}` | `glm-5.3:${string}` | `gpt-6-astra:${string}` | `kimi-k3:${string}`;
+export type CredentialTelemetryProvider =
+  | typeof FXQIDIAN_PROVIDER_SLUG
+  | typeof CLUSTER_PROTOCOL_PROVIDER_SLUG
+  | typeof TOKENHARBOR_PROVIDER_SLUG
+  | typeof CLAUDE_OPUS5_PROVIDER_SLUG
+  | typeof TOKENROUTER_PROVIDER_SLUG
+  | "claude-fable-5.1"
+  | "claude-opus-5"
+  | "glm-5.3"
+  | "claude-sonnet-4.6"
+  | "deepseek-v4-pro"
+  | "qwen3.8-max"
+  | "gpt-6-astra"
+  | "kimi-k3"
+  | `${string}:${string}`
+  | (string & {});
 
 type CredentialSlotHealth = {
   consecutiveFailures: number;

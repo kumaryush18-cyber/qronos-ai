@@ -51,14 +51,14 @@ export function SupportChatWidget() {
   const utils = trpc.useUtils();
   const { data: unreadCount = 0 } = trpc.support.getUnreadCount.useQuery(undefined, {
     enabled: !!user,
-    refetchInterval: 3500,
+    refetchInterval: isOpen ? 10_000 : 60_000,
     refetchIntervalInBackground: false,
     refetchOnWindowFocus: true,
   });
   
   const { data: history = [] } = trpc.support.getHistory.useQuery(undefined, {
     enabled: !!user && isOpen,
-    refetchInterval: isOpen ? 1500 : false,
+    refetchInterval: isOpen ? 5_000 : false,
   });
 
   const markAsRead = trpc.support.markAsRead.useMutation({

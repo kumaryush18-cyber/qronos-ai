@@ -28,7 +28,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
-import { UPI_TIERS, CRYPTO_TIERS, USD_TO_INR_RATE, type UPITier, type CryptoTier } from "@shared/paymentTiers";
+import { UPI_TIERS, CRYPTO_TIERS, CODING_PLAN_TIERS, getCodingPlanTier, USD_TO_INR_RATE, type UPITier, type CryptoTier, type CodingPlanTier } from "@shared/paymentTiers";
 
 export interface CheckoutModalProps {
   isOpen: boolean;
@@ -38,6 +38,10 @@ export interface CheckoutModalProps {
   initialAmountSol?: number;
   userId?: number;
   isPayg?: boolean;
+  isCodingPlan?: boolean;
+  codingPlanTierId?: string;
+  codingTokens?: number;
+  planName?: string;
   onSuccess?: (details: any) => void;
 }
 
@@ -95,11 +99,17 @@ export function CheckoutModal({
   initialAmountSol,
   userId,
   isPayg = false,
+  isCodingPlan = false,
+  codingPlanTierId,
+  codingTokens,
+  planName,
   onSuccess,
 }: CheckoutModalProps) {
   const [activeRail, setActiveRail] = useState<"crypto" | "upi" | "card">(initialRail);
   const [mounted, setMounted] = useState(false);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+
+  const matchedCodingPlan = isCodingPlan ? (getCodingPlanTier(codingPlanTierId || initialPackageUsd) || CODING_PLAN_TIERS[0]) : undefined;
 
   // Sync initialRail if changed
   useEffect(() => {
@@ -109,7 +119,19 @@ export function CheckoutModal({
       }
       if (initialPackageUsd) {
         setSelectedUsd(initialPackageUsd);
-        const matchedUpi = UPI_TIERS.find((t) => t.amountUsd === initialPackageUsd);
+        const matchedUpi = isCodingPlan && matchedCodingPlan
+          ? {
+              id: matchedCodingPlan.id,
+              name: matchedCodingPlan.name,
+              amountUsd: matchedCodingPlan.amountUsd,
+              amountInr: matchedCodingPlan.amountInr,
+              scanAmountUsd: matchedCodingPlan.scanAmountUsd,
+              scanAmountInr: matchedCodingPlan.scanAmountInr,
+              credits: matchedCodingPlan.tokensMillions,
+              creditsNanos: matchedCodingPlan.tokens,
+              description: matchedCodingPlan.description,
+            }
+          : UPI_TIERS.find((t) => t.amountUsd === initialPackageUsd);
         if (matchedUpi) {
           setSelectedUpiTier(matchedUpi);
         }
@@ -119,7 +141,7 @@ export function CheckoutModal({
         }
       }
     }
-  }, [isOpen, initialRail, initialPackageUsd]);
+  }, [isOpen, initialRail, initialPackageUsd, isCodingPlan, codingPlanTierId]);
 
   // ---------------------------------------------------------------------------
   // Card Payment State
@@ -263,17 +285,20 @@ export function CheckoutModal({
     if (solCountdownIntervalRef.current) clearInterval(solCountdownIntervalRef.current);
 
     try {
+      const matchedCoding = isCodingPlan ? (getCodingPlanTier(codingPlanTierId || selectedUsd) || CODING_PLAN_TIERS[0]) : undefined;
       const res = await fetch("/api/solana-pay/create-order", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           user_id: userId,
-          usd_amount: selectedUsd,
-          package_usd: selectedUsd,
+          usd_amount: matchedCoding ? matchedCoding.amountUsd : selectedUsd,
+          package_usd: matchedCoding ? matchedCoding.amountUsd : selectedUsd,
+          tier_id: matchedCoding?.id,
           amount_sol: initialAmountSol,
           is_payg: isPayg,
-          label: isPayg ? "TokenForge PAYG" : "TokenForge",
-          message: isPayg ? `PAYG Deposit $${selectedUsd}` : "API Credits",
+          is_coding_plan: isCodingPlan,
+          label: isCodingPlan ? "TokenForge Coding Plan" : isPayg ? "TokenForge PAYG" : "TokenForge",
+          message: isCodingPlan ? `${matchedCoding?.tokensMillions || 250}M Coding Tokens` : isPayg ? `PAYG Deposit $${selectedUsd}` : "API Credits",
         }),
       });
 
@@ -451,16 +476,18 @@ export function CheckoutModal({
     if (upiPollIntervalRef.current) clearInterval(upiPollIntervalRef.current);
 
     try {
+      const matchedCoding = isCodingPlan ? (getCodingPlanTier(codingPlanTierId || selectedUsd) || CODING_PLAN_TIERS[0]) : undefined;
       const res = await fetch("/api/upi/create-order", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           user_id: userId,
-          tier_id: selectedUpiTier.id,
-          amount_inr: selectedUpiTier.scanAmountInr,
-          amount_usd: selectedUpiTier.amountUsd,
-          credits: selectedUpiTier.credits,
+          tier_id: matchedCoding?.id || selectedUpiTier.id,
+          amount_inr: matchedCoding?.scanAmountInr || selectedUpiTier.scanAmountInr,
+          amount_usd: matchedCoding?.amountUsd || selectedUpiTier.amountUsd,
+          credits: matchedCoding ? matchedCoding.tokensMillions : selectedUpiTier.credits,
           is_payg: isPayg,
+          is_coding_plan: isCodingPlan,
         }),
       });
 
@@ -794,7 +821,9 @@ export function CheckoutModal({
         <div className="relative px-5 py-4 border-b border-white/[0.08] flex items-center justify-between bg-black/40 backdrop-blur-xl">
           <div className="flex items-center gap-3">
             <div className={`w-9 h-9 rounded-2xl flex items-center justify-center shadow-lg ${
-              isPayg
+              isCodingPlan
+                ? "bg-gradient-to-tr from-cyan-500 to-blue-500 shadow-cyan-500/25"
+                : isPayg
                 ? "bg-gradient-to-tr from-emerald-500 to-teal-500 shadow-emerald-500/25"
                 : "bg-gradient-to-tr from-rose-500 to-pink-500 shadow-rose-500/25"
             }`}>
@@ -802,17 +831,25 @@ export function CheckoutModal({
             </div>
             <div>
               <h2 className="text-base sm:text-lg font-semibold text-white tracking-tight flex items-center gap-2">
-                {isPayg ? "Deposit Developer Compute Balance" : "Top Up API Compute Units"}
+                {isCodingPlan
+                  ? `Coding Plan: ${matchedCodingPlan?.tokensMillions || 250}M Tokens ($${matchedCodingPlan?.amountUsd || 25})`
+                  : isPayg
+                  ? "Deposit Developer Compute Balance"
+                  : "Top Up API Compute Units"}
                 <span className={`text-[10px] uppercase font-mono px-2 py-0.5 rounded-full font-medium ${
-                  isPayg
+                  isCodingPlan
+                    ? "bg-cyan-500/15 border border-cyan-500/30 text-cyan-300"
+                    : isPayg
                     ? "bg-emerald-500/15 border border-emerald-500/30 text-emerald-300"
                     : "bg-rose-500/15 border border-rose-500/30 text-rose-300"
                 }`}>
-                  {isPayg ? "+100% Bonus (2x)" : "Zero Fee"}
+                  {isCodingPlan ? `${matchedCodingPlan?.tokensMillions || 250}M Tokens` : isPayg ? "+100% Bonus (2x)" : "Zero Fee"}
                 </span>
               </h2>
               <p className="text-xs text-neutral-400">
-                {isPayg
+                {isCodingPlan
+                  ? `Instant ${matchedCodingPlan?.tokensMillions || 250} Million tokens allocated directly to your coding allowance.`
+                  : isPayg
                   ? "Deposit compute balance directly. Every recharge receives a 100% bonus (2x compute grant) for official model rates."
                   : "Instant compute allocation with high-availability multi-rail settlement"}
               </p>

@@ -7,13 +7,15 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { CheckoutModal } from "@/components/CheckoutModal";
 import { PaygPaymentModal } from "@/components/PaygPaymentModal";
 import { ModelPricingTable } from "@/components/ModelPricingTable";
-import { ShieldCheck, Smartphone, Wallet, Zap, Sparkles, CreditCard, Loader2, ArrowRight, Percent, CheckCircle2 } from "lucide-react";
+import { ShieldCheck, Smartphone, Wallet, Zap, Sparkles, CreditCard, Loader2, ArrowRight, Percent, CheckCircle2, Code2, Terminal, Cpu } from "lucide-react";
 import { Link } from "wouter";
 import { toast } from "sonner";
+import { CODING_PLAN_TIERS, type CodingPlanTier } from "@shared/paymentTiers";
 
 export default function Pricing() {
-  const [pricingTier, setPricingTier] = useState<"payg" | "bundles">("payg");
+  const [pricingTier, setPricingTier] = useState<"payg" | "coding" | "bundles">("payg");
   const [activeRail, setActiveRail] = useState<"card" | "upi" | "crypto">("upi");
+  const [codingRail, setCodingRail] = useState<"upi" | "crypto">("upi");
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [isPaygModalOpen, setIsPaygModalOpen] = useState(false);
   const [authAlertOpen, setAuthAlertOpen] = useState(false);
@@ -24,6 +26,8 @@ export default function Pricing() {
   const [selectedRailForModal, setSelectedRailForModal] = useState<"crypto" | "upi" | "card">("upi");
   const [selectedAmountUsd, setSelectedAmountUsd] = useState<number>(25);
   const [isCheckoutPayg, setIsCheckoutPayg] = useState(false);
+  const [isCheckoutCodingPlan, setIsCheckoutCodingPlan] = useState(false);
+  const [selectedCodingTierId, setSelectedCodingTierId] = useState<string | undefined>(undefined);
   const [dodoLoadingPlan, setDodoLoadingPlan] = useState<string | null>(null);
   const [dodoProducts, setDodoProducts] = useState<{ starter: string; pro: string; max: string; power: string; ultra: string }>({
     starter: "",
@@ -63,6 +67,8 @@ export default function Pricing() {
       return;
     }
     setSelectedRailForModal("upi");
+    setIsCheckoutCodingPlan(false);
+    setIsCheckoutPayg(false);
     setIsCheckoutOpen(true);
   };
 
@@ -70,6 +76,21 @@ export default function Pricing() {
     if (!user) { setAuthAlertOpen(true); return; }
     setSelectedRailForModal(rail);
     setSelectedAmountUsd(amount);
+    setIsCheckoutPayg(false);
+    setIsCheckoutCodingPlan(false);
+    setSelectedCodingTierId(undefined);
+    setIsCheckoutOpen(true);
+  };
+
+  const openCodingCheckout = (rail: "upi" | "crypto", tier: CodingPlanTier) => {
+    if (!user) {
+      setAuthAlertOpen(true);
+      return;
+    }
+    setSelectedRailForModal(rail);
+    setSelectedAmountUsd(tier.amountUsd);
+    setSelectedCodingTierId(tier.id);
+    setIsCheckoutCodingPlan(true);
     setIsCheckoutPayg(false);
     setIsCheckoutOpen(true);
   };
@@ -83,6 +104,8 @@ export default function Pricing() {
     setSelectedRailForModal(method);
     setSelectedAmountUsd(amountUsd);
     setIsCheckoutPayg(true);
+    setIsCheckoutCodingPlan(false);
+    setSelectedCodingTierId(undefined);
     setIsCheckoutOpen(true);
   };
 
@@ -384,6 +407,10 @@ export default function Pricing() {
                 <>
                   Pay As You Go with <span className="text-rose-400">100% Bonus Credit</span>
                 </>
+              ) : pricingTier === "coding" ? (
+                <>
+                  Dedicated <span className="text-cyan-400">Coding Token Plans</span> for Developers
+                </>
               ) : (
                 <>
                   Find the <span className="text-rose-400">Perfect Plan</span> for Your Workload
@@ -394,6 +421,8 @@ export default function Pricing() {
           subtitle={
             pricingTier === "payg"
               ? "Fund your developer compute balance on demand. Every top-up receives an instant +100% capacity grant (2x usable quota) with transparent metering and sub-second failover routing."
+              : pricingTier === "coding"
+              ? "High-capacity token allocations at 10M tokens / $1 with instant automated ledger settlement. Supports Claude Opus 5, Sonnet 4.6, GLM 5.3, Qwen 3.8 Max, DeepSeek V4 Pro, and GPT-6 Astra."
               : "Prepaid API compute subscription packages with instant quota allocation and high-throughput routing. Direct settlement across Card, UPI, and Solana."
           }
           plans={pricingTier === "bundles" ? currentPlans : []}
@@ -508,46 +537,198 @@ export default function Pricing() {
                   setIsPaygModalOpen(true);
                 }} />
               </div>
+            ) : pricingTier === "coding" ? (
+              <div className="w-full max-w-6xl mx-auto px-4 pb-12">
+                {/* Coding Rail Toggle */}
+                <div className="flex flex-col items-center gap-3 mb-8">
+                  <div className="flex items-center justify-center p-1.5 rounded-2xl bg-black/50 border border-white/10 backdrop-blur-xl shadow-xl gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setCodingRail("upi")}
+                      className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-medium text-xs sm:text-sm transition-all duration-200 cursor-pointer ${
+                        codingRail === "upi"
+                          ? "bg-cyan-500 text-black font-bold shadow-lg shadow-cyan-500/30"
+                          : "text-slate-400 hover:text-white"
+                      }`}
+                    >
+                      <Smartphone size={16} />
+                      <span>Domestic UPI (₹ INR)</span>
+                      <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-black/30 text-emerald-950 font-bold">
+                        Zero Fees
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCodingRail("crypto")}
+                      className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-medium text-xs sm:text-sm transition-all duration-200 cursor-pointer ${
+                        codingRail === "crypto"
+                          ? "bg-cyan-500 text-black font-bold shadow-lg shadow-cyan-500/30"
+                          : "text-slate-400 hover:text-white"
+                      }`}
+                    >
+                      <Wallet size={16} />
+                      <span>Solana Pay (Global SOL)</span>
+                      <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-black/30 text-purple-950 font-bold">
+                        Instant
+                      </span>
+                    </button>
+                  </div>
+                  <p className="text-xs text-slate-400 flex items-center gap-1.5">
+                    <Sparkles size={13} className="text-cyan-400" />
+                    <span>
+                      10 Million Tokens per $1 USD · Dedicated developer coding allowance · 100% compatible with Claude Opus 5 & GLM 5.3
+                    </span>
+                  </p>
+                </div>
+
+                {/* Coding Plan Cards Grid */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {CODING_PLAN_TIERS.map((tier) => (
+                    <div
+                      key={tier.id}
+                      className={`relative rounded-3xl p-6 sm:p-7 backdrop-blur-2xl transition-all duration-300 flex flex-col justify-between ${
+                        tier.popular
+                          ? "bg-gradient-to-b from-cyan-950/50 via-black/80 to-black/60 border-2 border-cyan-400/60 shadow-2xl shadow-cyan-950/50 ring-1 ring-cyan-400/30"
+                          : "bg-white/[0.03] border border-white/10 hover:border-white/20 hover:bg-white/[0.05]"
+                      }`}
+                    >
+                      {/* Top Badges */}
+                      <div className="flex items-center justify-between gap-2 mb-4">
+                        <div className="flex items-center gap-2">
+                          <div className="w-8 h-8 rounded-xl bg-cyan-500/15 border border-cyan-500/30 flex items-center justify-center text-cyan-400">
+                            <Code2 size={16} />
+                          </div>
+                          <div>
+                            <h3 className="text-lg font-bold text-white tracking-tight">{tier.name}</h3>
+                            <span className="text-[11px] text-slate-400 font-mono">
+                              {tier.tokensMillions >= 1000 ? `${(tier.tokensMillions / 1000).toFixed(1)} Billion` : `${tier.tokensMillions} Million`} Tokens
+                            </span>
+                          </div>
+                        </div>
+                        {tier.badge && (
+                          <span className={`text-[10px] uppercase font-bold tracking-wider px-2.5 py-1 rounded-full ${
+                            tier.popular
+                              ? "bg-cyan-400 text-black shadow-md shadow-cyan-400/20"
+                              : "bg-cyan-500/20 text-cyan-300 border border-cyan-500/30"
+                          }`}>
+                            {tier.badge}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Price Display */}
+                      <div className="my-3 pb-4 border-b border-white/10">
+                        <div className="flex items-baseline gap-2">
+                          <span className="text-4xl font-extralight text-white font-display tracking-tight">
+                            ${tier.amountUsd}
+                          </span>
+                          <span className="text-xs text-slate-400 font-mono">
+                            / ₹{tier.amountInr.toLocaleString()} INR
+                          </span>
+                        </div>
+                        <div className="text-xs text-cyan-300/90 font-medium mt-1 flex items-center gap-1.5">
+                          <Sparkles size={12} />
+                          <span>{tier.tokensMillions}M Tokens Allocation</span>
+                        </div>
+                        <p className="text-xs text-slate-300 mt-2 leading-relaxed">
+                          {tier.description}
+                        </p>
+                      </div>
+
+                      {/* Features List */}
+                      <ul className="space-y-2.5 my-4 flex-1 text-xs text-slate-200">
+                        {tier.features.map((feat, idx) => (
+                          <li key={idx} className="flex items-start gap-2">
+                            <CheckCircle2 className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" />
+                            <span>{feat}</span>
+                          </li>
+                        ))}
+                      </ul>
+
+                      {/* Checkout Button */}
+                      <button
+                        type="button"
+                        onClick={() => openCodingCheckout(codingRail, tier)}
+                        className={`w-full mt-4 py-3.5 rounded-xl font-bold text-xs sm:text-sm transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                          tier.popular
+                            ? "bg-gradient-to-r from-cyan-400 via-cyan-500 to-teal-400 hover:from-cyan-300 hover:to-teal-300 text-black shadow-xl shadow-cyan-500/25 active:scale-[0.99]"
+                            : "bg-white/10 hover:bg-white/20 text-white border border-white/15"
+                        }`}
+                      >
+                        {codingRail === "upi" ? (
+                          <>
+                            <Smartphone size={16} />
+                            <span>Get {tier.tokensMillions}M Tokens (₹{tier.amountInr.toLocaleString()})</span>
+                          </>
+                        ) : (
+                          <>
+                            <Wallet size={16} />
+                            <span>Pay ${tier.amountUsd} with Solana</span>
+                          </>
+                        )}
+                        <ArrowRight size={14} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
             ) : null
           }
         >
           {/* Top-Level Controls */}
           <div className="flex flex-col items-center gap-5 w-full">
-            {/* Two-Tier Switcher */}
-            {creditsEnabled && (
-              <div className="inline-flex items-center p-1.5 rounded-2xl bg-black/60 border border-white/15 backdrop-blur-2xl shadow-2xl gap-2">
-                <button
-                  type="button"
-                  onClick={() => setPricingTier("payg")}
-                  className={`flex items-center gap-2.5 px-6 py-2.5 rounded-xl font-medium text-sm transition-all duration-200 cursor-pointer ${
-                    pricingTier === "payg"
-                      ? "bg-gradient-to-r from-rose-500 to-pink-500 text-white shadow-lg shadow-rose-500/30 font-semibold"
-                      : "text-slate-400 hover:text-white"
-                  }`}
-                >
-                  <span>Tier 1: Pay-As-You-Go</span>
-                  <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-white/20 text-white">
-                    +100% Bonus (2x)
-                  </span>
-                </button>
+            {/* Multi-Tier Switcher */}
+            <div className="inline-flex items-center p-1.5 rounded-2xl bg-black/60 border border-white/15 backdrop-blur-2xl shadow-2xl gap-2 flex-wrap justify-center">
+              <button
+                type="button"
+                onClick={() => setPricingTier("payg")}
+                className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-medium text-xs sm:text-sm transition-all duration-200 cursor-pointer ${
+                  pricingTier === "payg"
+                    ? "bg-gradient-to-r from-rose-500 to-pink-500 text-white shadow-lg shadow-rose-500/30 font-semibold"
+                    : "text-slate-400 hover:text-white"
+                }`}
+              >
+                <span>Tier 1: Pay-As-You-Go</span>
+                <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-white/20 text-white">
+                  +100% Bonus (2x)
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setPricingTier("coding")}
+                className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-medium text-xs sm:text-sm transition-all duration-200 cursor-pointer ${
+                  pricingTier === "coding"
+                    ? "bg-gradient-to-r from-cyan-500 to-teal-500 text-black shadow-lg shadow-cyan-500/30 font-bold"
+                    : "text-slate-400 hover:text-white"
+                }`}
+              >
+                <Code2 size={15} />
+                <span>Tier 2: Coding Token Plans</span>
+                <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-black/20 text-black">
+                  10M / $1
+                </span>
+              </button>
+
+              {creditsEnabled && (
                 <button
                   type="button"
                   onClick={() => setPricingTier("bundles")}
-                  className={`flex items-center gap-2.5 px-6 py-2.5 rounded-xl font-medium text-sm transition-all duration-200 cursor-pointer ${
+                  className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-medium text-xs sm:text-sm transition-all duration-200 cursor-pointer ${
                     pricingTier === "bundles"
                       ? "bg-gradient-to-r from-rose-500 to-pink-500 text-white shadow-lg shadow-rose-500/30 font-semibold"
                       : "text-slate-400 hover:text-white"
                   }`}
                 >
-                  <span>Tier 2: Compute Packages</span>
+                  <span>Tier 3: Compute Packages</span>
                   <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-white/10 text-slate-300">
                     Fixed Packages
                   </span>
                 </button>
-              </div>
-            )}
+              )}
+            </div>
 
-            {/* Rail Selector Switcher (Shown only for Tier 2 Bundles) */}
+            {/* Rail Selector Switcher (Shown only for Tier 3 Bundles) */}
             {pricingTier === "bundles" && (
               <div className="flex flex-col items-center gap-3">
                 <div className="flex flex-wrap items-center justify-center p-1.5 rounded-2xl bg-black/40 border border-white/10 backdrop-blur-xl shadow-xl gap-1">
@@ -662,10 +843,17 @@ export default function Pricing() {
       {/* Direct Settlement Checkout Modal for Card, UPI and Solana */}
       <CheckoutModal
         isOpen={isCheckoutOpen}
-        onClose={() => setIsCheckoutOpen(false)}
+        onClose={() => {
+          setIsCheckoutOpen(false);
+          setIsCheckoutCodingPlan(false);
+          setSelectedCodingTierId(undefined);
+        }}
         initialRail={selectedRailForModal}
         initialPackageUsd={selectedAmountUsd}
         isPayg={isCheckoutPayg}
+        isCodingPlan={isCheckoutCodingPlan}
+        codingPlanTierId={selectedCodingTierId}
+        codingTokens={CODING_PLAN_TIERS.find((t) => t.id === selectedCodingTierId)?.tokens}
         userId={user?.id}
       />
 

@@ -239,6 +239,7 @@ export const usageEvents = mysqlTable(
     index("usage_events_key_time_idx").on(table.apiKeyId, table.createdAt),
     index("usage_events_model_time_idx").on(table.modelId, table.createdAt),
     index("usage_events_user_status_time_idx").on(table.userId, table.status, table.createdAt),
+    index("usage_events_request_id_idx").on(table.requestId),
   ],
 );
 
@@ -250,6 +251,7 @@ export const creditAccounts = mysqlTable(
     userId: int("userId").notNull().unique().references(() => users.id, { onDelete: "cascade" }),
     balanceNanos: bigint("balanceNanos", { mode: "number" }).default(0).notNull(),
     paygBalanceNanos: bigint("paygBalanceNanos", { mode: "number" }).default(0).notNull(),
+    codingPlanTokens: bigint("codingPlanTokens", { mode: "number" }).default(0).notNull(),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
@@ -598,6 +600,7 @@ export const modelConfigs = mysqlTable(
     minTier: mysqlEnum("minTier", ["free", "starter", "pro", "max", "power", "ultra"]).default("free").notNull(),
     isPayg: boolean("isPayg").default(false).notNull(),
     isBundle: boolean("isBundle").default(true).notNull(),
+    isTokenPlan: boolean("isTokenPlan").default(false).notNull(),
     contextWindow: int("contextWindow"),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),

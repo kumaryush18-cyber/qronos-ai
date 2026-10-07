@@ -128,8 +128,8 @@ export function stripVisualContentFromMessage(
       const hash = computeImageHash(imageSource);
       const desc = descriptionsMap.get(hash);
       if (desc) {
-        const turnMeta = metadata?.turnsBack !== undefined
-          ? ` (Turn #${metadata.turnNumber ?? "?"} - ${metadata.turnsBack} msgs back)`
+        const turnMeta = metadata?.turnNumber !== undefined
+          ? ` (Turn #${metadata.turnNumber})`
           : "";
         return `[Visual Attachment${turnMeta} - Semantic Image Distillation]:\n${desc}`;
       }

@@ -56,6 +56,7 @@ import { encryptOrcaRouterCredential } from "./orcaRouterCredentialVault";
 import { decryptBaiReasoningContinuation, encryptBaiReasoningContinuation } from "./baiReasoningContinuationVault";
 import { decryptGlmToolContinuation, encryptGlmToolContinuation, type GlmPrivateToolContinuation } from "./glmToolContinuationVault";
 import { decryptProviderRuntimeConfig, encryptProviderRuntimeConfig } from "./providerRuntimeConfigVault";
+import { cached, bustCache } from "./memoryCache";
 import { TOKENFORGE_REFERRAL_REWARD_NANOS, isSpecialReferralCampaignCode, normalizeReferralCode } from "../shared/referrals";
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -229,42 +230,47 @@ async function activateExpiredMaintenanceCountdown(database: NonNullable<Awaited
 
 /** Returns the global inference admission state. Model catalogues and administration remain available during maintenance. */
 export async function getPlatformMaintenanceConfig(): Promise<PlatformMaintenanceConfig> {
-  try {
-    const db = await getDb();
-    if (!db) {
+  return cached("platform_maintenance_config", 30_000, async () => {
+    try {
+      const db = await getDb();
+      if (!db) {
+        const val = fallbackPlatformSettings.get(PLATFORM_MAINTENANCE_SETTING_KEY)?.value;
+        return { enabled: val === "enabled", updatedAt: null, updatedByUserId: null };
+      }
+      await activateExpiredMaintenanceCountdown(db);
+      const record = (await db.select().from(platformSettings).where(eq(platformSettings.settingKey, PLATFORM_MAINTENANCE_SETTING_KEY)).limit(1))[0];
+      return { enabled: record?.value === "enabled", updatedAt: record?.updatedAt ?? null, updatedByUserId: record?.updatedByUserId ?? null };
+    } catch (error: any) {
+      markDatabaseUnhealthy(error?.message ?? String(error));
       const val = fallbackPlatformSettings.get(PLATFORM_MAINTENANCE_SETTING_KEY)?.value;
       return { enabled: val === "enabled", updatedAt: null, updatedByUserId: null };
     }
-    await activateExpiredMaintenanceCountdown(db);
-    const record = (await db.select().from(platformSettings).where(eq(platformSettings.settingKey, PLATFORM_MAINTENANCE_SETTING_KEY)).limit(1))[0];
-    return { enabled: record?.value === "enabled", updatedAt: record?.updatedAt ?? null, updatedByUserId: record?.updatedByUserId ?? null };
-  } catch (error: any) {
-    markDatabaseUnhealthy(error?.message ?? String(error));
-    const val = fallbackPlatformSettings.get(PLATFORM_MAINTENANCE_SETTING_KEY)?.value;
-    return { enabled: val === "enabled", updatedAt: null, updatedByUserId: null };
-  }
+  });
 }
 
 /** Persists the administrator-controlled global inference admission state. */
 export async function getPlaygroundMaintenanceConfig(): Promise<PlatformMaintenanceConfig> {
-  try {
-    const db = await getDb();
-    if (!db) {
+  return cached("playground_maintenance_config", 30_000, async () => {
+    try {
+      const db = await getDb();
+      if (!db) {
+        const val = fallbackPlatformSettings.get(PLAYGROUND_MAINTENANCE_SETTING_KEY)?.value;
+        return { enabled: val === "enabled", updatedAt: null, updatedByUserId: null };
+      }
+      const record = (await db.select().from(platformSettings).where(eq(platformSettings.settingKey, PLAYGROUND_MAINTENANCE_SETTING_KEY)).limit(1))[0];
+      return { enabled: record?.value === "enabled", updatedAt: record?.updatedAt ?? null, updatedByUserId: record?.updatedByUserId ?? null };
+    } catch (error: any) {
+      markDatabaseUnhealthy(error?.message ?? String(error));
       const val = fallbackPlatformSettings.get(PLAYGROUND_MAINTENANCE_SETTING_KEY)?.value;
       return { enabled: val === "enabled", updatedAt: null, updatedByUserId: null };
     }
-    const record = (await db.select().from(platformSettings).where(eq(platformSettings.settingKey, PLAYGROUND_MAINTENANCE_SETTING_KEY)).limit(1))[0];
-    return { enabled: record?.value === "enabled", updatedAt: record?.updatedAt ?? null, updatedByUserId: record?.updatedByUserId ?? null };
-  } catch (error: any) {
-    markDatabaseUnhealthy(error?.message ?? String(error));
-    const val = fallbackPlatformSettings.get(PLAYGROUND_MAINTENANCE_SETTING_KEY)?.value;
-    return { enabled: val === "enabled", updatedAt: null, updatedByUserId: null };
-  }
+  });
 }
 
 export async function setPlaygroundMaintenanceConfig(enabled: boolean, updatedByUserId: number): Promise<PlatformMaintenanceConfig> {
   const value = enabled ? "enabled" : "disabled";
   fallbackPlatformSettings.set(PLAYGROUND_MAINTENANCE_SETTING_KEY, { value, updatedAt: new Date(), updatedByUserId });
+  bustCache("playground_maintenance_config");
   try {
     const db = await getDb();
     if (db) {
@@ -283,6 +289,7 @@ export async function setPlaygroundMaintenanceConfig(enabled: boolean, updatedBy
 export async function setPlatformMaintenanceConfig(enabled: boolean, updatedByUserId: number): Promise<PlatformMaintenanceConfig> {
   const value = enabled ? "enabled" : "disabled";
   fallbackPlatformSettings.set(PLATFORM_MAINTENANCE_SETTING_KEY, { value, updatedAt: new Date(), updatedByUserId });
+  bustCache("platform_maintenance_config");
   try {
     const db = await getDb();
     if (db) {
@@ -311,6 +318,7 @@ export async function setPlatformMaintenanceConfig(enabled: boolean, updatedByUs
 export async function resumePlatformAfterTimedMaintenance(updatedByUserId: number): Promise<PlatformMaintenanceConfig> {
   fallbackPlatformSettings.set(MAINTENANCE_COUNTDOWN_SETTING_KEY, { value: "", updatedAt: new Date(), updatedByUserId });
   fallbackPlatformSettings.set(PLATFORM_MAINTENANCE_SETTING_KEY, { value: "disabled", updatedAt: new Date(), updatedByUserId });
+  bustCache("platform_maintenance_config");
   try {
     const db = await getDb();
     if (db) {
@@ -394,29 +402,32 @@ export function normalizePinnedUserEmails(values: unknown): string[] {
  * When softPreference is false (Toggle OFF): strict lock is enforced (only designated provider allowed, no fallback).
  */
 export async function getPinnedUserRoutingPolicy(): Promise<PinnedUserRoutingPolicy> {
-  try {
-    const db = await getDb();
-    if (!db) {
+  return cached("pinned_user_routing_policy", 60_000, async () => {
+    try {
+      const db = await getDb();
+      if (!db) {
+        const val = fallbackPlatformSettings.get(PINNED_USER_ROUTING_POLICY_KEY)?.value;
+        return { softPreference: val === "soft_preference", updatedAt: null, updatedByUserId: null };
+      }
+      const record = (await db.select().from(platformSettings).where(eq(platformSettings.settingKey, PINNED_USER_ROUTING_POLICY_KEY)).limit(1))[0];
+      return {
+        softPreference: record?.value === "soft_preference",
+        updatedAt: record?.updatedAt ?? null,
+        updatedByUserId: record?.updatedByUserId ?? null,
+      };
+    } catch (error: any) {
+      markDatabaseUnhealthy(error?.message ?? String(error));
       const val = fallbackPlatformSettings.get(PINNED_USER_ROUTING_POLICY_KEY)?.value;
       return { softPreference: val === "soft_preference", updatedAt: null, updatedByUserId: null };
     }
-    const record = (await db.select().from(platformSettings).where(eq(platformSettings.settingKey, PINNED_USER_ROUTING_POLICY_KEY)).limit(1))[0];
-    return {
-      softPreference: record?.value === "soft_preference",
-      updatedAt: record?.updatedAt ?? null,
-      updatedByUserId: record?.updatedByUserId ?? null,
-    };
-  } catch (error: any) {
-    markDatabaseUnhealthy(error?.message ?? String(error));
-    const val = fallbackPlatformSettings.get(PINNED_USER_ROUTING_POLICY_KEY)?.value;
-    return { softPreference: val === "soft_preference", updatedAt: null, updatedByUserId: null };
-  }
+  });
 }
 
 export async function setPinnedUserRoutingPolicy(softPreference: boolean, updatedByUserId: number): Promise<PinnedUserRoutingPolicy> {
   const value = softPreference ? "soft_preference" : "strict_lock";
   const now = new Date();
   fallbackPlatformSettings.set(PINNED_USER_ROUTING_POLICY_KEY, { value, updatedAt: now, updatedByUserId });
+  bustCache("pinned_user_routing_policy");
   try {
     const db = await getDb();
     if (db) {
@@ -446,29 +457,31 @@ export type PlatformMaintenanceMessages = {
 
 /** Returns the stored custom maintenance messages (general + per-tier). */
 export async function getPlatformMaintenanceMessages(): Promise<PlatformMaintenanceMessages> {
-  try {
-    const db = await getDb();
-    if (!db) {
-      const val = fallbackPlatformSettings.get(PLATFORM_MAINTENANCE_MESSAGES_SETTING_KEY)?.value;
-      if (val) {
-        try { return JSON.parse(val); } catch {}
-      }
-      return { defaultMessage: "" };
-    }
-    const record = (await db.select().from(platformSettings).where(eq(platformSettings.settingKey, PLATFORM_MAINTENANCE_MESSAGES_SETTING_KEY)).limit(1))[0];
-    if (!record?.value) {
-      return { defaultMessage: "" };
-    }
+  return cached("platform_maintenance_messages", 60_000, async () => {
     try {
-      const parsed = JSON.parse(record.value) as PlatformMaintenanceMessages;
-      return parsed && typeof parsed === "object" ? parsed : { defaultMessage: "" };
-    } catch {
+      const db = await getDb();
+      if (!db) {
+        const val = fallbackPlatformSettings.get(PLATFORM_MAINTENANCE_MESSAGES_SETTING_KEY)?.value;
+        if (val) {
+          try { return JSON.parse(val); } catch {}
+        }
+        return { defaultMessage: "" };
+      }
+      const record = (await db.select().from(platformSettings).where(eq(platformSettings.settingKey, PLATFORM_MAINTENANCE_MESSAGES_SETTING_KEY)).limit(1))[0];
+      if (!record?.value) {
+        return { defaultMessage: "" };
+      }
+      try {
+        const parsed = JSON.parse(record.value) as PlatformMaintenanceMessages;
+        return parsed && typeof parsed === "object" ? parsed : { defaultMessage: "" };
+      } catch {
+        return { defaultMessage: "" };
+      }
+    } catch (error: any) {
+      markDatabaseUnhealthy(error?.message ?? String(error));
       return { defaultMessage: "" };
     }
-  } catch (error: any) {
-    markDatabaseUnhealthy(error?.message ?? String(error));
-    return { defaultMessage: "" };
-  }
+  });
 }
 
 /** Persists custom maintenance messages (general + per-tier). */
@@ -487,6 +500,7 @@ export async function setPlatformMaintenanceMessages(
   };
   const serialized = JSON.stringify(sanitized);
   fallbackPlatformSettings.set(PLATFORM_MAINTENANCE_MESSAGES_SETTING_KEY, { value: serialized, updatedAt: new Date(), updatedByUserId });
+  bustCache("platform_maintenance_messages");
   try {
     const db = await getDb();
     if (db) {
@@ -557,55 +571,57 @@ export type MaintenanceExemptionEntry = {
 
 /** Returns a user record by ID. */
 export async function getUserById(userId: number) {
-  const db = await getDb();
-  if (!db) {
-    if (userId === FALLBACK_ADMIN_SESSION_PRINCIPAL.id) return FALLBACK_ADMIN_SESSION_PRINCIPAL;
-    return undefined;
-  }
-  const result = await db
-    .select({
-      id: users.id,
-      openId: users.openId,
-      name: users.name,
-      email: users.email,
-      loginMethod: users.loginMethod,
-      role: users.role,
-      tier: users.tier,
-      creditsEnabled: users.creditsEnabled,
-      createdAt: users.createdAt,
-      updatedAt: users.updatedAt,
-      lastSignedIn: users.lastSignedIn,
-    })
-    .from(users)
-    .where(eq(users.id, userId))
-    .limit(1);
-  return result[0];
+  if (userId === FALLBACK_ADMIN_SESSION_PRINCIPAL.id) return FALLBACK_ADMIN_SESSION_PRINCIPAL;
+  return cached(`user_by_id:${userId}`, 30_000, async () => {
+    const db = await getDb();
+    if (!db) return undefined;
+    const result = await db
+      .select({
+        id: users.id,
+        openId: users.openId,
+        name: users.name,
+        email: users.email,
+        loginMethod: users.loginMethod,
+        role: users.role,
+        tier: users.tier,
+        creditsEnabled: users.creditsEnabled,
+        createdAt: users.createdAt,
+        updatedAt: users.updatedAt,
+        lastSignedIn: users.lastSignedIn,
+      })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+    return result[0];
+  });
 }
 
 /** Reads the current list of accounts exempted or restricted during global inference maintenance. */
 export async function getPlatformMaintenanceExemptions(): Promise<MaintenanceExemptionEntry[]> {
-  try {
-    const db = await getDb();
-    let rawValue: string | undefined;
-    if (!db) {
-      rawValue = fallbackPlatformSettings.get(PLATFORM_MAINTENANCE_EXEMPTIONS_SETTING_KEY)?.value;
-    } else {
-      const record = (await db.select().from(platformSettings).where(eq(platformSettings.settingKey, PLATFORM_MAINTENANCE_EXEMPTIONS_SETTING_KEY)).limit(1))[0];
-      rawValue = record?.value;
+  return cached("platform_maintenance_exemptions", 60_000, async () => {
+    try {
+      const db = await getDb();
+      let rawValue: string | undefined;
+      if (!db) {
+        rawValue = fallbackPlatformSettings.get(PLATFORM_MAINTENANCE_EXEMPTIONS_SETTING_KEY)?.value;
+      } else {
+        const record = (await db.select().from(platformSettings).where(eq(platformSettings.settingKey, PLATFORM_MAINTENANCE_EXEMPTIONS_SETTING_KEY)).limit(1))[0];
+        rawValue = record?.value;
+      }
+      if (!rawValue) return [];
+      const parsed = JSON.parse(rawValue);
+      if (!Array.isArray(parsed)) return [];
+      return parsed.map((item: any) => ({
+        email: normalizeEmail(String(item.email || "")),
+        status: item.status === "restricted" ? ("restricted" as const) : ("allowed" as const),
+        updatedAt: item.updatedAt ? String(item.updatedAt) : null,
+        updatedByUserId: typeof item.updatedByUserId === "number" ? item.updatedByUserId : null,
+      })).filter((item) => item.email.length > 0);
+    } catch (error: any) {
+      markDatabaseUnhealthy(error?.message ?? String(error));
+      return [];
     }
-    if (!rawValue) return [];
-    const parsed = JSON.parse(rawValue);
-    if (!Array.isArray(parsed)) return [];
-    return parsed.map((item: any) => ({
-      email: normalizeEmail(String(item.email || "")),
-      status: item.status === "restricted" ? ("restricted" as const) : ("allowed" as const),
-      updatedAt: item.updatedAt ? String(item.updatedAt) : null,
-      updatedByUserId: typeof item.updatedByUserId === "number" ? item.updatedByUserId : null,
-    })).filter((item) => item.email.length > 0);
-  } catch (error: any) {
-    markDatabaseUnhealthy(error?.message ?? String(error));
-    return [];
-  }
+  });
 }
 
 /** Configures an account exemption status ("allowed" to bypass maintenance, "restricted" to enforce maintenance). */
@@ -629,6 +645,7 @@ export async function setPlatformMaintenanceExemption(
   }
   const serialized = JSON.stringify(updated);
   fallbackPlatformSettings.set(PLATFORM_MAINTENANCE_EXEMPTIONS_SETTING_KEY, { value: serialized, updatedAt: new Date(), updatedByUserId });
+  bustCache("platform_maintenance_exemptions");
   try {
     const db = await getDb();
     if (db) {
@@ -654,6 +671,7 @@ export async function removePlatformMaintenanceExemption(
   const updated = current.filter(e => normalizeEmail(e.email) !== email);
   const serialized = JSON.stringify(updated);
   fallbackPlatformSettings.set(PLATFORM_MAINTENANCE_EXEMPTIONS_SETTING_KEY, { value: serialized, updatedAt: new Date(), updatedByUserId });
+  bustCache("platform_maintenance_exemptions");
   try {
     const db = await getDb();
     if (db) {
@@ -727,24 +745,26 @@ export type Gpt6AstraPremiumExemptionEntry = { email: string; updatedAt: string;
 const GPT6_ASTRA_PREMIUM_EXEMPTIONS_SETTING_KEY = "gpt6_astra_premium_exemptions_v1";
 
 export async function getGpt6AstraPremiumExemptions(): Promise<Gpt6AstraPremiumExemptionEntry[]> {
-  try {
-    const db = await getDb();
-    let rawValue: string | undefined;
-    if (!db) {
-      rawValue = fallbackPlatformSettings.get(GPT6_ASTRA_PREMIUM_EXEMPTIONS_SETTING_KEY)?.value;
-    } else {
-      const record = (await db.select().from(platformSettings).where(eq(platformSettings.settingKey, GPT6_ASTRA_PREMIUM_EXEMPTIONS_SETTING_KEY)).limit(1))[0];
-      rawValue = record?.value;
-      if (rawValue) {
-        fallbackPlatformSettings.set(GPT6_ASTRA_PREMIUM_EXEMPTIONS_SETTING_KEY, { value: rawValue, updatedAt: record.updatedAt || new Date(), updatedByUserId: record.updatedByUserId });
+  return cached("gpt6_astra_premium_exemptions", 60_000, async () => {
+    try {
+      const db = await getDb();
+      let rawValue: string | undefined;
+      if (!db) {
+        rawValue = fallbackPlatformSettings.get(GPT6_ASTRA_PREMIUM_EXEMPTIONS_SETTING_KEY)?.value;
+      } else {
+        const record = (await db.select().from(platformSettings).where(eq(platformSettings.settingKey, GPT6_ASTRA_PREMIUM_EXEMPTIONS_SETTING_KEY)).limit(1))[0];
+        rawValue = record?.value;
+        if (rawValue) {
+          fallbackPlatformSettings.set(GPT6_ASTRA_PREMIUM_EXEMPTIONS_SETTING_KEY, { value: rawValue, updatedAt: record.updatedAt || new Date(), updatedByUserId: record.updatedByUserId });
+        }
       }
+      if (!rawValue) return [];
+      return JSON.parse(rawValue);
+    } catch (err) {
+      console.error("[GPT6 Premium Exemption Parse Error]", err);
+      return [];
     }
-    if (!rawValue) return [];
-    return JSON.parse(rawValue);
-  } catch (err) {
-    console.error("[GPT6 Premium Exemption Parse Error]", err);
-    return [];
-  }
+  });
 }
 
 export async function setGpt6AstraPremiumExemption(
@@ -766,6 +786,7 @@ export async function setGpt6AstraPremiumExemption(
   }
   const serialized = JSON.stringify(updated);
   fallbackPlatformSettings.set(GPT6_ASTRA_PREMIUM_EXEMPTIONS_SETTING_KEY, { value: serialized, updatedAt: new Date(), updatedByUserId });
+  bustCache("gpt6_astra_premium_exemptions");
   try {
     const db = await getDb();
     if (db) {
@@ -790,6 +811,7 @@ export async function removeGpt6AstraPremiumExemption(
   const updated = current.filter(e => normalizeEmail(e.email) !== email);
   const serialized = JSON.stringify(updated);
   fallbackPlatformSettings.set(GPT6_ASTRA_PREMIUM_EXEMPTIONS_SETTING_KEY, { value: serialized, updatedAt: new Date(), updatedByUserId });
+  bustCache("gpt6_astra_premium_exemptions");
   try {
     const db = await getDb();
     if (db) {
@@ -933,6 +955,7 @@ export async function ensureCreditAccount(userId: number) {
         userId,
         balanceNanos: INTRODUCTORY_CREDIT_NANOS,
         paygBalanceNanos: 5_000_000_000,
+        codingPlanTokens: 0,
       });
       await tx.insert(creditLedger).values({
         userId,
@@ -993,6 +1016,17 @@ export async function preProvisionAccountEmail(input: { email: string; provision
 
   const existingUser = (await db.select({ id: users.id }).from(users).where(eq(users.email, email)).limit(1))[0];
   if (existingUser) return { kind: "existing_user" as const };
+
+  const existingReservation = (
+    await db
+      .select()
+      .from(preProvisionedAccounts)
+      .where(and(eq(preProvisionedAccounts.email, email), isNull(preProvisionedAccounts.activatedUserId)))
+      .limit(1)
+  )[0];
+  if (existingReservation) {
+    return { kind: "already_pre_provisioned" as const, reservation: existingReservation };
+  }
 
   const name = email.split("@")[0] || "TokenForge developer";
   const openId = `tf_auth_${randomBytes(16).toString("hex")}`;
@@ -1355,27 +1389,47 @@ export async function reserveCredit(
   userId: number,
   amountNanos: number,
   requestId: string,
-  options?: { keyGroup?: "payg" | "bundle" }
+  options?: { keyGroup?: "payg" | "bundle" | "token_plan" | "tokens" | "coding_plan" }
 ) {
   const db = await getDb();
-  if (!db) return { authorized: false, balanceNanos: 0, paygBalanceNanos: 0 };
+  if (!db) return { authorized: false, balanceNanos: 0, paygBalanceNanos: 0, codingPlanTokens: 0 };
   const account = await ensureCreditAccount(userId);
-  if (!account) return { authorized: false, balanceNanos: 0, paygBalanceNanos: 0 };
+  if (!account) return { authorized: false, balanceNanos: 0, paygBalanceNanos: 0, codingPlanTokens: 0 };
   const amount = Math.max(0, Math.trunc(amountNanos));
   const currentPayg = Number(account.paygBalanceNanos ?? 0);
   const currentStandard = Number(account.balanceNanos ?? 0);
-
-  if (amount === 0) {
-    return { authorized: true, balanceNanos: currentStandard, paygBalanceNanos: currentPayg };
-  }
+  const currentCodingTokens = Number((account as any).codingPlanTokens ?? 0);
 
   const keyGroup = options?.keyGroup;
+  const isTokenPlanKey = keyGroup === "token_plan" || keyGroup === "tokens" || keyGroup === "coding_plan";
+
+  // Key is strictly configured for Token Plan (Coding Tokens)
+  if (isTokenPlanKey) {
+    if (currentCodingTokens <= 0) {
+      return {
+        authorized: false,
+        balanceNanos: currentStandard,
+        paygBalanceNanos: currentPayg,
+        codingPlanTokens: 0,
+        isCodingPlan: true,
+        insufficientTokenPlan: true,
+      };
+    }
+    return {
+      authorized: true,
+      balanceNanos: currentStandard,
+      paygBalanceNanos: currentPayg,
+      codingPlanTokens: currentCodingTokens,
+      isCodingPlan: true,
+    };
+  }
+
   const creditsEnabled = await isUserCreditsEnabled(userId);
 
   // Key is strictly configured for Tier 1 PAYG
   if (keyGroup === "payg") {
     if (currentPayg < amount) {
-      return { authorized: false, balanceNanos: currentStandard, paygBalanceNanos: currentPayg };
+      return { authorized: false, balanceNanos: currentStandard, paygBalanceNanos: currentPayg, codingPlanTokens: currentCodingTokens };
     }
     return db.transaction(async tx => {
       const result = await tx.update(creditAccounts)
@@ -1383,7 +1437,7 @@ export async function reserveCredit(
         .where(and(eq(creditAccounts.userId, userId), gte(creditAccounts.paygBalanceNanos, amount)));
       if (!result[0].affectedRows) {
         const latest = (await tx.select().from(creditAccounts).where(eq(creditAccounts.userId, userId)).limit(1))[0];
-        return { authorized: false, balanceNanos: latest?.balanceNanos ?? 0, paygBalanceNanos: Number(latest?.paygBalanceNanos ?? 0) };
+        return { authorized: false, balanceNanos: latest?.balanceNanos ?? 0, paygBalanceNanos: Number(latest?.paygBalanceNanos ?? 0), codingPlanTokens: Number((latest as any)?.codingPlanTokens ?? 0) };
       }
       const latest = (await tx.select().from(creditAccounts).where(eq(creditAccounts.userId, userId)).limit(1))[0];
       const paygAfter = Number(latest?.paygBalanceNanos ?? 0);
@@ -1399,15 +1453,16 @@ export async function reserveCredit(
         authorized: true,
         balanceNanos: latest?.balanceNanos ?? 0,
         paygBalanceNanos: paygAfter,
+        codingPlanTokens: Number((latest as any)?.codingPlanTokens ?? 0),
         isPayg: true,
       };
     });
   }
 
-  // Key is strictly configured for Tier 2 Credit Bundles
+  // Key is strictly configured for Tier 2/3 Credit Bundles
   if (keyGroup === "bundle") {
     if (!creditsEnabled || currentStandard < amount) {
-      return { authorized: false, balanceNanos: currentStandard, paygBalanceNanos: currentPayg };
+      return { authorized: false, balanceNanos: currentStandard, paygBalanceNanos: currentPayg, codingPlanTokens: currentCodingTokens };
     }
     return db.transaction(async tx => {
       const result = await tx.update(creditAccounts)
@@ -1415,7 +1470,7 @@ export async function reserveCredit(
         .where(and(eq(creditAccounts.userId, userId), gte(creditAccounts.balanceNanos, amount)));
       if (!result[0].affectedRows) {
         const latest = (await tx.select().from(creditAccounts).where(eq(creditAccounts.userId, userId)).limit(1))[0];
-        return { authorized: false, balanceNanos: latest?.balanceNanos ?? 0, paygBalanceNanos: Number(latest?.paygBalanceNanos ?? 0) };
+        return { authorized: false, balanceNanos: latest?.balanceNanos ?? 0, paygBalanceNanos: Number(latest?.paygBalanceNanos ?? 0), codingPlanTokens: Number((latest as any)?.codingPlanTokens ?? 0) };
       }
       const latest = (await tx.select().from(creditAccounts).where(eq(creditAccounts.userId, userId)).limit(1))[0];
       const balanceNanos = latest?.balanceNanos ?? 0;
@@ -1427,7 +1482,7 @@ export async function reserveCredit(
         referenceId: `reservation:${requestId}`,
         note: "Reserved for an inference request (Credit Bundle balance)",
       });
-      return { authorized: true, balanceNanos, paygBalanceNanos: Number(latest?.paygBalanceNanos ?? 0) };
+      return { authorized: true, balanceNanos, paygBalanceNanos: Number(latest?.paygBalanceNanos ?? 0), codingPlanTokens: Number((latest as any)?.codingPlanTokens ?? 0) };
     });
   }
 
@@ -1523,26 +1578,84 @@ function isMissingUserForeignKeyViolation(error: unknown) {
  * the upstream model call is still in flight, the reservation has no remaining owner and is
  * deliberately treated as settled with no charge rather than recreating or mutating the account.
  */
-export async function settleReservedCredit(input: { userId: number; requestId: string; reservedNanos: number; finalChargeNanos: number; releaseReason?: string }, database?: CreditSettlementDatabase) {
+export async function settleReservedCredit(
+  input: {
+    userId: number;
+    requestId: string;
+    reservedNanos: number;
+    finalChargeNanos: number;
+    usedTokens?: number;
+    keyGroup?: "payg" | "bundle" | "token_plan" | "tokens" | "coding_plan";
+    releaseReason?: string;
+  },
+  database?: CreditSettlementDatabase
+) {
   const db = database ?? await getDb();
   if (!db) return { balanceNanos: 0, chargedNanos: 0 };
   const user = (await db.select({ id: users.id }).from(users).where(eq(users.id, input.userId)).limit(1))[0];
   if (!user) return { balanceNanos: 0, chargedNanos: 0 };
   const reserved = Math.max(0, Math.trunc(input.reservedNanos));
-  const chargedNanos = Math.min(reserved, Math.max(0, Math.trunc(input.finalChargeNanos)));
-  const refund = reserved - chargedNanos;
-  if (refund === 0) {
-    try {
-      const account = await ensureCreditAccount(input.userId);
-      return { balanceNanos: account?.balanceNanos ?? 0, chargedNanos };
-    } catch (error) {
-      // The account can be removed after the initial existence check and before initialization.
-      if (isMissingUserForeignKeyViolation(error)) return { balanceNanos: 0, chargedNanos: 0 };
-      throw error;
-    }
-  }
+  const usedTokens = Math.max(0, Math.trunc(input.usedTokens ?? 0));
+  const isTokenPlanKey = input.keyGroup === "token_plan" || input.keyGroup === "tokens" || input.keyGroup === "coding_plan";
+
   try {
     return await db.transaction(async tx => {
+      // 1. If this is a Token Plan API key (or playground token plan), deduct from codingPlanTokens
+      if (isTokenPlanKey || (input.keyGroup === undefined && usedTokens > 0)) {
+        const account = (await tx.select().from(creditAccounts).where(eq(creditAccounts.userId, input.userId)).limit(1))[0];
+        const currentCodingTokens = Number((account as any)?.codingPlanTokens ?? 0);
+        if (currentCodingTokens > 0 || isTokenPlanKey) {
+          const tokensDeducted = Math.min(currentCodingTokens, usedTokens);
+          await tx
+            .update(creditAccounts)
+            .set({ codingPlanTokens: sql`GREATEST(0, ${creditAccounts.codingPlanTokens} - ${tokensDeducted})` })
+            .where(eq(creditAccounts.userId, input.userId));
+
+          const updatedAccount = (await tx.select().from(creditAccounts).where(eq(creditAccounts.userId, input.userId)).limit(1))[0];
+          const remainingCodingTokens = Number((updatedAccount as any)?.codingPlanTokens ?? 0);
+
+          await tx.insert(creditLedger).values({
+            userId: input.userId,
+            kind: "usage_debit",
+            amountNanos: 0,
+            balanceAfterNanos: remainingCodingTokens,
+            referenceId: `coding_plan_debit:${input.requestId}`,
+            note: `Token Plan API Key: Deducted ${tokensDeducted.toLocaleString()} tokens (${remainingCodingTokens.toLocaleString()} tokens remaining)`,
+          });
+
+          // If all tokens were covered by coding plan, refund any reserved dollar credits
+          if (tokensDeducted >= usedTokens) {
+            if (reserved > 0) {
+              const wasPayg = (await tx.select().from(creditLedger).where(and(eq(creditLedger.userId, input.userId), eq(creditLedger.referenceId, `reservation_payg:${input.requestId}`))).limit(1))[0];
+              if (wasPayg) {
+                await tx.update(creditAccounts).set({ paygBalanceNanos: sql`${creditAccounts.paygBalanceNanos} + ${reserved}` }).where(eq(creditAccounts.userId, input.userId));
+              } else {
+                await tx.update(creditAccounts).set({ balanceNanos: sql`${creditAccounts.balanceNanos} + ${reserved}` }).where(eq(creditAccounts.userId, input.userId));
+              }
+            }
+            return {
+              balanceNanos: updatedAccount?.balanceNanos ?? 0,
+              paygBalanceNanos: Number(updatedAccount?.paygBalanceNanos ?? 0),
+              codingPlanTokens: remainingCodingTokens,
+              chargedNanos: 0,
+            };
+          }
+        }
+      }
+
+      // 2. Standard dollar credit settlement
+      const chargedNanos = Math.min(reserved, Math.max(0, Math.trunc(input.finalChargeNanos)));
+      const refund = reserved - chargedNanos;
+      if (refund === 0) {
+        const account = (await tx.select().from(creditAccounts).where(eq(creditAccounts.userId, input.userId)).limit(1))[0];
+        return {
+          balanceNanos: account?.balanceNanos ?? 0,
+          paygBalanceNanos: Number(account?.paygBalanceNanos ?? 0),
+          codingPlanTokens: Number((account as any)?.codingPlanTokens ?? 0),
+          chargedNanos,
+        };
+      }
+
       // Check if original reservation was PAYG
       const wasPaygReservation = (await tx.select().from(creditLedger).where(and(eq(creditLedger.userId, input.userId), eq(creditLedger.referenceId, `reservation_payg:${input.requestId}`))).limit(1))[0];
       if (wasPaygReservation) {
@@ -1559,7 +1672,12 @@ export async function settleReservedCredit(input: { userId: number; requestId: s
           referenceId: `settlement_payg:${input.requestId}`,
           note: input.releaseReason ?? "Unused PAYG reservation returned after metered completion",
         });
-        return { balanceNanos: account?.balanceNanos ?? 0, chargedNanos };
+        return {
+          balanceNanos: account?.balanceNanos ?? 0,
+          paygBalanceNanos: paygRem,
+          codingPlanTokens: Number((account as any)?.codingPlanTokens ?? 0),
+          chargedNanos,
+        };
       }
 
       await tx.update(creditAccounts).set({ balanceNanos: sql`${creditAccounts.balanceNanos} + ${refund}` }).where(eq(creditAccounts.userId, input.userId));
@@ -1573,7 +1691,12 @@ export async function settleReservedCredit(input: { userId: number; requestId: s
         referenceId: `settlement:${input.requestId}`,
         note: input.releaseReason ?? "Unused reservation returned after metered completion",
       });
-      return { balanceNanos, chargedNanos };
+      return {
+        balanceNanos,
+        paygBalanceNanos: Number(account?.paygBalanceNanos ?? 0),
+        codingPlanTokens: Number((account as any)?.codingPlanTokens ?? 0),
+        chargedNanos,
+      };
     });
   } catch (error) {
     // Account deletion can win the race after the check above but before the ledger insert.
@@ -1593,25 +1716,51 @@ export async function creditAccountFromSolanaPay(input: {
   signature: string;
   assetLabel?: string;
   isPayg?: boolean;
+  isCodingPlan?: boolean;
+  codingPlanTokens?: number;
+  planName?: string;
 }) {
   const db = await getDb();
   if (!db) return null;
   const user = (await db.select({ id: users.id }).from(users).where(eq(users.id, input.userId)).limit(1))[0];
   if (!user) return null;
   const amountNanos = Math.max(0, Math.trunc(input.amountNanos));
-  if (amountNanos === 0) {
+  if (amountNanos === 0 && !input.codingPlanTokens) {
     const account = await ensureCreditAccount(input.userId);
-    return { balanceNanos: account?.balanceNanos ?? 0, paygBalanceNanos: Number(account?.paygBalanceNanos ?? 0) };
+    return {
+      balanceNanos: account?.balanceNanos ?? 0,
+      paygBalanceNanos: Number(account?.paygBalanceNanos ?? 0),
+      codingPlanTokens: Number((account as any)?.codingPlanTokens ?? 0),
+    };
   }
 
   return await db.transaction(async tx => {
-    await tx.insert(creditAccounts).values({ userId: input.userId, balanceNanos: 0, paygBalanceNanos: 0 }).onDuplicateKeyUpdate({ set: { userId: input.userId } });
-    if (input.isPayg) {
+    await tx.insert(creditAccounts).values({ userId: input.userId, balanceNanos: 0, paygBalanceNanos: 0, codingPlanTokens: 0 }).onDuplicateKeyUpdate({ set: { userId: input.userId } });
+
+    if (input.isCodingPlan || (input.codingPlanTokens && input.codingPlanTokens > 0)) {
+      const tokensToAdd = input.codingPlanTokens || Math.max(0, Math.trunc(input.amountNanos));
+      await tx.update(creditAccounts).set({ codingPlanTokens: sql`${creditAccounts.codingPlanTokens} + ${tokensToAdd}` }).where(eq(creditAccounts.userId, input.userId));
+      const account = (await tx.select().from(creditAccounts).where(eq(creditAccounts.userId, input.userId)).limit(1))[0];
+      const balanceNanos = account?.balanceNanos ?? 0;
+      const paygBalanceNanos = Number(account?.paygBalanceNanos ?? 0);
+      const codingPlanTokens = Number((account as any)?.codingPlanTokens ?? tokensToAdd);
+      const mTokens = Math.round(tokensToAdd / 1_000_000);
+      await tx.insert(creditLedger).values({
+        userId: input.userId,
+        kind: "manual_adjustment",
+        amountNanos: 0,
+        balanceAfterNanos: codingPlanTokens,
+        referenceId: `solana_coding:${input.orderId}`,
+        note: `Coding Plan: ${input.planName || "Coding Plan"} (+${mTokens}M Tokens). tx: ${input.signature.slice(0, 8)}...`,
+      });
+      return { balanceNanos, paygBalanceNanos, codingPlanTokens };
+    } else if (input.isPayg) {
       const creditGrantNanos = amountNanos * 2;
       await tx.update(creditAccounts).set({ paygBalanceNanos: sql`${creditAccounts.paygBalanceNanos} + ${creditGrantNanos}` }).where(eq(creditAccounts.userId, input.userId));
       const account = (await tx.select().from(creditAccounts).where(eq(creditAccounts.userId, input.userId)).limit(1))[0];
       const balanceNanos = account?.balanceNanos ?? 0;
       const paygBalanceNanos = Number(account?.paygBalanceNanos ?? creditGrantNanos);
+      const codingPlanTokens = Number((account as any)?.codingPlanTokens ?? 0);
       await tx.insert(creditLedger).values({
         userId: input.userId,
         kind: "manual_adjustment",
@@ -1620,12 +1769,13 @@ export async function creditAccountFromSolanaPay(input: {
         referenceId: `solana_payg:${input.orderId}`,
         note: `PAYG USD Deposit (${input.assetLabel ?? "USD"}) +100% Bonus (2x Credit Grant). tx: ${input.signature.slice(0, 8)}...`,
       });
-      return { balanceNanos, paygBalanceNanos };
+      return { balanceNanos, paygBalanceNanos, codingPlanTokens };
     } else {
       await tx.update(creditAccounts).set({ balanceNanos: sql`${creditAccounts.balanceNanos} + ${amountNanos}` }).where(eq(creditAccounts.userId, input.userId));
       const account = (await tx.select().from(creditAccounts).where(eq(creditAccounts.userId, input.userId)).limit(1))[0];
       const balanceNanos = account?.balanceNanos ?? amountNanos;
       const paygBalanceNanos = Number(account?.paygBalanceNanos ?? 0);
+      const codingPlanTokens = Number((account as any)?.codingPlanTokens ?? 0);
       await tx.insert(creditLedger).values({
         userId: input.userId,
         kind: "manual_adjustment",
@@ -1634,7 +1784,7 @@ export async function creditAccountFromSolanaPay(input: {
         referenceId: `solana_pay:${input.orderId}`,
         note: `Solana Pay settlement (${input.assetLabel ?? "Mainnet SOL"}) tx: ${input.signature.slice(0, 8)}...`,
       });
-      return { balanceNanos, paygBalanceNanos };
+      return { balanceNanos, paygBalanceNanos, codingPlanTokens };
     }
   });
 }
@@ -1650,6 +1800,9 @@ export async function creditAccountFromUPIPay(input: {
   utr: string;
   assetLabel?: string;
   isPayg?: boolean;
+  isCodingPlan?: boolean;
+  codingPlanTokens?: number;
+  planName?: string;
 }) {
   try {
     const db = await getDb();
@@ -1657,19 +1810,42 @@ export async function creditAccountFromUPIPay(input: {
     const user = (await db.select({ id: users.id }).from(users).where(eq(users.id, input.userId)).limit(1))[0];
     if (!user) return null;
     const amountNanos = Math.max(0, Math.trunc(input.amountNanos));
-    if (amountNanos === 0) {
+    if (amountNanos === 0 && !input.codingPlanTokens) {
       const account = await ensureCreditAccount(input.userId);
-      return { balanceNanos: account?.balanceNanos ?? 0, paygBalanceNanos: Number(account?.paygBalanceNanos ?? 0) };
+      return {
+        balanceNanos: account?.balanceNanos ?? 0,
+        paygBalanceNanos: Number(account?.paygBalanceNanos ?? 0),
+        codingPlanTokens: Number((account as any)?.codingPlanTokens ?? 0),
+      };
     }
 
     return await db.transaction(async tx => {
-      await tx.insert(creditAccounts).values({ userId: input.userId, balanceNanos: 0, paygBalanceNanos: 0 }).onDuplicateKeyUpdate({ set: { userId: input.userId } });
-      if (input.isPayg) {
+      await tx.insert(creditAccounts).values({ userId: input.userId, balanceNanos: 0, paygBalanceNanos: 0, codingPlanTokens: 0 }).onDuplicateKeyUpdate({ set: { userId: input.userId } });
+
+      if (input.isCodingPlan || (input.codingPlanTokens && input.codingPlanTokens > 0)) {
+        const tokensToAdd = input.codingPlanTokens || Math.max(0, Math.trunc(input.amountNanos));
+        await tx.update(creditAccounts).set({ codingPlanTokens: sql`${creditAccounts.codingPlanTokens} + ${tokensToAdd}` }).where(eq(creditAccounts.userId, input.userId));
+        const account = (await tx.select().from(creditAccounts).where(eq(creditAccounts.userId, input.userId)).limit(1))[0];
+        const balanceNanos = account?.balanceNanos ?? 0;
+        const paygBalanceNanos = Number(account?.paygBalanceNanos ?? 0);
+        const codingPlanTokens = Number((account as any)?.codingPlanTokens ?? tokensToAdd);
+        const mTokens = Math.round(tokensToAdd / 1_000_000);
+        await tx.insert(creditLedger).values({
+          userId: input.userId,
+          kind: "manual_adjustment",
+          amountNanos: 0,
+          balanceAfterNanos: codingPlanTokens,
+          referenceId: `upi_coding:${input.orderId}`,
+          note: `Coding Plan: ${input.planName || "Coding Plan"} (+${mTokens}M Tokens). UTR: ${input.utr}`,
+        });
+        return { balanceNanos, paygBalanceNanos, codingPlanTokens };
+      } else if (input.isPayg) {
         const creditGrantNanos = amountNanos * 2;
         await tx.update(creditAccounts).set({ paygBalanceNanos: sql`${creditAccounts.paygBalanceNanos} + ${creditGrantNanos}` }).where(eq(creditAccounts.userId, input.userId));
         const account = (await tx.select().from(creditAccounts).where(eq(creditAccounts.userId, input.userId)).limit(1))[0];
         const balanceNanos = account?.balanceNanos ?? 0;
         const paygBalanceNanos = Number(account?.paygBalanceNanos ?? creditGrantNanos);
+        const codingPlanTokens = Number((account as any)?.codingPlanTokens ?? 0);
         await tx.insert(creditLedger).values({
           userId: input.userId,
           kind: "manual_adjustment",
@@ -1678,12 +1854,13 @@ export async function creditAccountFromUPIPay(input: {
           referenceId: `upi_payg:${input.orderId}`,
           note: `PAYG USD Deposit (${input.assetLabel ?? "UPI INR"}) +100% Bonus (2x Credit Grant). UTR: ${input.utr}`,
         });
-        return { balanceNanos, paygBalanceNanos };
+        return { balanceNanos, paygBalanceNanos, codingPlanTokens };
       } else {
         await tx.update(creditAccounts).set({ balanceNanos: sql`${creditAccounts.balanceNanos} + ${amountNanos}` }).where(eq(creditAccounts.userId, input.userId));
         const account = (await tx.select().from(creditAccounts).where(eq(creditAccounts.userId, input.userId)).limit(1))[0];
         const balanceNanos = account?.balanceNanos ?? amountNanos;
         const paygBalanceNanos = Number(account?.paygBalanceNanos ?? 0);
+        const codingPlanTokens = Number((account as any)?.codingPlanTokens ?? 0);
         await tx.insert(creditLedger).values({
           userId: input.userId,
           kind: "manual_adjustment",
@@ -1692,7 +1869,7 @@ export async function creditAccountFromUPIPay(input: {
           referenceId: `upi_pay:${input.orderId}`,
           note: `UPI payment verified (${input.assetLabel ?? "UPI INR"}) UTR: ${input.utr}`,
         });
-        return { balanceNanos, paygBalanceNanos };
+        return { balanceNanos, paygBalanceNanos, codingPlanTokens };
       }
     });
   } catch (error: any) {
@@ -1779,6 +1956,7 @@ export async function getCreditProfile(userId: number, now = new Date()) {
     userId,
     balanceNanos: account.balanceNanos,
     paygBalanceNanos: Number((account as any).paygBalanceNanos ?? 0),
+    codingPlanTokens: Number((account as any).codingPlanTokens ?? 0),
     creditsEnabled: await isUserCreditsEnabled(userId),
     canCheckIn: !todayCheckin[0],
     today: utcCalendarKey(now),
@@ -1839,7 +2017,7 @@ export function publicApiKey(key: ApiKeyRecord) {
     id: key.id,
     label: key.label,
     prefix: key.keyPrefix,
-    keyGroup: ((key as any).keyGroup as "payg" | "bundle") || "bundle",
+    keyGroup: ((key as any).keyGroup as "payg" | "bundle" | "token_plan" | "tokens" | "coding_plan") || "bundle",
     status: key.status,
     createdAt: key.createdAt,
     lastUsedAt: key.lastUsedAt,
@@ -1899,6 +2077,8 @@ export async function getDb(): Promise<ReturnType<typeof drizzle> | null> {
       void ensureApiKeysKeyGroupColumn(_pool);
       void ensureModelConfigsAccessColumns(_pool);
       void ensureUserCreditsEnabledColumn(_pool);
+      void ensureCreditAccountsColumns(_pool);
+      void ensureUsageEventsRequestIdIndex(_pool);
     } catch (error: any) {
       const msg = error?.message ?? String(error);
       const isQuotaOrRestricted = error?.errno === 1105 || /quota|restricted|limit/i.test(msg);
@@ -1978,8 +2158,19 @@ async function ensureModelConfigsAccessColumns(pool: mysql.Pool) {
     // ER_DUP_FIELDNAME (1060) is expected if column already exists
   }
   try {
+    await pool.query(
+      "ALTER TABLE model_configs ADD COLUMN isTokenPlan BOOLEAN NOT NULL DEFAULT FALSE"
+    );
+  } catch (err: any) {
+    // ER_DUP_FIELDNAME (1060) is expected if column already exists
+  }
+  try {
     // Ensure NULL values for isBundle default to TRUE
     await pool.query("UPDATE model_configs SET isBundle = TRUE WHERE isBundle IS NULL");
+    // Guarantee premier coding models have Token Plan access enabled by default
+    await pool.query(
+      "UPDATE model_configs SET isTokenPlan = TRUE WHERE modelId IN ('claude-opus-5.5', 'claude-opus-5', 'gpt-6-sol', 'glm-5.3', 'claude-sonnet-4.6', 'claude-fable-5.1', 'deepseek-v4-pro')"
+    );
     // Explicitly guarantee claude-opus-5 has BOTH bundle access ON and payg access ON
     await pool.query(
       "UPDATE model_configs SET isPayg = TRUE, isBundle = TRUE WHERE modelId = 'claude-opus-5'"
@@ -2009,6 +2200,51 @@ async function ensureUserCreditsEnabledColumn(pool: mysql.Pool) {
     );
   } catch (err) {
     console.warn("[Database] Error ensuring user creditsEnabled defaults:", err);
+  }
+}
+
+let _creditAccountsColumnsEnsured = false;
+async function ensureCreditAccountsColumns(pool: mysql.Pool) {
+  if (_creditAccountsColumnsEnsured) return;
+  _creditAccountsColumnsEnsured = true;
+  try {
+    await pool.query(
+      "ALTER TABLE credit_accounts ADD COLUMN codingPlanTokens BIGINT NOT NULL DEFAULT 0"
+    );
+  } catch (err: any) {
+    // ER_DUP_FIELDNAME (1060) is expected if column already exists
+  }
+  try {
+    await pool.query(
+      "ALTER TABLE credit_accounts ADD COLUMN paygBalanceNanos BIGINT NOT NULL DEFAULT 0"
+    );
+  } catch (err: any) {
+    // ER_DUP_FIELDNAME (1060) is expected if column already exists
+  }
+  try {
+    await pool.query("UPDATE credit_accounts SET codingPlanTokens = 0 WHERE codingPlanTokens IS NULL");
+  } catch {}
+  try {
+    await pool.query("UPDATE credit_accounts SET paygBalanceNanos = 0 WHERE paygBalanceNanos IS NULL");
+  } catch {}
+}
+
+let _usageEventsRequestIdIndexEnsured = false;
+async function ensureUsageEventsRequestIdIndex(pool: mysql.Pool) {
+  if (_usageEventsRequestIdIndexEnsured) return;
+  _usageEventsRequestIdIndexEnsured = true;
+  try {
+    const [rows]: any = await pool.query(
+      "SELECT INDEX_NAME FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'usage_events' AND INDEX_NAME = 'idx_usage_events_requestid'"
+    );
+    if (!rows || rows.length === 0) {
+      await pool.query("CREATE INDEX idx_usage_events_requestid ON usage_events (requestId)");
+      console.log("[Database] Created index idx_usage_events_requestid ON usage_events (requestId)");
+    }
+  } catch (err: any) {
+    if (err?.errno !== 1061 && !String(err?.message).includes("Duplicate key")) {
+      console.warn("[Database] Note on ensureUsageEventsRequestIdIndex:", err?.message ?? err);
+    }
   }
 }
 
@@ -2277,10 +2513,12 @@ export async function upsertUser(user: InsertUser): Promise<void> {
 /** Resolves a user's display name for live request telemetry; returns null when unavailable. */
 export async function lookupUserName(userId: number): Promise<string | null> {
   if (!Number.isInteger(userId) || userId <= 0) return null;
-  const db = await getDb();
-  if (!db) return null;
-  const row = (await db.select({ name: users.name }).from(users).where(eq(users.id, userId)).limit(1))[0];
-  return row?.name ?? null;
+  return cached(`user_name:${userId}`, 600_000, async () => {
+    const db = await getDb();
+    if (!db) return null;
+    const row = (await db.select({ name: users.name }).from(users).where(eq(users.id, userId)).limit(1))[0];
+    return row?.name ?? null;
+  });
 }
 
 export async function getUserByOpenId(openId: string) {
@@ -2599,42 +2837,45 @@ export async function clearFailedPasswordLogin(email: string) {
 }
 
 export async function getEmailAllowlistConfig(): Promise<EmailAllowlistConfig | null> {
-  try {
-    const db = await getDb();
-    if (!db) {
-      const fallback = fallbackPlatformSettings.get(EMAIL_ALLOWLIST_SETTING_KEY)?.value;
-      if (!fallback) return null;
+  return cached("email_allowlist", 60_000, async () => {
+    try {
+      const db = await getDb();
+      if (!db) {
+        const fallback = fallbackPlatformSettings.get(EMAIL_ALLOWLIST_SETTING_KEY)?.value;
+        if (!fallback) return null;
+        try {
+          const parsed = JSON.parse(fallback) as { entries?: unknown };
+          const entries = Array.isArray(parsed.entries) && parsed.entries.every(entry => typeof entry === "string")
+            ? normalizeEmailAllowlistEntries(parsed.entries)
+            : [];
+          return { entries, updatedAt: null, updatedByUserId: null };
+        } catch {
+          return null;
+        }
+      }
+      const record = (await db.select().from(platformSettings).where(eq(platformSettings.settingKey, EMAIL_ALLOWLIST_SETTING_KEY)).limit(1))[0];
+      if (!record) return null;
       try {
-        const parsed = JSON.parse(fallback) as { entries?: unknown };
+        const parsed = JSON.parse(record.value) as { entries?: unknown };
         const entries = Array.isArray(parsed.entries) && parsed.entries.every(entry => typeof entry === "string")
           ? normalizeEmailAllowlistEntries(parsed.entries)
           : [];
-        return { entries, updatedAt: null, updatedByUserId: null };
+        return { entries, updatedAt: record.updatedAt, updatedByUserId: record.updatedByUserId };
       } catch {
-        return null;
+        return { entries: [], updatedAt: record.updatedAt, updatedByUserId: record.updatedByUserId };
       }
+    } catch (error: any) {
+      markDatabaseUnhealthy(error?.message ?? String(error));
+      return null;
     }
-    const record = (await db.select().from(platformSettings).where(eq(platformSettings.settingKey, EMAIL_ALLOWLIST_SETTING_KEY)).limit(1))[0];
-    if (!record) return null;
-    try {
-      const parsed = JSON.parse(record.value) as { entries?: unknown };
-      const entries = Array.isArray(parsed.entries) && parsed.entries.every(entry => typeof entry === "string")
-        ? normalizeEmailAllowlistEntries(parsed.entries)
-        : [];
-      return { entries, updatedAt: record.updatedAt, updatedByUserId: record.updatedByUserId };
-    } catch {
-      return { entries: [], updatedAt: record.updatedAt, updatedByUserId: record.updatedByUserId };
-    }
-  } catch (error: any) {
-    markDatabaseUnhealthy(error?.message ?? String(error));
-    return null;
-  }
+  });
 }
 
 export async function setEmailAllowlistConfig(entries: readonly string[], updatedByUserId: number): Promise<EmailAllowlistConfig> {
   const db = await getDb();
   if (!db) throw new Error("TokenForge database is unavailable");
   const normalizedEntries = normalizeEmailAllowlistEntries(entries);
+  bustCache("email_allowlist");
   await db.insert(platformSettings).values({
     settingKey: EMAIL_ALLOWLIST_SETTING_KEY,
     value: JSON.stringify({ entries: normalizedEntries }),
@@ -2700,26 +2941,29 @@ export async function replaceOrcaRouterCredentialPool(credentials: readonly stri
 
 /** Returns the currently published public announcement, normalized so whitespace-only values remain unpublished. */
 export async function getAnnouncementText(): Promise<string | null> {
-  try {
-    const db = await getDb();
-    if (!db) {
+  return cached("announcement_text", 60_000, async () => {
+    try {
+      const db = await getDb();
+      if (!db) {
+        const fallback = fallbackPlatformSettings.get(ANNOUNCEMENT_TEXT_SETTING_KEY)?.value?.trim() ?? "";
+        return fallback || null;
+      }
+      const record = (await db.select({ value: platformSettings.value }).from(platformSettings).where(eq(platformSettings.settingKey, ANNOUNCEMENT_TEXT_SETTING_KEY)).limit(1))[0];
+      const text = record?.value.trim() ?? "";
+      return text || null;
+    } catch (error: any) {
+      markDatabaseUnhealthy(error?.message ?? String(error));
       const fallback = fallbackPlatformSettings.get(ANNOUNCEMENT_TEXT_SETTING_KEY)?.value?.trim() ?? "";
       return fallback || null;
     }
-    const record = (await db.select({ value: platformSettings.value }).from(platformSettings).where(eq(platformSettings.settingKey, ANNOUNCEMENT_TEXT_SETTING_KEY)).limit(1))[0];
-    const text = record?.value.trim() ?? "";
-    return text || null;
-  } catch (error: any) {
-    markDatabaseUnhealthy(error?.message ?? String(error));
-    const fallback = fallbackPlatformSettings.get(ANNOUNCEMENT_TEXT_SETTING_KEY)?.value?.trim() ?? "";
-    return fallback || null;
-  }
+  });
 }
 
 /** Persists an administrator-authored announcement. An empty value intentionally clears the public banner. */
 export async function setAnnouncementText(text: string, updatedByUserId: number): Promise<string | null> {
   const value = text.trim().slice(0, 500);
   fallbackPlatformSettings.set(ANNOUNCEMENT_TEXT_SETTING_KEY, { value, updatedAt: new Date(), updatedByUserId });
+  bustCache("announcement_text");
   try {
     const db = await getDb();
     if (db) {
@@ -2895,7 +3139,7 @@ async function purgeRemovedManagedProviderGroups(
   }
 }
 
-function clearRemovedManagedProviderTelemetry(modelId: ManagedDynamicProviderModel, providers: ClaudeOpus5ProviderRuntime[]) {
+export function clearRemovedManagedProviderTelemetry(modelId: ManagedDynamicProviderModel, providers: ClaudeOpus5ProviderRuntime[]) {
   for (const provider of providers) {
     clearProviderCredentialTelemetryGroup(`${modelId}:${provider.id}` as Extract<CredentialTelemetryProvider, `${string}:${string}`>);
   }
@@ -2935,7 +3179,7 @@ export function isMaskedOrPlaceholderKey(key: string | undefined | null): boolea
   return false;
 }
 
-function maskProviderApiKey(value: string) {
+export function maskProviderApiKey(value: string) {
   const normalized = value.trim();
   if (!normalized || isMaskedOrPlaceholderKey(normalized)) return "Not configured";
   return `${normalized.slice(0, Math.min(3, normalized.length))}••••${normalized.slice(-4)}`;
@@ -2946,7 +3190,7 @@ export function isManagedProviderCredentialEnabled(provider: { apiKeyEnabled?: r
   return provider.apiKeyEnabled?.[slot] !== false;
 }
 
-function providerApiKeyMasks(apiKeys: string[], apiKeyEnabled?: readonly boolean[]) {
+export function providerApiKeyMasks(apiKeys: string[], apiKeyEnabled?: readonly boolean[]) {
   return apiKeys.map((key, index) => ({
     slot: index + 1,
     value: maskProviderApiKey(key),
@@ -2962,7 +3206,7 @@ type ManagedProviderKeyUpdate = {
 };
 
 /** Retains secret values on partial saves while preserving each key's explicit routing state. */
-function applyManagedProviderKeyUpdate(
+export function applyManagedProviderKeyUpdate(
   existing: { apiKeys: string[]; apiKeyEnabled?: boolean[] } | undefined,
   submitted: ManagedProviderKeyUpdate,
 ) {
@@ -2987,40 +3231,42 @@ function applyManagedProviderKeyUpdate(
 }
 
 async function readClaudeFable5RuntimeOverride() {
-  const db = await getDb();
-  let record: { value: string; updatedAt?: Date | null; updatedByUserId?: number | null } | undefined;
-  if (db) {
-    try {
-      record = (await db.select().from(platformSettings).where(eq(platformSettings.settingKey, CLAUDE_FABLE5_NVIDIA_RUNTIME_SETTING_KEY)).limit(1))[0];
-    } catch {
-      // Fallback to memory if DB query fails
+  return cached("runtime:claude_fable5_nvidia", 60_000, async () => {
+    const db = await getDb();
+    let record: { value: string; updatedAt?: Date | null; updatedByUserId?: number | null } | undefined;
+    if (db) {
+      try {
+        record = (await db.select().from(platformSettings).where(eq(platformSettings.settingKey, CLAUDE_FABLE5_NVIDIA_RUNTIME_SETTING_KEY)).limit(1))[0];
+      } catch {
+        // Fallback to memory if DB query fails
+      }
     }
-  }
-  if (!record) {
-    record = fallbackPlatformSettings.get(CLAUDE_FABLE5_NVIDIA_RUNTIME_SETTING_KEY);
-  }
-  if (!record) return null;
-  try {
-    const encoded = JSON.parse(record.value) as { ciphertext?: string; iv?: string; authTag?: string };
-    const decrypted = decryptProviderRuntimeConfig({ ciphertext: String(encoded.ciphertext ?? ""), iv: String(encoded.iv ?? ""), authTag: String(encoded.authTag ?? "") });
-    if (!decrypted || typeof decrypted !== "object") return null;
-    const candidate = decrypted as Partial<ClaudeFable5RuntimePayload> & { baseUrl?: unknown; model?: unknown; apiKeys?: unknown };
-    const legacyProvider = {
-      id: "primary",
-      label: "Primary provider",
-      enabled: true,
-      baseUrl: typeof candidate.baseUrl === "string" ? candidate.baseUrl.trim() : "",
-      model: typeof candidate.model === "string" ? candidate.model.trim() : "",
-      apiKeys: Array.isArray(candidate.apiKeys) ? candidate.apiKeys : [],
-    };
-    return {
-      payload: { providers: normalizeClaudeOpus5Providers(candidate.providers, normalizeClaudeOpus5Providers([legacyProvider], [])) },
-      updatedAt: record.updatedAt,
-      updatedByUserId: record.updatedByUserId,
-    };
-  } catch {
-    return null;
-  }
+    if (!record) {
+      record = fallbackPlatformSettings.get(CLAUDE_FABLE5_NVIDIA_RUNTIME_SETTING_KEY);
+    }
+    if (!record) return null;
+    try {
+      const encoded = JSON.parse(record.value) as { ciphertext?: string; iv?: string; authTag?: string };
+      const decrypted = decryptProviderRuntimeConfig({ ciphertext: String(encoded.ciphertext ?? ""), iv: String(encoded.iv ?? ""), authTag: String(encoded.authTag ?? "") });
+      if (!decrypted || typeof decrypted !== "object") return null;
+      const candidate = decrypted as Partial<ClaudeFable5RuntimePayload> & { baseUrl?: unknown; model?: unknown; apiKeys?: unknown };
+      const legacyProvider = {
+        id: "primary",
+        label: "Primary provider",
+        enabled: true,
+        baseUrl: typeof candidate.baseUrl === "string" ? candidate.baseUrl.trim() : "",
+        model: typeof candidate.model === "string" ? candidate.model.trim() : "",
+        apiKeys: Array.isArray(candidate.apiKeys) ? candidate.apiKeys : [],
+      };
+      return {
+        payload: { providers: normalizeClaudeOpus5Providers(candidate.providers, normalizeClaudeOpus5Providers([legacyProvider], [])) },
+        updatedAt: record.updatedAt,
+        updatedByUserId: record.updatedByUserId,
+      };
+    } catch {
+      return null;
+    }
+  });
 }
 
 export async function getClaudeFable5NvidiaRuntimeConfig(): Promise<ClaudeFable5RuntimePayload> {
@@ -3052,6 +3298,7 @@ export async function getClaudeFable5NvidiaProviderSettings() {
       bypassCooldown: provider.bypassCooldown === true,
       supportsVision: provider.supportsVision === true,
       supportsDocuments: provider.supportsDocuments === true,
+      reasoningEffort: provider.reasoningEffort ?? null,
     })),
     source: override ? "database" as const : "environment" as const,
     updatedAt: override?.updatedAt ?? null,
@@ -3059,13 +3306,13 @@ export async function getClaudeFable5NvidiaProviderSettings() {
   };
 }
 
-export async function updateClaudeFable5NvidiaProviderSettings(input: { providers: Array<{ id: string; label: string; enabled?: boolean; baseUrl: string; model: string; apiKeys: string[]; apiKeyEnabled?: boolean[]; removeSlots?: number[]; maxInputTokens?: number | null; maxOutputTokens?: number | null; disableIdentityPrompt?: boolean; pinnedUserEmails?: string[]; bypassCooldown?: boolean; supportsVision?: boolean; supportsDocuments?: boolean }> } | { baseUrl?: string; model?: string; apiKeys?: string[]; apiKeyEnabled?: boolean[]; removeSlots?: number[]; maxInputTokens?: number | null; maxOutputTokens?: number | null; disableIdentityPrompt?: boolean; pinnedUserEmails?: string[]; bypassCooldown?: boolean; supportsVision?: boolean; supportsDocuments?: boolean }, updatedByUserId: number) {
+export async function updateClaudeFable5NvidiaProviderSettings(input: { providers: Array<{ id: string; label: string; enabled?: boolean; baseUrl: string; model: string; apiKeys: string[]; apiKeyEnabled?: boolean[]; removeSlots?: number[]; maxInputTokens?: number | null; maxOutputTokens?: number | null; disableIdentityPrompt?: boolean; pinnedUserEmails?: string[]; bypassCooldown?: boolean; supportsVision?: boolean; supportsDocuments?: boolean; reasoningEffort?: "low" | "medium" | "high" | "xhigh" | "max" | null }> } | { baseUrl?: string; model?: string; apiKeys?: string[]; apiKeyEnabled?: boolean[]; removeSlots?: number[]; maxInputTokens?: number | null; maxOutputTokens?: number | null; disableIdentityPrompt?: boolean; pinnedUserEmails?: string[]; bypassCooldown?: boolean; supportsVision?: boolean; supportsDocuments?: boolean; reasoningEffort?: "low" | "medium" | "high" | "xhigh" | "max" | null }, updatedByUserId: number) {
   const db = await getDb();
   if (!db) throw new Error("TokenForge database is unavailable");
   const current = await getClaudeFable5NvidiaRuntimeConfig();
   const currentById = new Map(current.providers.map(provider => [provider.id, provider]));
   const legacyPrimary = current.providers[0] ?? { id: "primary", label: "Primary provider", enabled: true, baseUrl: "", model: "", apiKeys: [] };
-  const submittedProviders = "providers" in input ? input.providers : [{ id: legacyPrimary.id, label: legacyPrimary.label, enabled: legacyPrimary.enabled, baseUrl: input.baseUrl ?? legacyPrimary.baseUrl, model: input.model ?? legacyPrimary.model, apiKeys: input.apiKeys ?? [], apiKeyEnabled: input.apiKeyEnabled, removeSlots: input.removeSlots, maxInputTokens: input.maxInputTokens, maxOutputTokens: input.maxOutputTokens, disableIdentityPrompt: input.disableIdentityPrompt, pinnedUserEmails: input.pinnedUserEmails, bypassCooldown: input.bypassCooldown, supportsVision: input.supportsVision, supportsDocuments: input.supportsDocuments }];
+  const submittedProviders = "providers" in input ? input.providers : [{ id: legacyPrimary.id, label: legacyPrimary.label, enabled: legacyPrimary.enabled, baseUrl: input.baseUrl ?? legacyPrimary.baseUrl, model: input.model ?? legacyPrimary.model, apiKeys: input.apiKeys ?? [], apiKeyEnabled: input.apiKeyEnabled, removeSlots: input.removeSlots, maxInputTokens: input.maxInputTokens, maxOutputTokens: input.maxOutputTokens, disableIdentityPrompt: input.disableIdentityPrompt, pinnedUserEmails: input.pinnedUserEmails, bypassCooldown: input.bypassCooldown, supportsVision: input.supportsVision, supportsDocuments: input.supportsDocuments, reasoningEffort: (input as any).reasoningEffort }];
   const nextProviders = submittedProviders.map((submitted, index) => {
     const existing = currentById.get(submitted.id);
     const keys = applyManagedProviderKeyUpdate(existing, submitted);
@@ -3083,6 +3330,11 @@ export async function updateClaudeFable5NvidiaProviderSettings(input: { provider
     const supportsDocuments = submitted.supportsDocuments !== undefined
       ? submitted.supportsDocuments === true
       : existing?.supportsDocuments === true;
+    const reasoningEffort = normalizeReasoningEffort(
+      submitted.reasoningEffort !== undefined
+        ? submitted.reasoningEffort
+        : (existing as any)?.reasoningEffort
+    );
     const pinnedUserEmails = normalizePinnedUserEmails(submitted.pinnedUserEmails !== undefined ? submitted.pinnedUserEmails : existing?.pinnedUserEmails);
     return {
       id: normalizeClaudeOpus5ProviderId(submitted.id, `provider-${index + 1}`),
@@ -3097,6 +3349,7 @@ export async function updateClaudeFable5NvidiaProviderSettings(input: { provider
       ...(supportsDocuments ? { supportsDocuments: true } : {}),
       ...(maxInputTokens !== undefined ? { maxInputTokens } : {}),
       ...(maxOutputTokens !== undefined ? { maxOutputTokens } : {}),
+      ...(reasoningEffort ? { reasoningEffort } : {}),
       ...(pinnedUserEmails.length ? { pinnedUserEmails } : {}),
     };
   });
@@ -3106,6 +3359,7 @@ export async function updateClaudeFable5NvidiaProviderSettings(input: { provider
   const encrypted = encryptProviderRuntimeConfig(next);
   const removedProviders = current.providers.filter(provider => !ids.has(provider.id));
   fallbackPlatformSettings.set(CLAUDE_FABLE5_NVIDIA_RUNTIME_SETTING_KEY, { value: JSON.stringify(encrypted), updatedAt: new Date(), updatedByUserId });
+  bustCache("runtime:claude_fable5_nvidia");
   try {
     await db.transaction(async tx => {
       await tx.insert(platformSettings).values({
@@ -3136,28 +3390,30 @@ function qwen38MaxRuntimeFromEnvironment(): Qwen38MaxRuntimePayload {
 }
 
 async function readQwen38MaxRuntimeOverride() {
-  const db = await getDb();
-  let record: { value: string; updatedAt?: Date | null; updatedByUserId?: number | null } | undefined;
-  if (db) {
-    try {
-      record = (await db.select().from(platformSettings).where(eq(platformSettings.settingKey, QWEN38_MAX_RUNTIME_SETTING_KEY)).limit(1))[0];
-    } catch {
-      // Fallback to memory
+  return cached("runtime:qwen38_max", 60_000, async () => {
+    const db = await getDb();
+    let record: { value: string; updatedAt?: Date | null; updatedByUserId?: number | null } | undefined;
+    if (db) {
+      try {
+        record = (await db.select().from(platformSettings).where(eq(platformSettings.settingKey, QWEN38_MAX_RUNTIME_SETTING_KEY)).limit(1))[0];
+      } catch {
+        // Fallback to memory
+      }
     }
-  }
-  if (!record) {
-    record = fallbackPlatformSettings.get(QWEN38_MAX_RUNTIME_SETTING_KEY);
-  }
-  if (!record) return null;
-  try {
-    const encoded = JSON.parse(record.value) as { ciphertext?: string; iv?: string; authTag?: string };
-    const decrypted = decryptProviderRuntimeConfig({ ciphertext: String(encoded.ciphertext ?? ""), iv: String(encoded.iv ?? ""), authTag: String(encoded.authTag ?? "") });
-    if (!decrypted || typeof decrypted !== "object") return null;
-    const candidate = decrypted as Partial<Qwen38MaxRuntimePayload>;
-    return { payload: { providers: normalizeClaudeOpus5Providers(candidate.providers, []) }, updatedAt: record.updatedAt, updatedByUserId: record.updatedByUserId };
-  } catch {
-    return null;
-  }
+    if (!record) {
+      record = fallbackPlatformSettings.get(QWEN38_MAX_RUNTIME_SETTING_KEY);
+    }
+    if (!record) return null;
+    try {
+      const encoded = JSON.parse(record.value) as { ciphertext?: string; iv?: string; authTag?: string };
+      const decrypted = decryptProviderRuntimeConfig({ ciphertext: String(encoded.ciphertext ?? ""), iv: String(encoded.iv ?? ""), authTag: String(encoded.authTag ?? "") });
+      if (!decrypted || typeof decrypted !== "object") return null;
+      const candidate = decrypted as Partial<Qwen38MaxRuntimePayload>;
+      return { payload: { providers: normalizeClaudeOpus5Providers(candidate.providers, []) }, updatedAt: record.updatedAt, updatedByUserId: record.updatedByUserId };
+    } catch {
+      return null;
+    }
+  });
 }
 
 export async function getQwen38MaxRuntimeConfig(): Promise<Qwen38MaxRuntimePayload> {
@@ -3183,6 +3439,7 @@ export async function getQwen38MaxProviderSettings() {
       bypassCooldown: provider.bypassCooldown === true,
       supportsVision: provider.supportsVision === true,
       supportsDocuments: provider.supportsDocuments === true,
+      reasoningEffort: provider.reasoningEffort ?? null,
     })),
     source: override ? "database" as const : "environment" as const,
     updatedAt: override?.updatedAt ?? null,
@@ -3190,7 +3447,7 @@ export async function getQwen38MaxProviderSettings() {
   };
 }
 
-export async function updateQwen38MaxProviderSettings(input: { providers: Array<{ id: string; label: string; enabled?: boolean; baseUrl: string; model: string; apiKeys: string[]; apiKeyEnabled?: boolean[]; removeSlots?: number[]; maxInputTokens?: number | null; disableIdentityPrompt?: boolean; pinnedUserEmails?: string[]; bypassCooldown?: boolean; supportsVision?: boolean; supportsDocuments?: boolean }> }, updatedByUserId: number) {
+export async function updateQwen38MaxProviderSettings(input: { providers: Array<{ id: string; label: string; enabled?: boolean; baseUrl: string; model: string; apiKeys: string[]; apiKeyEnabled?: boolean[]; removeSlots?: number[]; maxInputTokens?: number | null; disableIdentityPrompt?: boolean; pinnedUserEmails?: string[]; bypassCooldown?: boolean; supportsVision?: boolean; supportsDocuments?: boolean; reasoningEffort?: "low" | "medium" | "high" | "xhigh" | "max" | null }> }, updatedByUserId: number) {
   const db = await getDb();
   if (!db) throw new Error("TokenForge database is unavailable");
   const current = await getQwen38MaxRuntimeConfig();
@@ -3211,6 +3468,11 @@ export async function updateQwen38MaxProviderSettings(input: { providers: Array<
     const supportsDocuments = submitted.supportsDocuments !== undefined
       ? submitted.supportsDocuments === true
       : existing?.supportsDocuments === true;
+    const reasoningEffort = normalizeReasoningEffort(
+      submitted.reasoningEffort !== undefined
+        ? submitted.reasoningEffort
+        : (existing as any)?.reasoningEffort
+    );
     const pinnedUserEmails = normalizePinnedUserEmails(submitted.pinnedUserEmails !== undefined ? submitted.pinnedUserEmails : existing?.pinnedUserEmails);
     return {
       id: normalizeClaudeOpus5ProviderId(submitted.id, `provider-${index + 1}`),
@@ -3224,6 +3486,7 @@ export async function updateQwen38MaxProviderSettings(input: { providers: Array<
       ...(supportsVision ? { supportsVision: true } : {}),
       ...(supportsDocuments ? { supportsDocuments: true } : {}),
       ...(maxInputTokens !== undefined ? { maxInputTokens } : {}),
+      ...(reasoningEffort ? { reasoningEffort } : {}),
       ...(pinnedUserEmails.length ? { pinnedUserEmails } : {}),
     };
   });
@@ -3232,6 +3495,7 @@ export async function updateQwen38MaxProviderSettings(input: { providers: Array<
   const encrypted = encryptProviderRuntimeConfig({ providers: nextProviders } satisfies Qwen38MaxRuntimePayload);
   const removedProviders = current.providers.filter(provider => !ids.has(provider.id));
   fallbackPlatformSettings.set(QWEN38_MAX_RUNTIME_SETTING_KEY, { value: JSON.stringify(encrypted), updatedAt: new Date(), updatedByUserId });
+  bustCache("runtime:qwen38_max");
   try {
     await db.transaction(async tx => {
       await tx.insert(platformSettings).values({ settingKey: QWEN38_MAX_RUNTIME_SETTING_KEY, value: JSON.stringify(encrypted), updatedByUserId }).onDuplicateKeyUpdate({ set: { value: JSON.stringify(encrypted), updatedByUserId, updatedAt: new Date() } });
@@ -3261,28 +3525,30 @@ function gpt6AstraRuntimeFromEnvironment(): Gpt6AstraRuntimePayload {
 }
 
 async function readGpt6AstraRuntimeOverride() {
-  const db = await getDb();
-  let record: { value: string; updatedAt?: Date | null; updatedByUserId?: number | null } | undefined;
-  if (db) {
-    try {
-      record = (await db.select().from(platformSettings).where(eq(platformSettings.settingKey, GPT6_ASTRA_RUNTIME_SETTING_KEY)).limit(1))[0];
-    } catch {
-      // Fallback to memory
+  return cached("runtime:gpt6_astra", 60_000, async () => {
+    const db = await getDb();
+    let record: { value: string; updatedAt?: Date | null; updatedByUserId?: number | null } | undefined;
+    if (db) {
+      try {
+        record = (await db.select().from(platformSettings).where(eq(platformSettings.settingKey, GPT6_ASTRA_RUNTIME_SETTING_KEY)).limit(1))[0];
+      } catch {
+        // Fallback to memory
+      }
     }
-  }
-  if (!record) {
-    record = fallbackPlatformSettings.get(GPT6_ASTRA_RUNTIME_SETTING_KEY);
-  }
-  if (!record) return null;
-  try {
-    const encoded = JSON.parse(record.value) as { ciphertext?: string; iv?: string; authTag?: string };
-    const decrypted = decryptProviderRuntimeConfig({ ciphertext: String(encoded.ciphertext ?? ""), iv: String(encoded.iv ?? ""), authTag: String(encoded.authTag ?? "") });
-    if (!decrypted || typeof decrypted !== "object") return null;
-    const candidate = decrypted as Partial<Gpt6AstraRuntimePayload>;
-    return { payload: { providers: normalizeClaudeOpus5Providers(candidate.providers, []) }, updatedAt: record.updatedAt, updatedByUserId: record.updatedByUserId };
-  } catch {
-    return null;
-  }
+    if (!record) {
+      record = fallbackPlatformSettings.get(GPT6_ASTRA_RUNTIME_SETTING_KEY);
+    }
+    if (!record) return null;
+    try {
+      const encoded = JSON.parse(record.value) as { ciphertext?: string; iv?: string; authTag?: string };
+      const decrypted = decryptProviderRuntimeConfig({ ciphertext: String(encoded.ciphertext ?? ""), iv: String(encoded.iv ?? ""), authTag: String(encoded.authTag ?? "") });
+      if (!decrypted || typeof decrypted !== "object") return null;
+      const candidate = decrypted as Partial<Gpt6AstraRuntimePayload>;
+      return { payload: { providers: normalizeClaudeOpus5Providers(candidate.providers, []) }, updatedAt: record.updatedAt, updatedByUserId: record.updatedByUserId };
+    } catch {
+      return null;
+    }
+  });
 }
 
 export async function getGpt6AstraRuntimeConfig(): Promise<Gpt6AstraRuntimePayload> {
@@ -3308,6 +3574,7 @@ export async function getGpt6AstraProviderSettings() {
       bypassCooldown: provider.bypassCooldown === true,
       supportsVision: provider.supportsVision === true,
       supportsDocuments: provider.supportsDocuments === true,
+      reasoningEffort: provider.reasoningEffort ?? null,
     })),
     source: override ? "database" as const : "environment" as const,
     updatedAt: override?.updatedAt ?? null,
@@ -3315,7 +3582,7 @@ export async function getGpt6AstraProviderSettings() {
   };
 }
 
-export async function updateGpt6AstraProviderSettings(input: { providers: Array<{ id: string; label: string; enabled?: boolean; baseUrl: string; model: string; apiKeys: string[]; apiKeyEnabled?: boolean[]; removeSlots?: number[]; maxInputTokens?: number | null; disableIdentityPrompt?: boolean; pinnedUserEmails?: string[]; bypassCooldown?: boolean; supportsVision?: boolean; supportsDocuments?: boolean }> }, updatedByUserId: number) {
+export async function updateGpt6AstraProviderSettings(input: { providers: Array<{ id: string; label: string; enabled?: boolean; baseUrl: string; model: string; apiKeys: string[]; apiKeyEnabled?: boolean[]; removeSlots?: number[]; maxInputTokens?: number | null; disableIdentityPrompt?: boolean; pinnedUserEmails?: string[]; bypassCooldown?: boolean; supportsVision?: boolean; supportsDocuments?: boolean; reasoningEffort?: "low" | "medium" | "high" | "xhigh" | "max" | null }> }, updatedByUserId: number) {
   const db = await getDb();
   if (!db) throw new Error("TokenForge database is unavailable");
   const current = await getGpt6AstraRuntimeConfig();
@@ -3336,6 +3603,11 @@ export async function updateGpt6AstraProviderSettings(input: { providers: Array<
     const supportsDocuments = submitted.supportsDocuments !== undefined
       ? submitted.supportsDocuments === true
       : existing?.supportsDocuments === true;
+    const reasoningEffort = normalizeReasoningEffort(
+      submitted.reasoningEffort !== undefined
+        ? submitted.reasoningEffort
+        : (existing as any)?.reasoningEffort
+    );
     const pinnedUserEmails = normalizePinnedUserEmails(submitted.pinnedUserEmails !== undefined ? submitted.pinnedUserEmails : existing?.pinnedUserEmails);
     return {
       id: normalizeClaudeOpus5ProviderId(submitted.id, `provider-${index + 1}`),
@@ -3349,6 +3621,7 @@ export async function updateGpt6AstraProviderSettings(input: { providers: Array<
       ...(supportsVision ? { supportsVision: true } : {}),
       ...(supportsDocuments ? { supportsDocuments: true } : {}),
       ...(maxInputTokens !== undefined ? { maxInputTokens } : {}),
+      ...(reasoningEffort ? { reasoningEffort } : {}),
       ...(pinnedUserEmails.length ? { pinnedUserEmails } : {}),
     };
   });
@@ -3357,6 +3630,7 @@ export async function updateGpt6AstraProviderSettings(input: { providers: Array<
   const encrypted = encryptProviderRuntimeConfig({ providers: nextProviders } satisfies Gpt6AstraRuntimePayload);
   const removedProviders = current.providers.filter(provider => !ids.has(provider.id));
   fallbackPlatformSettings.set(GPT6_ASTRA_RUNTIME_SETTING_KEY, { value: JSON.stringify(encrypted), updatedAt: new Date(), updatedByUserId });
+  bustCache("runtime:gpt6_astra");
   try {
     await db.transaction(async tx => {
       await tx.insert(platformSettings).values({ settingKey: GPT6_ASTRA_RUNTIME_SETTING_KEY, value: JSON.stringify(encrypted), updatedByUserId }).onDuplicateKeyUpdate({ set: { value: JSON.stringify(encrypted), updatedByUserId, updatedAt: new Date() } });
@@ -3388,28 +3662,30 @@ export function kimiK3RuntimeFromEnvironment(): KimiK3RuntimePayload {
 }
 
 async function readKimiK3RuntimeOverride() {
-  const db = await getDb();
-  let record: { value: string; updatedAt?: Date | null; updatedByUserId?: number | null } | undefined;
-  if (db) {
-    try {
-      record = (await db.select().from(platformSettings).where(eq(platformSettings.settingKey, KIMI_K3_RUNTIME_SETTING_KEY)).limit(1))[0];
-    } catch {
-      // Fallback to memory
+  return cached("runtime:kimi_k3", 60_000, async () => {
+    const db = await getDb();
+    let record: { value: string; updatedAt?: Date | null; updatedByUserId?: number | null } | undefined;
+    if (db) {
+      try {
+        record = (await db.select().from(platformSettings).where(eq(platformSettings.settingKey, KIMI_K3_RUNTIME_SETTING_KEY)).limit(1))[0];
+      } catch {
+        // Fallback to memory
+      }
     }
-  }
-  if (!record) {
-    record = fallbackPlatformSettings.get(KIMI_K3_RUNTIME_SETTING_KEY);
-  }
-  if (!record) return null;
-  try {
-    const encoded = JSON.parse(record.value) as { ciphertext?: string; iv?: string; authTag?: string };
-    const decrypted = decryptProviderRuntimeConfig({ ciphertext: String(encoded.ciphertext ?? ""), iv: String(encoded.iv ?? ""), authTag: String(encoded.authTag ?? "") });
-    if (!decrypted || typeof decrypted !== "object") return null;
-    const candidate = decrypted as Partial<KimiK3RuntimePayload>;
-    return { payload: { providers: normalizeClaudeOpus5Providers(candidate.providers, []) }, updatedAt: record.updatedAt, updatedByUserId: record.updatedByUserId };
-  } catch {
-    return null;
-  }
+    if (!record) {
+      record = fallbackPlatformSettings.get(KIMI_K3_RUNTIME_SETTING_KEY);
+    }
+    if (!record) return null;
+    try {
+      const encoded = JSON.parse(record.value) as { ciphertext?: string; iv?: string; authTag?: string };
+      const decrypted = decryptProviderRuntimeConfig({ ciphertext: String(encoded.ciphertext ?? ""), iv: String(encoded.iv ?? ""), authTag: String(encoded.authTag ?? "") });
+      if (!decrypted || typeof decrypted !== "object") return null;
+      const candidate = decrypted as Partial<KimiK3RuntimePayload>;
+      return { payload: { providers: normalizeClaudeOpus5Providers(candidate.providers, []) }, updatedAt: record.updatedAt, updatedByUserId: record.updatedByUserId };
+    } catch {
+      return null;
+    }
+  });
 }
 
 export async function getKimiK3RuntimeConfig(): Promise<KimiK3RuntimePayload> {
@@ -3435,6 +3711,7 @@ export async function getKimiK3ProviderSettings() {
       bypassCooldown: provider.bypassCooldown === true,
       supportsVision: provider.supportsVision === true,
       supportsDocuments: provider.supportsDocuments === true,
+      reasoningEffort: provider.reasoningEffort ?? null,
     })),
     source: override ? "database" as const : "environment" as const,
     updatedAt: override?.updatedAt ?? null,
@@ -3442,7 +3719,7 @@ export async function getKimiK3ProviderSettings() {
   };
 }
 
-export async function updateKimiK3ProviderSettings(input: { providers: Array<{ id: string; label: string; enabled?: boolean; baseUrl: string; model: string; apiKeys: string[]; apiKeyEnabled?: boolean[]; removeSlots?: number[]; maxInputTokens?: number | null; disableIdentityPrompt?: boolean; pinnedUserEmails?: string[]; bypassCooldown?: boolean; supportsVision?: boolean; supportsDocuments?: boolean }> }, updatedByUserId: number) {
+export async function updateKimiK3ProviderSettings(input: { providers: Array<{ id: string; label: string; enabled?: boolean; baseUrl: string; model: string; apiKeys: string[]; apiKeyEnabled?: boolean[]; removeSlots?: number[]; maxInputTokens?: number | null; disableIdentityPrompt?: boolean; pinnedUserEmails?: string[]; bypassCooldown?: boolean; supportsVision?: boolean; supportsDocuments?: boolean; reasoningEffort?: "low" | "medium" | "high" | "xhigh" | "max" | null }> }, updatedByUserId: number) {
   const db = await getDb();
   if (!db) throw new Error("TokenForge database is unavailable");
   const current = await getKimiK3RuntimeConfig();
@@ -3463,6 +3740,11 @@ export async function updateKimiK3ProviderSettings(input: { providers: Array<{ i
     const supportsDocuments = submitted.supportsDocuments !== undefined
       ? submitted.supportsDocuments === true
       : existing?.supportsDocuments === true;
+    const reasoningEffort = normalizeReasoningEffort(
+      submitted.reasoningEffort !== undefined
+        ? submitted.reasoningEffort
+        : (existing as any)?.reasoningEffort
+    );
     const pinnedUserEmails = normalizePinnedUserEmails(submitted.pinnedUserEmails !== undefined ? submitted.pinnedUserEmails : existing?.pinnedUserEmails);
     return {
       id: normalizeClaudeOpus5ProviderId(submitted.id, `provider-${index + 1}`),
@@ -3476,6 +3758,7 @@ export async function updateKimiK3ProviderSettings(input: { providers: Array<{ i
       ...(supportsVision ? { supportsVision: true } : {}),
       ...(supportsDocuments ? { supportsDocuments: true } : {}),
       ...(maxInputTokens !== undefined ? { maxInputTokens } : {}),
+      ...(reasoningEffort ? { reasoningEffort } : {}),
       ...(pinnedUserEmails.length ? { pinnedUserEmails } : {}),
     };
   });
@@ -3484,6 +3767,7 @@ export async function updateKimiK3ProviderSettings(input: { providers: Array<{ i
   const encrypted = encryptProviderRuntimeConfig({ providers: nextProviders } satisfies KimiK3RuntimePayload);
   const removedProviders = current.providers.filter(provider => !ids.has(provider.id));
   fallbackPlatformSettings.set(KIMI_K3_RUNTIME_SETTING_KEY, { value: JSON.stringify(encrypted), updatedAt: new Date(), updatedByUserId });
+  bustCache("runtime:kimi_k3");
   try {
     await db.transaction(async tx => {
       await tx.insert(platformSettings).values({ settingKey: KIMI_K3_RUNTIME_SETTING_KEY, value: JSON.stringify(encrypted), updatedByUserId }).onDuplicateKeyUpdate({ set: { value: JSON.stringify(encrypted), updatedByUserId, updatedAt: new Date() } });
@@ -3520,6 +3804,8 @@ export type ClaudeOpus5ProviderRuntime = {
   supportsVision?: boolean;
   /** When true, flags this provider as capable of processing documents and PDF inputs. */
   supportsDocuments?: boolean;
+  /** Explicit reasoning effort override for this provider (low, medium, high, xhigh, max). Null/undefined = client pass-through. */
+  reasoningEffort?: "low" | "medium" | "high" | "xhigh" | "max" | null;
 };
 
 export type ClaudeOpus5QwenModelRuntime = {
@@ -3597,22 +3883,24 @@ function normalizeBailuWebshareProxyPool(value: unknown, fallback: BailuWebshare
 }
 
 async function readBailuWebshareProxyPoolOverride() {
-  const db = await getDb();
-  if (!db) return null;
-  const record = (await db.select().from(platformSettings).where(eq(platformSettings.settingKey, BAILU_WEBSHARE_PROXY_POOL_SETTING_KEY)).limit(1))[0];
-  if (!record) return null;
-  try {
-    const encoded = JSON.parse(record.value) as { ciphertext?: string; iv?: string; authTag?: string };
-    const payload = decryptProviderRuntimeConfig({ ciphertext: String(encoded.ciphertext ?? ""), iv: String(encoded.iv ?? ""), authTag: String(encoded.authTag ?? "") }) as Partial<BailuWebshareProxyPoolRuntime> | null;
-    if (!payload || typeof payload !== "object") return null;
-    return {
-      payload: { enabled: payload.enabled === true, proxies: normalizeBailuWebshareProxyPool(payload.proxies) },
-      updatedAt: record.updatedAt,
-      updatedByUserId: record.updatedByUserId,
-    };
-  } catch {
-    return null;
-  }
+  return cached("runtime:bailu_webshare_proxy_pool", 60_000, async () => {
+    const db = await getDb();
+    if (!db) return null;
+    const record = (await db.select().from(platformSettings).where(eq(platformSettings.settingKey, BAILU_WEBSHARE_PROXY_POOL_SETTING_KEY)).limit(1))[0];
+    if (!record) return null;
+    try {
+      const encoded = JSON.parse(record.value) as { ciphertext?: string; iv?: string; authTag?: string };
+      const payload = decryptProviderRuntimeConfig({ ciphertext: String(encoded.ciphertext ?? ""), iv: String(encoded.iv ?? ""), authTag: String(encoded.authTag ?? "") }) as Partial<BailuWebshareProxyPoolRuntime> | null;
+      if (!payload || typeof payload !== "object") return null;
+      return {
+        payload: { enabled: payload.enabled === true, proxies: normalizeBailuWebshareProxyPool(payload.proxies) },
+        updatedAt: record.updatedAt,
+        updatedByUserId: record.updatedByUserId,
+      };
+    } catch {
+      return null;
+    }
+  });
 }
 
 export async function getBailuWebshareProxyPoolRuntimeConfig(): Promise<BailuWebshareProxyPoolRuntime> {
@@ -3735,6 +4023,7 @@ export async function updateBailuWebshareProxyPoolSettings(input: { enabled?: bo
     throw new Error("Each Webshare proxy needs a unique ID, IPv4 host, port, username, and password");
   }
   const encrypted = encryptProviderRuntimeConfig({ enabled: input.enabled === true, proxies } satisfies BailuWebshareProxyPoolRuntime);
+  bustCache("runtime:bailu_webshare_proxy_pool");
   await db.insert(platformSettings).values({ settingKey: BAILU_WEBSHARE_PROXY_POOL_SETTING_KEY, value: JSON.stringify(encrypted), updatedByUserId }).onDuplicateKeyUpdate({ set: { value: JSON.stringify(encrypted), updatedByUserId, updatedAt: new Date() } });
   await ensureBailuWebshareProxySlotMetricRows(proxies);
   return getBailuWebshareProxyPoolSettings();
@@ -3807,27 +4096,29 @@ function renderNimProxyRuntimeFromEnvironment(): RenderNimProxyRuntimePayload {
 }
 
 async function readRenderNimProxyRuntimeOverride() {
-  const db = await getDb();
-  if (!db) return null;
-  const record = (await db.select().from(platformSettings).where(eq(platformSettings.settingKey, RENDER_NIM_PROXY_SWARM_SETTING_KEY)).limit(1))[0];
-  if (!record) return null;
-  try {
-    const encoded = JSON.parse(record.value) as { ciphertext?: string; iv?: string; authTag?: string };
-    const payload = decryptProviderRuntimeConfig({ ciphertext: String(encoded.ciphertext ?? ""), iv: String(encoded.iv ?? ""), authTag: String(encoded.authTag ?? "") }) as Partial<RenderNimProxyRuntimePayload> | null;
-    if (!payload || typeof payload !== "object") return null;
-    const fallback = renderNimProxyRuntimeFromEnvironment();
-    return {
-      payload: {
-        enabled: payload.enabled !== false,
-        model: typeof payload.model === "string" && payload.model.trim() ? payload.model.trim() : fallback.model,
-        endpoints: normalizeRenderNimProxyEndpoints(payload.endpoints, fallback.endpoints),
-      },
-      updatedAt: record.updatedAt,
-      updatedByUserId: record.updatedByUserId,
-    };
-  } catch {
-    return null;
-  }
+  return cached("runtime:render_nim_proxy_swarm", 60_000, async () => {
+    const db = await getDb();
+    if (!db) return null;
+    const record = (await db.select().from(platformSettings).where(eq(platformSettings.settingKey, RENDER_NIM_PROXY_SWARM_SETTING_KEY)).limit(1))[0];
+    if (!record) return null;
+    try {
+      const encoded = JSON.parse(record.value) as { ciphertext?: string; iv?: string; authTag?: string };
+      const payload = decryptProviderRuntimeConfig({ ciphertext: String(encoded.ciphertext ?? ""), iv: String(encoded.iv ?? ""), authTag: String(encoded.authTag ?? "") }) as Partial<RenderNimProxyRuntimePayload> | null;
+      if (!payload || typeof payload !== "object") return null;
+      const fallback = renderNimProxyRuntimeFromEnvironment();
+      return {
+        payload: {
+          enabled: payload.enabled !== false,
+          model: typeof payload.model === "string" && payload.model.trim() ? payload.model.trim() : fallback.model,
+          endpoints: normalizeRenderNimProxyEndpoints(payload.endpoints, fallback.endpoints),
+        },
+        updatedAt: record.updatedAt,
+        updatedByUserId: record.updatedByUserId,
+      };
+    } catch {
+      return null;
+    }
+  });
 }
 
 export async function getRenderNimProxyRuntimeConfig(): Promise<RenderNimProxyRuntimePayload & { apiKey: string }> {
@@ -3888,6 +4179,7 @@ export async function updateRenderNimProxySwarmSettings(input: { enabled?: boole
   if (!model || !endpoints.length) throw new Error("A Render proxy model ID and at least one HTTPS endpoint are required");
   const payload: RenderNimProxyRuntimePayload = { enabled: input.enabled !== false, model, endpoints };
   const encrypted = encryptProviderRuntimeConfig(payload);
+  bustCache("runtime:render_nim_proxy_swarm");
   await db.insert(platformSettings).values({ settingKey: RENDER_NIM_PROXY_SWARM_SETTING_KEY, value: JSON.stringify(encrypted), updatedByUserId }).onDuplicateKeyUpdate({ set: { value: JSON.stringify(encrypted), updatedByUserId, updatedAt: new Date() } });
   await ensureRenderNimProxyMetricRows(endpoints);
   return getRenderNimProxySwarmSettings();
@@ -3988,17 +4280,21 @@ export async function recordModelFailureLog(
   const httpStatus = Number.isInteger(input?.httpStatus) && input.httpStatus! >= 100 && input.httpStatus! <= 599
     ? input.httpStatus!
     : null;
-  await db.insert(claudeOpus5FailureLogs).values({
-    modelId: modelId.trim().slice(0, 64) || "unknown",
-    sourceType: input?.sourceType === "render" ? "render" : "provider",
-    sourceId: (input?.sourceId ?? "").trim().slice(0, 96) || "unknown",
-    sourceLabel: sanitizeRenderNimProxyFailureMessage(input?.sourceLabel ?? "Upstream").slice(0, 128),
-    credentialSlot: Number.isInteger(input?.credentialSlot) && input.credentialSlot! > 0 ? input.credentialSlot! : null,
-    httpStatus,
-    failureKind: input?.failureKind ?? "generic_failure",
-    retryable: Boolean(input?.retryable),
-    callerMessage: sanitizeRenderNimProxyFailureMessage(input?.callerMessage ?? ""),
-  });
+  try {
+    await db.insert(claudeOpus5FailureLogs).values({
+      modelId: modelId.trim().slice(0, 64) || "unknown",
+      sourceType: input?.sourceType === "render" ? "render" : "provider",
+      sourceId: (input?.sourceId ?? "").trim().slice(0, 96) || "unknown",
+      sourceLabel: sanitizeRenderNimProxyFailureMessage(input?.sourceLabel ?? "Upstream").slice(0, 128),
+      credentialSlot: Number.isInteger(input?.credentialSlot) && input.credentialSlot! > 0 ? input.credentialSlot! : null,
+      httpStatus,
+      failureKind: input?.failureKind ?? "generic_failure",
+      retryable: Boolean(input?.retryable),
+      callerMessage: sanitizeRenderNimProxyFailureMessage(input?.callerMessage ?? ""),
+    });
+  } catch (err) {
+    console.warn(`[recordModelFailureLog failed for ${modelId}]`, err);
+  }
 }
 
 async function recordManagedProviderFailureLog(modelId: ManagedProviderFailureLogModel, input: ManagedProviderFailureLogInput) {
@@ -4086,8 +4382,15 @@ export async function getRecentModelFailureLogs(modelId?: string, limit = 100) {
   if (!db) return [];
   const boundedLimit = Math.min(200, Math.max(1, Math.trunc(limit)));
   if (modelId) {
+    const normalized = modelId.trim().toLowerCase();
+    const targetModels = [normalized];
+    if (normalized === "claude-opus-5.5") {
+      targetModels.push("claude-opus-5");
+    } else if (normalized === "claude-opus-5") {
+      targetModels.push("claude-opus-5.5");
+    }
     return db.select().from(claudeOpus5FailureLogs)
-      .where(eq(claudeOpus5FailureLogs.modelId, modelId))
+      .where(inArray(claudeOpus5FailureLogs.modelId, targetModels))
       .orderBy(desc(claudeOpus5FailureLogs.occurredAt), desc(claudeOpus5FailureLogs.id))
       .limit(boundedLimit);
   }
@@ -4100,7 +4403,7 @@ async function getRecentManagedProviderFailureLogs(modelId: ManagedProviderFailu
   return getRecentModelFailureLogs(modelId, limit);
 }
 
-function normalizeClaudeOpus5ProviderId(value: unknown, fallback: string) {
+export function normalizeClaudeOpus5ProviderId(value: unknown, fallback: string) {
   const normalized = typeof value === "string" ? value.trim().toLowerCase() : "";
   return /^[a-z0-9][a-z0-9_-]{0,63}$/.test(normalized) ? normalized : fallback;
 }
@@ -4147,7 +4450,16 @@ export function normalizeMaxInputTokens(value: unknown): number | undefined {
   return Math.min(10_000_000, Math.max(1, Math.trunc(candidate)));
 }
 
-function normalizeClaudeOpus5Providers(value: unknown, fallback: ClaudeOpus5ProviderRuntime[]) {
+export function normalizeReasoningEffort(value: unknown): "low" | "medium" | "high" | "xhigh" | "max" | undefined {
+  if (typeof value !== "string") return undefined;
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "low" || normalized === "medium" || normalized === "high" || normalized === "xhigh" || normalized === "max") {
+    return normalized as "low" | "medium" | "high" | "xhigh" | "max";
+  }
+  return undefined;
+}
+
+export function normalizeClaudeOpus5Providers(value: unknown, fallback: ClaudeOpus5ProviderRuntime[]) {
   if (!Array.isArray(value)) return fallback;
   const seen = new Set<string>();
   const providers = value.flatMap((candidate, index) => {
@@ -4168,6 +4480,7 @@ function normalizeClaudeOpus5Providers(value: unknown, fallback: ClaudeOpus5Prov
       ? normalizeClaudeOpus5QwenMaxOutputTokens(raw.maxOutputTokens)
       : normalizeMaxOutputTokens(raw.maxOutputTokens);
     const maxInputTokens = normalizeMaxInputTokens(raw.maxInputTokens);
+    const reasoningEffort = normalizeReasoningEffort(raw.reasoningEffort);
     const model = (typeof raw.model === "string" ? raw.model.trim() : "") || modelPool[0]?.model || "";
     const pinnedUserEmails = normalizePinnedUserEmails(raw.pinnedUserEmails);
     if (!baseUrl || !model || !apiKeys.length) return [];
@@ -4186,6 +4499,7 @@ function normalizeClaudeOpus5Providers(value: unknown, fallback: ClaudeOpus5Prov
       ...(raw.bypassCooldown ? { bypassCooldown: true } : {}),
       ...(raw.supportsVision !== undefined ? { supportsVision: Boolean(raw.supportsVision) } : {}),
       ...(raw.supportsDocuments !== undefined ? { supportsDocuments: Boolean(raw.supportsDocuments) } : {}),
+      ...(reasoningEffort ? { reasoningEffort } : {}),
       ...(pinnedUserEmails.length ? { pinnedUserEmails } : {}),
     }];
   }).slice(0, MAX_CLAUDE_OPUS5_PROVIDERS);
@@ -4313,44 +4627,45 @@ function claudeOpus5RuntimeFromEnvironment(): ClaudeOpus5RuntimePayload {
 }
 
 async function readClaudeOpus5RuntimeOverride() {
-  const db = await getDb();
-  if (!db) return null;
-  let record: { value: string; updatedAt?: Date | null; updatedByUserId?: number | null } | undefined;
-  if (db) {
-    try {
-      record = (await db.select().from(platformSettings).where(eq(platformSettings.settingKey, CLAUDE_OPUS5_TOKENREPLY_RUNTIME_SETTING_KEY)).limit(1))[0];
-    } catch {
-      // Fallback to memory
+  return cached("runtime:claude_opus5", 60_000, async () => {
+    const db = await getDb();
+    let record: { value: string; updatedAt?: Date | null; updatedByUserId?: number | null } | undefined;
+    if (db) {
+      try {
+        record = (await db.select().from(platformSettings).where(eq(platformSettings.settingKey, CLAUDE_OPUS5_TOKENREPLY_RUNTIME_SETTING_KEY)).limit(1))[0];
+      } catch {
+        // Fallback to memory
+      }
     }
-  }
-  if (!record) {
-    record = fallbackPlatformSettings.get(CLAUDE_OPUS5_TOKENREPLY_RUNTIME_SETTING_KEY);
-  }
-  if (!record) return null;
-  try {
-    const encoded = JSON.parse(record.value) as { ciphertext?: string; iv?: string; authTag?: string };
-    const decrypted = decryptProviderRuntimeConfig({ ciphertext: String(encoded.ciphertext ?? ""), iv: String(encoded.iv ?? ""), authTag: String(encoded.authTag ?? "") });
-    if (!decrypted || typeof decrypted !== "object") return null;
-    const candidate = decrypted as Partial<ClaudeOpus5RuntimePayload> & { baseUrl?: unknown; model?: unknown; apiKeys?: unknown };
-    const legacyProvider = {
-      id: "primary",
-      label: "Primary provider",
-      enabled: candidate.providers?.[0]?.enabled !== false,
-      baseUrl: typeof candidate.baseUrl === "string" ? candidate.baseUrl.trim() : "",
-      model: typeof candidate.model === "string" ? candidate.model.trim() : "",
-      apiKeys: Array.isArray(candidate.apiKeys) ? candidate.apiKeys : [],
-    };
-    return {
-      payload: {
-        providers: normalizeClaudeOpus5Providers(candidate.providers, normalizeClaudeOpus5Providers([legacyProvider], [])),
-        baiPriority: candidate.baiPriority === true,
-      },
-      updatedAt: record.updatedAt,
-      updatedByUserId: record.updatedByUserId,
-    };
-  } catch {
-    return null;
-  }
+    if (!record) {
+      record = fallbackPlatformSettings.get(CLAUDE_OPUS5_TOKENREPLY_RUNTIME_SETTING_KEY);
+    }
+    if (!record) return null;
+    try {
+      const encoded = JSON.parse(record.value) as { ciphertext?: string; iv?: string; authTag?: string };
+      const decrypted = decryptProviderRuntimeConfig({ ciphertext: String(encoded.ciphertext ?? ""), iv: String(encoded.iv ?? ""), authTag: String(encoded.authTag ?? "") });
+      if (!decrypted || typeof decrypted !== "object") return null;
+      const candidate = decrypted as Partial<ClaudeOpus5RuntimePayload> & { baseUrl?: unknown; model?: unknown; apiKeys?: unknown };
+      const legacyProvider = {
+        id: "primary",
+        label: "Primary provider",
+        enabled: candidate.providers?.[0]?.enabled !== false,
+        baseUrl: typeof candidate.baseUrl === "string" ? candidate.baseUrl.trim() : "",
+        model: typeof candidate.model === "string" ? candidate.model.trim() : "",
+        apiKeys: Array.isArray(candidate.apiKeys) ? candidate.apiKeys : [],
+      };
+      return {
+        payload: {
+          providers: normalizeClaudeOpus5Providers(candidate.providers, normalizeClaudeOpus5Providers([legacyProvider], [])),
+          baiPriority: candidate.baiPriority === true,
+        },
+        updatedAt: record.updatedAt,
+        updatedByUserId: record.updatedByUserId,
+      };
+    } catch {
+      return null;
+    }
+  });
 }
 
 export async function getClaudeOpus5RuntimeConfig(): Promise<ClaudeOpus5RuntimePayload> {
@@ -4389,6 +4704,7 @@ export async function getClaudeOpus5ProviderSettings() {
         bypassCooldown: provider.bypassCooldown === true,
         supportsVision: provider.supportsVision === true,
         supportsDocuments: provider.supportsDocuments === true,
+        reasoningEffort: provider.reasoningEffort ?? null,
         ...(isClaudeOpus5QwenProvider(provider.label) ? {
           maxOutputTokens: provider.maxOutputTokens ?? CLAUDE_OPUS5_QWEN_MAX_OUTPUT_TOKENS,
           modelPool: (provider.modelPool ?? []).map(entry => {
@@ -4429,7 +4745,7 @@ export async function getClaudeOpus5ProviderSettings() {
   };
 }
 
-export async function updateClaudeOpus5ProviderSettings(input: { providers: Array<{ id: string; label: string; enabled?: boolean; baseUrl: string; model: string; apiKeys: string[]; apiKeyEnabled?: boolean[]; removeSlots?: number[]; modelPool?: Array<{ id: string; model: string; enabled?: boolean; quotaTokens?: number }>; maxOutputTokens?: number | null; maxInputTokens?: number | null; disableIdentityPrompt?: boolean; pinnedUserEmails?: string[]; bypassCooldown?: boolean; supportsVision?: boolean; supportsDocuments?: boolean }>; baiPriority?: boolean }, updatedByUserId: number) {
+export async function updateClaudeOpus5ProviderSettings(input: { providers: Array<{ id: string; label: string; enabled?: boolean; baseUrl: string; model: string; apiKeys: string[]; apiKeyEnabled?: boolean[]; removeSlots?: number[]; modelPool?: Array<{ id: string; model: string; enabled?: boolean; quotaTokens?: number }>; maxOutputTokens?: number | null; maxInputTokens?: number | null; disableIdentityPrompt?: boolean; pinnedUserEmails?: string[]; bypassCooldown?: boolean; supportsVision?: boolean; supportsDocuments?: boolean; reasoningEffort?: "low" | "medium" | "high" | "xhigh" | "max" | null }>; baiPriority?: boolean }, updatedByUserId: number) {
   const db = await getDb();
   if (!db) throw new Error("TokenForge database is unavailable");
   const current = await getClaudeOpus5RuntimeConfig();
@@ -4463,6 +4779,11 @@ export async function updateClaudeOpus5ProviderSettings(input: { providers: Arra
     const supportsDocuments = submitted.supportsDocuments !== undefined
       ? submitted.supportsDocuments === true
       : existing?.supportsDocuments === true;
+    const reasoningEffort = normalizeReasoningEffort(
+      submitted.reasoningEffort !== undefined
+        ? submitted.reasoningEffort
+        : (existing as any)?.reasoningEffort
+    );
     const pinnedUserEmails = normalizePinnedUserEmails(submitted.pinnedUserEmails !== undefined ? submitted.pinnedUserEmails : existing?.pinnedUserEmails);
     return {
       id,
@@ -4475,6 +4796,7 @@ export async function updateClaudeOpus5ProviderSettings(input: { providers: Arra
       ...(bypassCooldown ? { bypassCooldown: true } : {}),
       ...(supportsVision ? { supportsVision: true } : {}),
       ...(supportsDocuments ? { supportsDocuments: true } : {}),
+      ...(reasoningEffort ? { reasoningEffort } : {}),
       ...(pool.length ? { modelPool: pool } : {}),
       ...(maxOutputTokens !== undefined ? { maxOutputTokens } : {}),
       ...(maxInputTokens !== undefined ? { maxInputTokens } : {}),
@@ -4494,6 +4816,8 @@ export async function updateClaudeOpus5ProviderSettings(input: { providers: Arra
   const encrypted = encryptProviderRuntimeConfig(next);
   const removedProviders = current.providers.filter(provider => !ids.has(provider.id));
   fallbackPlatformSettings.set(CLAUDE_OPUS5_TOKENREPLY_RUNTIME_SETTING_KEY, { value: JSON.stringify(encrypted), updatedAt: new Date(), updatedByUserId });
+  bustCache("runtime:claude_opus5");
+  bustCache("all_multimodal_providers");
   try {
     await db.transaction(async tx => {
       await tx.insert(platformSettings).values({
@@ -4516,6 +4840,8 @@ export async function setClaudeOpus5BaiPriority(enabled: boolean, updatedByUserI
   const current = await getClaudeOpus5RuntimeConfig();
   const next: ClaudeOpus5RuntimePayload = { ...current, baiPriority: enabled };
   const encrypted = encryptProviderRuntimeConfig(next);
+  bustCache("runtime:claude_opus5");
+  bustCache("all_multimodal_providers");
   await db.transaction(async tx => {
     await tx.insert(platformSettings).values({
       settingKey: CLAUDE_OPUS5_TOKENREPLY_RUNTIME_SETTING_KEY,
@@ -4532,6 +4858,8 @@ export async function deleteClaudeOpus5QwenModel(input: { providerId: string; mo
   const current = await getClaudeOpus5RuntimeConfig();
   const next = removeClaudeOpus5QwenModelFromRuntime(current, input.providerId, input.modelEntryId);
   const encrypted = encryptProviderRuntimeConfig(next);
+  bustCache("runtime:claude_opus5");
+  bustCache("all_multimodal_providers");
   await db.transaction(async tx => {
     await tx.insert(platformSettings).values({
       settingKey: CLAUDE_OPUS5_TOKENREPLY_RUNTIME_SETTING_KEY,
@@ -4558,6 +4886,8 @@ export async function deleteClaudeOpus5QwenApiKey(input: { providerId: string; s
   const { runtime, removedApiKey } = removeClaudeOpus5QwenApiKeyFromRuntime(current, input.providerId, input.slot);
   const encrypted = encryptProviderRuntimeConfig(runtime);
   const fingerprint = managedProviderCredentialFingerprint("claude-opus-5", removedApiKey, input.providerId);
+  bustCache("runtime:claude_opus5");
+  bustCache("all_multimodal_providers");
   await db.transaction(async tx => {
     await tx.insert(platformSettings).values({
       settingKey: CLAUDE_OPUS5_TOKENREPLY_RUNTIME_SETTING_KEY,
@@ -4590,40 +4920,42 @@ function glm53RuntimeFromEnvironment(): Glm53RuntimePayload {
 }
 
 async function readGlm53RuntimeOverride() {
-  const db = await getDb();
-  let record: { value: string; updatedAt?: Date | null; updatedByUserId?: number | null } | undefined;
-  if (db) {
-    try {
-      record = (await db.select().from(platformSettings).where(eq(platformSettings.settingKey, GLM53_RUNTIME_SETTING_KEY)).limit(1))[0];
-    } catch {
-      // Fallback to memory
+  return cached("runtime:glm53", 60_000, async () => {
+    const db = await getDb();
+    let record: { value: string; updatedAt?: Date | null; updatedByUserId?: number | null } | undefined;
+    if (db) {
+      try {
+        record = (await db.select().from(platformSettings).where(eq(platformSettings.settingKey, GLM53_RUNTIME_SETTING_KEY)).limit(1))[0];
+      } catch {
+        // Fallback to memory
+      }
     }
-  }
-  if (!record) {
-    record = fallbackPlatformSettings.get(GLM53_RUNTIME_SETTING_KEY);
-  }
-  if (!record) return null;
-  try {
-    const encoded = JSON.parse(record.value) as { ciphertext?: string; iv?: string; authTag?: string };
-    const decrypted = decryptProviderRuntimeConfig({ ciphertext: String(encoded.ciphertext ?? ""), iv: String(encoded.iv ?? ""), authTag: String(encoded.authTag ?? "") });
-    if (!decrypted || typeof decrypted !== "object") return null;
-    const candidate = decrypted as Partial<Glm53RuntimePayload> & { baseUrl?: unknown; model?: unknown; apiKeys?: unknown };
-    const legacyProvider = {
-      id: "primary",
-      label: "Primary provider",
-      enabled: true,
-      baseUrl: typeof candidate.baseUrl === "string" ? candidate.baseUrl.trim() : "",
-      model: typeof candidate.model === "string" ? candidate.model.trim() : "",
-      apiKeys: Array.isArray(candidate.apiKeys) ? candidate.apiKeys : [],
-    };
-    return {
-      payload: { providers: normalizeClaudeOpus5Providers(candidate.providers, normalizeClaudeOpus5Providers([legacyProvider], [])) },
-      updatedAt: record.updatedAt,
-      updatedByUserId: record.updatedByUserId,
-    };
-  } catch {
-    return null;
-  }
+    if (!record) {
+      record = fallbackPlatformSettings.get(GLM53_RUNTIME_SETTING_KEY);
+    }
+    if (!record) return null;
+    try {
+      const encoded = JSON.parse(record.value) as { ciphertext?: string; iv?: string; authTag?: string };
+      const decrypted = decryptProviderRuntimeConfig({ ciphertext: String(encoded.ciphertext ?? ""), iv: String(encoded.iv ?? ""), authTag: String(encoded.authTag ?? "") });
+      if (!decrypted || typeof decrypted !== "object") return null;
+      const candidate = decrypted as Partial<Glm53RuntimePayload> & { baseUrl?: unknown; model?: unknown; apiKeys?: unknown };
+      const legacyProvider = {
+        id: "primary",
+        label: "Primary provider",
+        enabled: true,
+        baseUrl: typeof candidate.baseUrl === "string" ? candidate.baseUrl.trim() : "",
+        model: typeof candidate.model === "string" ? candidate.model.trim() : "",
+        apiKeys: Array.isArray(candidate.apiKeys) ? candidate.apiKeys : [],
+      };
+      return {
+        payload: { providers: normalizeClaudeOpus5Providers(candidate.providers, normalizeClaudeOpus5Providers([legacyProvider], [])) },
+        updatedAt: record.updatedAt,
+        updatedByUserId: record.updatedByUserId,
+      };
+    } catch {
+      return null;
+    }
+  });
 }
 
 export async function getGlm53RuntimeConfig(): Promise<Glm53RuntimePayload> {
@@ -4666,6 +4998,7 @@ export async function getGlm53ProviderSettings() {
       bypassCooldown: provider.bypassCooldown === true,
       supportsVision: provider.supportsVision === true,
       supportsDocuments: provider.supportsDocuments === true,
+      reasoningEffort: provider.reasoningEffort ?? null,
     })),
     source: override ? "database" as const : "environment" as const,
     updatedAt: override?.updatedAt ?? null,
@@ -4673,14 +5006,14 @@ export async function getGlm53ProviderSettings() {
   };
 }
 
-export async function updateGlm53ProviderSettings(input: { providers: Array<{ id: string; label: string; enabled?: boolean; baseUrl: string; model: string; apiKeys: string[]; apiKeyEnabled?: boolean[]; removeSlots?: number[]; maxInputTokens?: number | null; maxOutputTokens?: number | null; disableIdentityPrompt?: boolean; pinnedUserEmails?: string[]; bypassCooldown?: boolean; supportsVision?: boolean; supportsDocuments?: boolean }> } | { baseUrl?: string; model?: string; apiKeys?: string[]; apiKeyEnabled?: boolean[]; removeSlots?: number[]; maxInputTokens?: number | null; maxOutputTokens?: number | null; disableIdentityPrompt?: boolean; pinnedUserEmails?: string[]; bypassCooldown?: boolean; supportsVision?: boolean; supportsDocuments?: boolean }, updatedByUserId: number) {
+export async function updateGlm53ProviderSettings(input: { providers: Array<{ id: string; label: string; enabled?: boolean; baseUrl: string; model: string; apiKeys: string[]; apiKeyEnabled?: boolean[]; removeSlots?: number[]; maxInputTokens?: number | null; maxOutputTokens?: number | null; disableIdentityPrompt?: boolean; pinnedUserEmails?: string[]; bypassCooldown?: boolean; supportsVision?: boolean; supportsDocuments?: boolean; reasoningEffort?: "low" | "medium" | "high" | "xhigh" | "max" | null }> } | { baseUrl?: string; model?: string; apiKeys?: string[]; apiKeyEnabled?: boolean[]; removeSlots?: number[]; maxInputTokens?: number | null; maxOutputTokens?: number | null; disableIdentityPrompt?: boolean; pinnedUserEmails?: string[]; bypassCooldown?: boolean; supportsVision?: boolean; supportsDocuments?: boolean; reasoningEffort?: "low" | "medium" | "high" | "xhigh" | "max" | null }, updatedByUserId: number) {
   const db = await getDb();
   if (!db) throw new Error("TokenForge database is unavailable");
   const current = await getGlm53RuntimeConfig();
   const currentById = new Map(current.providers.map(provider => [provider.id, provider]));
   const legacyPrimary = current.providers[0] ?? { id: "primary", label: "Primary provider", enabled: true, baseUrl: "", model: "", apiKeys: [] };
   
-  const submittedProviders = "providers" in input ? input.providers : [{ id: legacyPrimary.id, label: legacyPrimary.label, enabled: legacyPrimary.enabled, baseUrl: input.baseUrl ?? legacyPrimary.baseUrl, model: input.model ?? legacyPrimary.model, apiKeys: input.apiKeys ?? [], apiKeyEnabled: input.apiKeyEnabled, removeSlots: input.removeSlots, maxInputTokens: input.maxInputTokens, maxOutputTokens: input.maxOutputTokens, disableIdentityPrompt: input.disableIdentityPrompt, pinnedUserEmails: input.pinnedUserEmails, bypassCooldown: input.bypassCooldown, supportsVision: input.supportsVision, supportsDocuments: input.supportsDocuments }];
+  const submittedProviders = "providers" in input ? input.providers : [{ id: legacyPrimary.id, label: legacyPrimary.label, enabled: legacyPrimary.enabled, baseUrl: input.baseUrl ?? legacyPrimary.baseUrl, model: input.model ?? legacyPrimary.model, apiKeys: input.apiKeys ?? [], apiKeyEnabled: input.apiKeyEnabled, removeSlots: input.removeSlots, maxInputTokens: input.maxInputTokens, maxOutputTokens: input.maxOutputTokens, disableIdentityPrompt: input.disableIdentityPrompt, pinnedUserEmails: input.pinnedUserEmails, bypassCooldown: input.bypassCooldown, supportsVision: input.supportsVision, supportsDocuments: input.supportsDocuments, reasoningEffort: (input as any).reasoningEffort }];
   
   const nextProviders = submittedProviders.map((submitted, index) => {
     const existing = currentById.get(submitted.id);
@@ -4699,6 +5032,11 @@ export async function updateGlm53ProviderSettings(input: { providers: Array<{ id
     const supportsDocuments = submitted.supportsDocuments !== undefined
       ? submitted.supportsDocuments === true
       : existing?.supportsDocuments === true;
+    const reasoningEffort = normalizeReasoningEffort(
+      submitted.reasoningEffort !== undefined
+        ? submitted.reasoningEffort
+        : (existing as any)?.reasoningEffort
+    );
     const pinnedUserEmails = normalizePinnedUserEmails(submitted.pinnedUserEmails !== undefined ? submitted.pinnedUserEmails : existing?.pinnedUserEmails);
     return {
       id: normalizeClaudeOpus5ProviderId(submitted.id, `provider-${index + 1}`),
@@ -4713,6 +5051,7 @@ export async function updateGlm53ProviderSettings(input: { providers: Array<{ id
       ...(supportsDocuments ? { supportsDocuments: true } : {}),
       ...(maxInputTokens !== undefined ? { maxInputTokens } : {}),
       ...(maxOutputTokens !== undefined ? { maxOutputTokens } : {}),
+      ...(reasoningEffort ? { reasoningEffort } : {}),
       ...(pinnedUserEmails.length ? { pinnedUserEmails } : {}),
     };
   });
@@ -4725,6 +5064,8 @@ export async function updateGlm53ProviderSettings(input: { providers: Array<{ id
   const removedProviders = current.providers.filter(provider => !ids.has(provider.id));
 
   fallbackPlatformSettings.set(GLM53_RUNTIME_SETTING_KEY, { value: JSON.stringify(encrypted), updatedAt: new Date(), updatedByUserId });
+  bustCache("runtime:glm53");
+  bustCache("all_multimodal_providers");
   try {
     await db.transaction(async tx => {
       await tx.insert(platformSettings).values({
@@ -4765,40 +5106,42 @@ function deepseekV4ProRuntimeFromEnvironment(): DeepseekV4ProRuntimePayload {
 }
 
 async function readDeepseekV4ProRuntimeOverride() {
-  const db = await getDb();
-  let record: { value: string; updatedAt?: Date | null; updatedByUserId?: number | null } | undefined;
-  if (db) {
-    try {
-      record = (await db.select().from(platformSettings).where(eq(platformSettings.settingKey, DEEPSEEK_V4PRO_RUNTIME_SETTING_KEY)).limit(1))[0];
-    } catch {
-      // Fallback to memory
+  return cached("runtime:deepseek_v4pro", 60_000, async () => {
+    const db = await getDb();
+    let record: { value: string; updatedAt?: Date | null; updatedByUserId?: number | null } | undefined;
+    if (db) {
+      try {
+        record = (await db.select().from(platformSettings).where(eq(platformSettings.settingKey, DEEPSEEK_V4PRO_RUNTIME_SETTING_KEY)).limit(1))[0];
+      } catch {
+        // Fallback to memory
+      }
     }
-  }
-  if (!record) {
-    record = fallbackPlatformSettings.get(DEEPSEEK_V4PRO_RUNTIME_SETTING_KEY);
-  }
-  if (!record) return null;
-  try {
-    const encoded = JSON.parse(record.value) as { ciphertext?: string; iv?: string; authTag?: string };
-    const decrypted = decryptProviderRuntimeConfig({ ciphertext: String(encoded.ciphertext ?? ""), iv: String(encoded.iv ?? ""), authTag: String(encoded.authTag ?? "") });
-    if (!decrypted || typeof decrypted !== "object") return null;
-    const candidate = decrypted as Partial<DeepseekV4ProRuntimePayload> & { baseUrl?: unknown; model?: unknown; apiKeys?: unknown };
-    const legacyProvider = {
-      id: "primary",
-      label: "Primary provider",
-      enabled: candidate.providers?.[0]?.enabled !== false,
-      baseUrl: typeof candidate.baseUrl === "string" ? candidate.baseUrl.trim() : "",
-      model: typeof candidate.model === "string" ? candidate.model.trim() : "",
-      apiKeys: Array.isArray(candidate.apiKeys) ? candidate.apiKeys : [],
-    };
-    return {
-      payload: { providers: normalizeDeepseekV4ProProviders(candidate.providers, normalizeDeepseekV4ProProviders([legacyProvider], [])) },
-      updatedAt: record.updatedAt,
-      updatedByUserId: record.updatedByUserId,
-    };
-  } catch {
-    return null;
-  }
+    if (!record) {
+      record = fallbackPlatformSettings.get(DEEPSEEK_V4PRO_RUNTIME_SETTING_KEY);
+    }
+    if (!record) return null;
+    try {
+      const encoded = JSON.parse(record.value) as { ciphertext?: string; iv?: string; authTag?: string };
+      const decrypted = decryptProviderRuntimeConfig({ ciphertext: String(encoded.ciphertext ?? ""), iv: String(encoded.iv ?? ""), authTag: String(encoded.authTag ?? "") });
+      if (!decrypted || typeof decrypted !== "object") return null;
+      const candidate = decrypted as Partial<DeepseekV4ProRuntimePayload> & { baseUrl?: unknown; model?: unknown; apiKeys?: unknown };
+      const legacyProvider = {
+        id: "primary",
+        label: "Primary provider",
+        enabled: candidate.providers?.[0]?.enabled !== false,
+        baseUrl: typeof candidate.baseUrl === "string" ? candidate.baseUrl.trim() : "",
+        model: typeof candidate.model === "string" ? candidate.model.trim() : "",
+        apiKeys: Array.isArray(candidate.apiKeys) ? candidate.apiKeys : [],
+      };
+      return {
+        payload: { providers: normalizeDeepseekV4ProProviders(candidate.providers, normalizeDeepseekV4ProProviders([legacyProvider], [])) },
+        updatedAt: record.updatedAt,
+        updatedByUserId: record.updatedByUserId,
+      };
+    } catch {
+      return null;
+    }
+  });
 }
 
 export async function getDeepseekV4ProRuntimeConfig(): Promise<DeepseekV4ProRuntimePayload> {
@@ -4826,6 +5169,7 @@ export async function getDeepseekV4ProProviderSettings() {
       bypassCooldown: provider.bypassCooldown === true,
       supportsVision: provider.supportsVision === true,
       supportsDocuments: provider.supportsDocuments === true,
+      reasoningEffort: provider.reasoningEffort ?? null,
     })),
     /** Compatibility fields retain a read-only view for callers on the legacy setting shape. */
     baseUrl: primary?.baseUrl ?? "",
@@ -4837,8 +5181,8 @@ export async function getDeepseekV4ProProviderSettings() {
   };
 }
 
-type DeepseekV4ProProviderUpdate = { id: string; label: string; enabled?: boolean; baseUrl: string; model: string; apiKeys: string[]; apiKeyEnabled?: boolean[]; removeSlots?: number[]; maxInputTokens?: number | null; disableIdentityPrompt?: boolean; pinnedUserEmails?: string[]; bypassCooldown?: boolean; supportsVision?: boolean; supportsDocuments?: boolean };
-type DeepseekV4ProLegacyUpdate = { baseUrl?: string; model?: string; apiKeys?: string[]; apiKeyEnabled?: boolean[]; removeSlots?: number[]; maxInputTokens?: number | null; disableIdentityPrompt?: boolean; pinnedUserEmails?: string[]; bypassCooldown?: boolean; supportsVision?: boolean; supportsDocuments?: boolean };
+type DeepseekV4ProProviderUpdate = { id: string; label: string; enabled?: boolean; baseUrl: string; model: string; apiKeys: string[]; apiKeyEnabled?: boolean[]; removeSlots?: number[]; maxInputTokens?: number | null; disableIdentityPrompt?: boolean; pinnedUserEmails?: string[]; bypassCooldown?: boolean; supportsVision?: boolean; supportsDocuments?: boolean; reasoningEffort?: "low" | "medium" | "high" | "xhigh" | "max" | null };
+type DeepseekV4ProLegacyUpdate = { baseUrl?: string; model?: string; apiKeys?: string[]; apiKeyEnabled?: boolean[]; removeSlots?: number[]; maxInputTokens?: number | null; disableIdentityPrompt?: boolean; pinnedUserEmails?: string[]; bypassCooldown?: boolean; supportsVision?: boolean; supportsDocuments?: boolean; reasoningEffort?: "low" | "medium" | "high" | "xhigh" | "max" | null };
 
 export async function updateDeepseekV4ProProviderSettings(input: { providers: DeepseekV4ProProviderUpdate[] } | DeepseekV4ProLegacyUpdate, updatedByUserId: number) {
   const db = await getDb();
@@ -4863,6 +5207,7 @@ export async function updateDeepseekV4ProProviderSettings(input: { providers: De
       bypassCooldown: input.bypassCooldown,
       supportsVision: input.supportsVision,
       supportsDocuments: input.supportsDocuments,
+      reasoningEffort: input.reasoningEffort,
     }];
   const nextProviders = submittedProviders.map((submitted, index) => {
     const existing = currentById.get(submitted.id);
@@ -4880,6 +5225,11 @@ export async function updateDeepseekV4ProProviderSettings(input: { providers: De
     const supportsDocuments = submitted.supportsDocuments !== undefined
       ? submitted.supportsDocuments === true
       : existing?.supportsDocuments === true;
+    const reasoningEffort = normalizeReasoningEffort(
+      submitted.reasoningEffort !== undefined
+        ? submitted.reasoningEffort
+        : (existing as any)?.reasoningEffort
+    );
     const pinnedUserEmails = normalizePinnedUserEmails(submitted.pinnedUserEmails !== undefined ? submitted.pinnedUserEmails : existing?.pinnedUserEmails);
     return {
       id: normalizeClaudeOpus5ProviderId(submitted.id, `provider-${index + 1}`),
@@ -4893,6 +5243,7 @@ export async function updateDeepseekV4ProProviderSettings(input: { providers: De
       ...(supportsVision ? { supportsVision: true } : {}),
       ...(supportsDocuments ? { supportsDocuments: true } : {}),
       ...(maxInputTokens !== undefined ? { maxInputTokens } : {}),
+      ...(reasoningEffort ? { reasoningEffort } : {}),
       ...(pinnedUserEmails.length ? { pinnedUserEmails } : {}),
     };
   });
@@ -4903,6 +5254,8 @@ export async function updateDeepseekV4ProProviderSettings(input: { providers: De
   const encrypted = encryptProviderRuntimeConfig({ providers: nextProviders } satisfies DeepseekV4ProRuntimePayload);
   const removedProviders = current.providers.filter(provider => !ids.has(provider.id));
   fallbackPlatformSettings.set(DEEPSEEK_V4PRO_RUNTIME_SETTING_KEY, { value: JSON.stringify(encrypted), updatedAt: new Date(), updatedByUserId });
+  bustCache("runtime:deepseek_v4pro");
+  bustCache("all_multimodal_providers");
   try {
     await db.transaction(async tx => {
       await tx.insert(platformSettings).values({
@@ -4922,35 +5275,37 @@ export async function updateDeepseekV4ProProviderSettings(input: { providers: De
 export type Sonnet46ProviderRuntime = ClaudeOpus5ProviderRuntime;
 type Sonnet46RuntimePayload = { providers: Sonnet46ProviderRuntime[] };
 export const MAX_SONNET46_PROVIDERS = 100;
-type Sonnet46ProviderUpdate = { id: string; label: string; enabled?: boolean; baseUrl: string; model: string; apiKeys: string[]; apiKeyEnabled?: boolean[]; removeSlots?: number[]; maxInputTokens?: number | null; disableIdentityPrompt?: boolean; pinnedUserEmails?: string[]; bypassCooldown?: boolean; supportsVision?: boolean; supportsDocuments?: boolean };
+type Sonnet46ProviderUpdate = { id: string; label: string; enabled?: boolean; baseUrl: string; model: string; apiKeys: string[]; apiKeyEnabled?: boolean[]; removeSlots?: number[]; maxInputTokens?: number | null; disableIdentityPrompt?: boolean; pinnedUserEmails?: string[]; bypassCooldown?: boolean; supportsVision?: boolean; supportsDocuments?: boolean; reasoningEffort?: "low" | "medium" | "high" | "xhigh" | "max" | null };
 
 function normalizeSonnet46Providers(value: unknown, fallback: Sonnet46ProviderRuntime[]) {
   return normalizeClaudeOpus5Providers(value, fallback).slice(0, MAX_SONNET46_PROVIDERS);
 }
 
 async function readSonnet46RuntimeOverride() {
-  const db = await getDb();
-  let record: { value: string; updatedAt?: Date | null; updatedByUserId?: number | null } | undefined;
-  if (db) {
-    try {
-      record = (await db.select().from(platformSettings).where(eq(platformSettings.settingKey, SONNET46_RUNTIME_SETTING_KEY)).limit(1))[0];
-    } catch {
-      // Fallback to memory
+  return cached("runtime:sonnet46", 60_000, async () => {
+    const db = await getDb();
+    let record: { value: string; updatedAt?: Date | null; updatedByUserId?: number | null } | undefined;
+    if (db) {
+      try {
+        record = (await db.select().from(platformSettings).where(eq(platformSettings.settingKey, SONNET46_RUNTIME_SETTING_KEY)).limit(1))[0];
+      } catch {
+        // Fallback to memory
+      }
     }
-  }
-  if (!record) {
-    record = fallbackPlatformSettings.get(SONNET46_RUNTIME_SETTING_KEY);
-  }
-  if (!record) return null;
-  try {
-    const encoded = JSON.parse(record.value) as { ciphertext?: string; iv?: string; authTag?: string };
-    const decrypted = decryptProviderRuntimeConfig({ ciphertext: String(encoded.ciphertext ?? ""), iv: String(encoded.iv ?? ""), authTag: String(encoded.authTag ?? "") });
-    if (!decrypted || typeof decrypted !== "object") return null;
-    const candidate = decrypted as Partial<Sonnet46RuntimePayload>;
-    return { payload: { providers: normalizeSonnet46Providers(candidate.providers, []) }, updatedAt: record.updatedAt, updatedByUserId: record.updatedByUserId };
-  } catch {
-    return null;
-  }
+    if (!record) {
+      record = fallbackPlatformSettings.get(SONNET46_RUNTIME_SETTING_KEY);
+    }
+    if (!record) return null;
+    try {
+      const encoded = JSON.parse(record.value) as { ciphertext?: string; iv?: string; authTag?: string };
+      const decrypted = decryptProviderRuntimeConfig({ ciphertext: String(encoded.ciphertext ?? ""), iv: String(encoded.iv ?? ""), authTag: String(encoded.authTag ?? "") });
+      if (!decrypted || typeof decrypted !== "object") return null;
+      const candidate = decrypted as Partial<Sonnet46RuntimePayload>;
+      return { payload: { providers: normalizeSonnet46Providers(candidate.providers, []) }, updatedAt: record.updatedAt, updatedByUserId: record.updatedByUserId };
+    } catch {
+      return null;
+    }
+  });
 }
 
 export async function getSonnet46RuntimeConfig(): Promise<Sonnet46RuntimePayload> {
@@ -4976,6 +5331,7 @@ export async function getSonnet46ProviderSettings() {
       bypassCooldown: provider.bypassCooldown === true,
       supportsVision: provider.supportsVision === true,
       supportsDocuments: provider.supportsDocuments === true,
+      reasoningEffort: provider.reasoningEffort ?? null,
     })),
     baseUrl: primary?.baseUrl ?? "",
     model: primary?.model ?? "",
@@ -5007,6 +5363,11 @@ export async function updateSonnet46ProviderSettings(input: { providers: Sonnet4
     const supportsDocuments = submitted.supportsDocuments !== undefined
       ? submitted.supportsDocuments === true
       : existing?.supportsDocuments === true;
+    const reasoningEffort = normalizeReasoningEffort(
+      submitted.reasoningEffort !== undefined
+        ? submitted.reasoningEffort
+        : (existing as any)?.reasoningEffort
+    );
     const pinnedUserEmails = normalizePinnedUserEmails(submitted.pinnedUserEmails !== undefined ? submitted.pinnedUserEmails : existing?.pinnedUserEmails);
     return {
       id: normalizeClaudeOpus5ProviderId(submitted.id, `provider-${index + 1}`),
@@ -5020,6 +5381,7 @@ export async function updateSonnet46ProviderSettings(input: { providers: Sonnet4
       ...(supportsVision ? { supportsVision: true } : {}),
       ...(supportsDocuments ? { supportsDocuments: true } : {}),
       ...(maxInputTokens !== undefined ? { maxInputTokens } : {}),
+      ...(reasoningEffort ? { reasoningEffort } : {}),
       ...(pinnedUserEmails.length ? { pinnedUserEmails } : {}),
     };
   });
@@ -5030,6 +5392,8 @@ export async function updateSonnet46ProviderSettings(input: { providers: Sonnet4
   const encrypted = encryptProviderRuntimeConfig({ providers: nextProviders } satisfies Sonnet46RuntimePayload);
   const removedProviders = current.providers.filter(provider => !ids.has(provider.id));
   fallbackPlatformSettings.set(SONNET46_RUNTIME_SETTING_KEY, { value: JSON.stringify(encrypted), updatedAt: new Date(), updatedByUserId });
+  bustCache("runtime:sonnet46");
+  bustCache("all_multimodal_providers");
   try {
     await db.transaction(async tx => {
       await tx.insert(platformSettings).values({
@@ -5047,12 +5411,12 @@ export async function updateSonnet46ProviderSettings(input: { providers: Sonnet4
 }
 
 export const MANAGED_PROVIDER_METRIC_MODEL_IDS = ["claude-fable-5.1", "claude-opus-5", "glm-5.3", "claude-sonnet-4.6", "deepseek-v4-pro", "qwen3.8-max", "gpt-6-astra", "kimi-k3"] as const;
-export type ManagedProviderMetricModel = typeof MANAGED_PROVIDER_METRIC_MODEL_IDS[number];
+export type ManagedProviderMetricModel = typeof MANAGED_PROVIDER_METRIC_MODEL_IDS[number] | (string & {});
 
 export function managedProviderCredentialFingerprint(modelId: ManagedProviderMetricModel, credential: string, providerGroupId?: string) {
   const secret = process.env.JWT_SECRET?.trim();
   if (!secret) throw new Error("TokenForge provider metric vault is unavailable");
-  const groupScope = (modelId === "claude-opus-5" || modelId === "claude-sonnet-4.6" || modelId === "deepseek-v4-pro" || modelId === "claude-fable-5.1" || modelId === "qwen3.8-max" || modelId === "gpt-6-astra" || modelId === "kimi-k3") && providerGroupId && providerGroupId !== "primary" ? `\u0000provider:${providerGroupId}` : "";
+  const groupScope = providerGroupId && providerGroupId !== "primary" ? `\u0000provider:${providerGroupId}` : "";
   return createHmac("sha256", secret).update(`TokenForge:ProviderKeyMetrics:v1\u0000${modelId}${groupScope}\u0000${credential}`).digest("hex");
 }
 
@@ -5364,6 +5728,23 @@ export async function getManagedProviderKeyMetrics() {
       };
     }),
   }));
+  const universalGroups = await import("./universalModelProviders")
+    .then(m => m.listAllUniversalKeyMetricGroups())
+    .catch(() => []);
+
+  const staticIds = new Set([
+    "claude-fable-5.1",
+    "claude-opus-5",
+    "claude-sonnet-4.6",
+    "deepseek-v4-pro",
+    "qwen3.8-max",
+    "gpt-6-astra",
+    "kimi-k3",
+    ...runtimes.map(r => r.modelId),
+  ]);
+
+  const uniqueUniversal = universalGroups.filter(g => !staticIds.has(g.modelId));
+
   return [
     ...standardMetrics,
     { modelId: "claude-fable-5.1", slots: [], providers: fableProviders },
@@ -5373,6 +5754,7 @@ export async function getManagedProviderKeyMetrics() {
     { modelId: "qwen3.8-max", slots: [], providers: qwenProviders },
     { modelId: "gpt-6-astra", slots: [], providers: gpt6AstraProviders },
     { modelId: "kimi-k3", slots: [], providers: kimiProviders },
+    ...uniqueUniversal,
   ];
 }
 
@@ -5492,9 +5874,23 @@ export async function resetDiscordVerification(userId: number) {
   return { reset: wasVerified };
 }
 
-export async function createApiKey(userId: number, label: string, keyGroup: "payg" | "bundle" = "bundle") {
+export async function createApiKey(
+  userId: number,
+  label: string,
+  keyGroup: "payg" | "bundle" | "token_plan" | "tokens" | "coding_plan" = "token_plan"
+) {
   const db = await getDb();
   if (!db) throw new Error("TokenForge database is unavailable");
+
+  // Enforce max 10 active API keys per account
+  const activeKeys = await db
+    .select({ id: apiKeys.id })
+    .from(apiKeys)
+    .where(and(eq(apiKeys.userId, userId), eq(apiKeys.status, "active")));
+
+  if (activeKeys.length >= 10) {
+    throw new Error("Maximum limit of 10 active API keys reached for this account. Please revoke or delete an existing key before creating a new one.");
+  }
 
   const secret = newPlaintextKey();
   const keyPrefix = `${secret.slice(0, 15)}…`;
@@ -5515,24 +5911,48 @@ export async function listApiKeys(userId: number) {
 export async function revokeApiKey(userId: number, apiKeyId: number) {
   const db = await getDb();
   if (!db) return false;
+  // Permanently delete the API key row from the database
   const result = await db
-    .update(apiKeys)
-    .set({ status: "revoked", revokedAt: new Date() })
-    .where(and(eq(apiKeys.id, apiKeyId), eq(apiKeys.userId, userId), eq(apiKeys.status, "active")));
-  const success = result[0].affectedRows > 0;
+    .delete(apiKeys)
+    .where(and(eq(apiKeys.id, apiKeyId), eq(apiKeys.userId, userId)));
+  const success = (result[0]?.affectedRows ?? 0) > 0;
   if (success) {
     API_KEY_CACHE.clear();
   }
   return success;
 }
 
-export async function rotateApiKey(userId: number, apiKeyId: number, label: string, keyGroup?: "payg" | "bundle") {
+export async function deleteApiKey(userId: number, apiKeyId: number) {
+  return revokeApiKey(userId, apiKeyId);
+}
+
+export async function purgeRevokedApiKeys() {
   const db = await getDb();
-  let existingGroup: "payg" | "bundle" = keyGroup ?? "bundle";
+  if (!db) return 0;
+  try {
+    const result = await db
+      .delete(apiKeys)
+      .where(ne(apiKeys.status, "active"));
+    API_KEY_CACHE.clear();
+    return result[0]?.affectedRows ?? 0;
+  } catch (err) {
+    console.warn("[Database] Purge revoked API keys warning:", err);
+    return 0;
+  }
+}
+
+export async function rotateApiKey(
+  userId: number,
+  apiKeyId: number,
+  label: string,
+  keyGroup?: "payg" | "bundle" | "token_plan" | "tokens" | "coding_plan"
+) {
+  const db = await getDb();
+  let existingGroup: "payg" | "bundle" | "token_plan" | "tokens" | "coding_plan" = keyGroup ?? "token_plan";
   if (db && !keyGroup) {
     const existing = (await db.select().from(apiKeys).where(and(eq(apiKeys.id, apiKeyId), eq(apiKeys.userId, userId))).limit(1))[0];
     if (existing) {
-      existingGroup = ((existing as any).keyGroup as "payg" | "bundle") || "bundle";
+      existingGroup = ((existing as any).keyGroup as "payg" | "bundle" | "token_plan" | "tokens" | "coding_plan") || "token_plan";
     }
   }
   const wasRevoked = await revokeApiKey(userId, apiKeyId);
@@ -5595,10 +6015,23 @@ export async function findActiveApiKey(plainTextKey: string, database?: ApiKeyLo
   return found;
 }
 
+const API_KEY_TOUCH_CACHE = new Map<number, number>();
+const API_KEY_TOUCH_INTERVAL_MS = 60_000;
+
 export async function touchApiKey(apiKeyId: number) {
+  const now = Date.now();
+  const last = API_KEY_TOUCH_CACHE.get(apiKeyId);
+  if (last && now - last < API_KEY_TOUCH_INTERVAL_MS) {
+    return;
+  }
+  API_KEY_TOUCH_CACHE.set(apiKeyId, now);
   const db = await getDb();
   if (!db) return;
-  await db.update(apiKeys).set({ lastUsedAt: new Date() }).where(eq(apiKeys.id, apiKeyId));
+  try {
+    await db.update(apiKeys).set({ lastUsedAt: new Date() }).where(eq(apiKeys.id, apiKeyId));
+  } catch (err) {
+    console.warn("[touchApiKey] error updating lastUsedAt:", err);
+  }
 }
 
 export async function getQuotaStatus(userId: number) {
@@ -5656,23 +6089,109 @@ export async function getUsageSummary(userId: number) {
 }
 
 export async function getPublicModelTokenMetrics() {
-  const byModel = Object.fromEntries(TOKENFORGE_MODEL_IDS.map(modelId => [modelId, 0])) as Record<TokenForgeModelId, number>;
-  const empty = { totalTokens: TOKENFORGE_TOKEN_BASELINE, byModel };
+  return cached("public_model_token_metrics", 60_000, async () => {
+    const byModel = Object.fromEntries(TOKENFORGE_MODEL_IDS.map(modelId => [modelId, 0])) as Record<TokenForgeModelId, number>;
+    const empty = { totalTokens: TOKENFORGE_TOKEN_BASELINE, byModel };
+    try {
+      const db = await getDb();
+      if (!db) return empty;
+      const rows = await db
+        .select({ modelId: dailyUsage.modelId, totalTokens: sql<number>`coalesce(sum(${dailyUsage.totalTokens}), 0)` })
+        .from(dailyUsage)
+        .groupBy(dailyUsage.modelId);
+      for (const row of rows) {
+        if (TOKENFORGE_MODEL_IDS.includes(row.modelId as TokenForgeModelId)) byModel[row.modelId as TokenForgeModelId] = Number(row.totalTokens ?? 0);
+      }
+      const recordedTotalTokens = Object.values(byModel).reduce((total, amount) => total + amount, 0);
+      return { totalTokens: TOKENFORGE_TOKEN_BASELINE + recordedTotalTokens, byModel };
+    } catch (error: any) {
+      markDatabaseUnhealthy(error?.message ?? String(error));
+      return empty;
+    }
+  });
+}
+
+type UsageEventInsert = typeof usageEvents.$inferInsert;
+
+interface DailyUsageRollup {
+  userId: number;
+  apiKeyId?: number;
+  usageDate: Date;
+  modelId: string;
+  requestCount: number;
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+}
+
+let _pendingUsageEvents: UsageEventInsert[] = [];
+let _pendingDailyUsage = new Map<string, DailyUsageRollup>();
+let _flushUsageTimer: NodeJS.Timeout | null = null;
+let _isFlushingUsage = false;
+
+export async function flushUsageBuffer(): Promise<void> {
+  if (_isFlushingUsage) return;
+  const events = _pendingUsageEvents;
+  const rollups = Array.from(_pendingDailyUsage.values());
+  if (events.length === 0 && rollups.length === 0) return;
+
+  _pendingUsageEvents = [];
+  _pendingDailyUsage = new Map();
+  _isFlushingUsage = true;
+
   try {
     const db = await getDb();
-    if (!db) return empty;
-    const rows = await db
-      .select({ modelId: dailyUsage.modelId, totalTokens: sql<number>`coalesce(sum(${dailyUsage.totalTokens}), 0)` })
-      .from(dailyUsage)
-      .groupBy(dailyUsage.modelId);
-    for (const row of rows) {
-      if (TOKENFORGE_MODEL_IDS.includes(row.modelId as TokenForgeModelId)) byModel[row.modelId as TokenForgeModelId] = Number(row.totalTokens ?? 0);
+    if (!db) return;
+
+    if (events.length > 0) {
+      await db.insert(usageEvents).values(events).catch(err => {
+        console.warn("[flushUsageBuffer] Error batch inserting usageEvents:", err);
+      });
     }
-    const recordedTotalTokens = Object.values(byModel).reduce((total, amount) => total + amount, 0);
-    return { totalTokens: TOKENFORGE_TOKEN_BASELINE + recordedTotalTokens, byModel };
-  } catch (error: any) {
-    markDatabaseUnhealthy(error?.message ?? String(error));
-    return empty;
+
+    if (rollups.length > 0) {
+      for (const r of rollups) {
+        await db
+          .insert(dailyUsage)
+          .values({
+            userId: r.userId,
+            apiKeyId: r.apiKeyId,
+            usageDate: r.usageDate,
+            modelId: r.modelId,
+            requestCount: r.requestCount,
+            inputTokens: r.inputTokens,
+            outputTokens: r.outputTokens,
+            totalTokens: r.totalTokens,
+          })
+          .onDuplicateKeyUpdate({
+            set: {
+              requestCount: sql`${dailyUsage.requestCount} + ${r.requestCount}`,
+              inputTokens: sql`${dailyUsage.inputTokens} + ${r.inputTokens}`,
+              outputTokens: sql`${dailyUsage.outputTokens} + ${r.outputTokens}`,
+              totalTokens: sql`${dailyUsage.totalTokens} + ${r.totalTokens}`,
+              updatedAt: new Date(),
+            },
+          })
+          .catch(err => {
+            console.warn("[flushUsageBuffer] Error rolling up dailyUsage:", err);
+          });
+      }
+    }
+  } finally {
+    _isFlushingUsage = false;
+  }
+}
+
+function scheduleFlushUsageBuffer() {
+  if (_pendingUsageEvents.length >= 25) {
+    void flushUsageBuffer();
+    return;
+  }
+  if (!_flushUsageTimer) {
+    _flushUsageTimer = setTimeout(() => {
+      _flushUsageTimer = null;
+      void flushUsageBuffer();
+    }, 1500);
   }
 }
 
@@ -5694,8 +6213,6 @@ export async function recordUsage(input: {
   provider?: string;
   isMultimodal?: boolean;
 }) {
-  const db = await getDb();
-  if (!db) return;
   const inputTokens = input.inputTokens ?? 0;
   const outputTokens = input.outputTokens ?? 0;
   const totalTokens = inputTokens + outputTokens;
@@ -5709,19 +6226,39 @@ export async function recordUsage(input: {
             : input.provider))
     : input.provider;
   const rawErrorMessage = input.rawErrorMessage ?? input.errorMessage;
-  await db.insert(usageEvents).values({ ...input, provider, inputTokens, outputTokens, totalTokens, chargeNanos, rawErrorMessage });
-  await db
-    .insert(dailyUsage)
-    .values({ userId: input.userId, apiKeyId: input.apiKeyId, usageDate: day, modelId: input.modelId, requestCount: 1, inputTokens, outputTokens, totalTokens })
-    .onDuplicateKeyUpdate({
-      set: {
-        requestCount: sql`${dailyUsage.requestCount} + 1`,
-        inputTokens: sql`${dailyUsage.inputTokens} + ${inputTokens}`,
-        outputTokens: sql`${dailyUsage.outputTokens} + ${outputTokens}`,
-        totalTokens: sql`${dailyUsage.totalTokens} + ${totalTokens}`,
-        updatedAt: new Date(),
-      },
+
+  _pendingUsageEvents.push({
+    ...input,
+    provider,
+    inputTokens,
+    outputTokens,
+    totalTokens,
+    chargeNanos,
+    rawErrorMessage,
+  });
+
+  const rollupKey = `${input.userId}:${input.apiKeyId ?? 0}:${day.toISOString().slice(0, 10)}:${input.modelId}`;
+  const existing = _pendingDailyUsage.get(rollupKey);
+  if (existing) {
+    existing.requestCount += 1;
+    existing.inputTokens += inputTokens;
+    existing.outputTokens += outputTokens;
+    existing.totalTokens += totalTokens;
+  } else {
+    _pendingDailyUsage.set(rollupKey, {
+      userId: input.userId,
+      apiKeyId: input.apiKeyId,
+      usageDate: day,
+      modelId: input.modelId,
+      requestCount: 1,
+      inputTokens,
+      outputTokens,
+      totalTokens,
     });
+  }
+
+  scheduleFlushUsageBuffer();
+
   const userName = input.userId ? await lookupUserName(input.userId) : null;
   publishLiveRequest({
     requestId: input.requestId,
@@ -5843,17 +6380,23 @@ export async function getRecentRequestCounts(userId: number, sourceIpHash: strin
   return { account: Number(accountRows[0]?.count ?? 0), ip: Number(ipRows[0]?.count ?? 0) };
 }
 
-let lastCatalogueModelCount = 0;
+let catalogueSeeded = false;
 let catalogueInitialization: Promise<void> | null = null;
 
 export async function ensureCatalogue() {
-  if (catalogueInitialization && lastCatalogueModelCount === CATALOGUE_DEFINITIONS.length) {
+  if (catalogueSeeded) {
+    return;
+  }
+  if (catalogueInitialization) {
     return catalogueInitialization;
   }
   catalogueInitialization = (async () => {
     try {
       const db = await getDb();
       if (!db) return;
+      if (_pool) {
+        await ensureCreditAccountsColumns(_pool);
+      }
       const baseUrl = process.env.FXQIDIAN_BASE_URL ?? "https://fxqidian.de5.net";
       const clusterBaseUrl = process.env.CLUSTER_PROTOCOL_BASE_URL ?? "https://api.clusterprotocol.ai";
       const tokenHarborBaseUrl = process.env.TOKENHARBOR_BASE_URL ?? "https://tokenharbor.ai";
@@ -5910,36 +6453,43 @@ export async function ensureCatalogue() {
         syncModelFromDatabaseRecord(row);
       }
 
-      lastCatalogueModelCount = allCurrentModels.length;
+      catalogueSeeded = true;
     } catch (error: any) {
       markDatabaseUnhealthy(error?.message ?? String(error));
+    } finally {
+      catalogueInitialization = null;
     }
   })();
-  try {
-    await catalogueInitialization;
-  } catch {
-    catalogueInitialization = null;
-  }
+  return catalogueInitialization;
 }
 
 export async function isModelAvailable(modelId: string) {
   try {
-    await ensureCatalogue();
-    const db = await getDb();
-    if (!db) return TOKENFORGE_MODEL_IDS.includes(modelId as any);
-    const records = await db.select({ enabled: modelConfigs.enabled, providerEnabled: providerConfigs.enabled }).from(modelConfigs).leftJoin(providerConfigs, eq(modelConfigs.providerSlug, providerConfigs.slug)).where(eq(modelConfigs.modelId, modelId)).limit(1);
-    return Boolean(records[0]?.enabled && records[0]?.providerEnabled);
+    const snapshot = await getModelAvailabilitySnapshot();
+    const match = snapshot.find(m => m.modelId === modelId);
+    if (match) return match.available;
+    return TOKENFORGE_MODEL_IDS.includes(modelId as any);
   } catch (error: any) {
-    markDatabaseUnhealthy(error?.message ?? String(error));
     return TOKENFORGE_MODEL_IDS.includes(modelId as any);
   }
 }
 
-export function normalizeModelAvailability(rows: Array<{ modelId: string; enabled: boolean; providerEnabled: boolean | null; minTier?: string | null }>) {
+export function normalizeModelAvailability(rows: Array<{
+  modelId: string;
+  enabled: boolean;
+  providerEnabled: boolean | null;
+  minTier?: string | null;
+  isPayg?: boolean | null;
+  isBundle?: boolean | null;
+  isTokenPlan?: boolean | null;
+}>) {
   return rows.map(row => ({
     modelId: row.modelId,
     available: Boolean(row.enabled && row.providerEnabled),
     minTier: ((row.minTier as UserTier) || "free") as UserTier,
+    isPayg: Boolean(row.isPayg),
+    isBundle: row.isBundle !== false,
+    isTokenPlan: Boolean(row.isTokenPlan),
   }));
 }
 
@@ -5957,6 +6507,7 @@ export type AdminAccountBase = {
   tokenLimit: number | null;
   balanceNanos: number | null;
   paygBalanceNanos?: number | null;
+  codingPlanTokens?: number | null;
   discordVerifiedAt: Date | null;
   specialReferralSlot?: number | null;
   specialReferralAwardedAt?: Date | null;
@@ -6006,6 +6557,7 @@ export function composeAdminAccountOverview(accounts: AdminAccountBase[], usageR
       logUserMessages: Boolean((account as any).logUserMessages ?? false),
       balanceNanos: Number(account.balanceNanos ?? 0),
       paygBalanceNanos: Number(account.paygBalanceNanos ?? 0),
+      codingPlanTokens: Number((account as any).codingPlanTokens ?? 0),
       requestCount: Number(usage?.requestCount ?? 0),
       totalTokens: Number(usage?.totalTokens ?? 0),
       lifetimeSpendNanos: Number(usage?.lifetimeSpendNanos ?? 0),
@@ -6086,7 +6638,7 @@ export async function listAdminAccounts(input: AdminAccountDirectoryInput = {}) 
           ? [desc(specialReferralClaims.awardedAt), desc(specialReferralClaims.reservedAt), desc(users.createdAt), desc(users.id)]
         : [desc(users.createdAt), desc(users.id)];
   const accounts = await db
-    .select({ id: users.id, name: users.name, email: users.email, tier: users.tier, creditsEnabled: users.creditsEnabled, createdAt: users.createdAt, lastSignedIn: users.lastSignedIn, suspended: accountControls.isSuspended, suspicious: accountControls.isSuspicious, requestLimit: accountControls.dailyRequestLimit, tokenLimit: accountControls.dailyTokenLimit, logUserMessages: accountControls.logUserMessages, balanceNanos: creditAccounts.balanceNanos, paygBalanceNanos: creditAccounts.paygBalanceNanos, discordVerifiedAt: accountControls.discordVerifiedAt, specialReferralSlot: specialReferralClaims.slotNumber, specialReferralAwardedAt: specialReferralClaims.awardedAt, referralCount })
+    .select({ id: users.id, name: users.name, email: users.email, tier: users.tier, creditsEnabled: users.creditsEnabled, createdAt: users.createdAt, lastSignedIn: users.lastSignedIn, suspended: accountControls.isSuspended, suspicious: accountControls.isSuspicious, requestLimit: accountControls.dailyRequestLimit, tokenLimit: accountControls.dailyTokenLimit, logUserMessages: accountControls.logUserMessages, balanceNanos: creditAccounts.balanceNanos, paygBalanceNanos: creditAccounts.paygBalanceNanos, codingPlanTokens: creditAccounts.codingPlanTokens, discordVerifiedAt: accountControls.discordVerifiedAt, specialReferralSlot: specialReferralClaims.slotNumber, specialReferralAwardedAt: specialReferralClaims.awardedAt, referralCount })
     .from(users)
     .leftJoin(accountControls, eq(users.id, accountControls.userId))
     .leftJoin(creditAccounts, eq(users.id, creditAccounts.userId))
@@ -6308,43 +6860,70 @@ export async function resolveGitHubIdentity(input: GitHubIdentityInput) {
 }
 
 export async function getModelAvailabilitySnapshot() {
-  await ensureCatalogue();
-  const db = await getDb();
-  if (!db) return [];
-  const rows = await db
-    .select({
-      modelId: modelConfigs.modelId,
-      enabled: modelConfigs.enabled,
-      providerEnabled: providerConfigs.enabled,
-      minTier: modelConfigs.minTier,
-    })
-    .from(modelConfigs)
-    .leftJoin(providerConfigs, eq(modelConfigs.providerSlug, providerConfigs.slug));
-  return normalizeModelAvailability(rows);
+  return cached("model_availability_snapshot", 60_000, async () => {
+    const db = await getDb();
+    if (!db) return [];
+    const rows = await db
+      .select({
+        modelId: modelConfigs.modelId,
+        enabled: modelConfigs.enabled,
+        providerEnabled: providerConfigs.enabled,
+        minTier: modelConfigs.minTier,
+        isPayg: modelConfigs.isPayg,
+        isBundle: modelConfigs.isBundle,
+        isTokenPlan: modelConfigs.isTokenPlan,
+      })
+      .from(modelConfigs)
+      .leftJoin(providerConfigs, eq(modelConfigs.providerSlug, providerConfigs.slug));
+    return normalizeModelAvailability(rows);
+  });
 }
 
-const ADMIN_OVERVIEW_CACHE_TTL_MS = 10_000;
+const ADMIN_OVERVIEW_CACHE_TTL_MS = 60_000;
+const MODEL_DISTINCT_USAGE_CACHE_TTL_MS = 300_000; // 5 minutes cache for expensive distinct usage scan
 let adminOverviewCache: { at: number; value: unknown } | null = null;
+let cachedAllAccountModelUsage: { at: number; data: any[] } | null = null;
 
 export async function getAdminOverview() {
   if (adminOverviewCache && Date.now() - adminOverviewCache.at < ADMIN_OVERVIEW_CACHE_TTL_MS) {
     return adminOverviewCache.value;
   }
-  await ensureCatalogue();
   const db = await getDb();
   if (!db) return { models: [], providers: [], accounts: [], usage: [], emailProviders: [], allAccountModelUsage: [], totals: { totalTokens: 0, totalRequests: 0 }, providerTelemetry: getProviderCredentialTelemetry({}), managedProviderKeyMetrics: [] };
   // This aggregate queries only `users`; keep this expression unqualified so the SELECT,
   // GROUP BY, and ORDER BY clauses remain byte-for-byte compatible on the deployed MySQL dialect.
   const emailProvider = sql<string>`${sql.raw(ADMIN_EMAIL_PROVIDER_EXPRESSION)}`;
+
+  let allAccountModelUsagePromise: Promise<any[]>;
+  if (cachedAllAccountModelUsage && Date.now() - cachedAllAccountModelUsage.at < MODEL_DISTINCT_USAGE_CACHE_TTL_MS) {
+    allAccountModelUsagePromise = Promise.resolve(cachedAllAccountModelUsage.data);
+  } else {
+    allAccountModelUsagePromise = db
+      .select({
+        modelId: usageEvents.modelId,
+        accountCount: sql<number>`count(distinct ${usageEvents.userId})`,
+        requestCount: sql<number>`coalesce(count(${usageEvents.id}), 0)`,
+        totalTokens: sql<number>`coalesce(sum(${usageEvents.totalTokens}), 0)`
+      })
+      .from(usageEvents)
+      .where(eq(usageEvents.status, "success"))
+      .groupBy(usageEvents.modelId)
+      .orderBy(desc(sql`count(${usageEvents.id})`), desc(sql`sum(${usageEvents.totalTokens})`), usageEvents.modelId)
+      .then(rows => {
+        cachedAllAccountModelUsage = { at: Date.now(), data: rows };
+        return rows;
+      });
+  }
+
   const [models, providers, accounts, usage, accountUsage, totals, emailProviderRows, allAccountModelUsageRows, totalAccountsRows] = await Promise.all([
     db.select().from(modelConfigs).orderBy(modelConfigs.displayName),
     db.select().from(providerConfigs).orderBy(providerConfigs.displayName),
-    db.select({ id: users.id, name: users.name, email: users.email, createdAt: users.createdAt, lastSignedIn: users.lastSignedIn, suspended: accountControls.isSuspended, suspicious: accountControls.isSuspicious, requestLimit: accountControls.dailyRequestLimit, tokenLimit: accountControls.dailyTokenLimit, balanceNanos: creditAccounts.balanceNanos, discordVerifiedAt: accountControls.discordVerifiedAt }).from(users).leftJoin(accountControls, eq(users.id, accountControls.userId)).leftJoin(creditAccounts, eq(users.id, creditAccounts.userId)).orderBy(desc(users.lastSignedIn)),
+    db.select({ id: users.id, name: users.name, email: users.email, createdAt: users.createdAt, lastSignedIn: users.lastSignedIn, suspended: accountControls.isSuspended, suspicious: accountControls.isSuspicious, requestLimit: accountControls.dailyRequestLimit, tokenLimit: accountControls.dailyTokenLimit, balanceNanos: creditAccounts.balanceNanos, paygBalanceNanos: creditAccounts.paygBalanceNanos, codingPlanTokens: creditAccounts.codingPlanTokens, discordVerifiedAt: accountControls.discordVerifiedAt }).from(users).leftJoin(accountControls, eq(users.id, accountControls.userId)).leftJoin(creditAccounts, eq(users.id, creditAccounts.userId)).orderBy(desc(users.lastSignedIn)),
     db.select({ day: dailyUsage.usageDate, requests: sql<number>`coalesce(sum(${dailyUsage.requestCount}), 0)`, tokens: sql<number>`coalesce(sum(${dailyUsage.totalTokens}), 0)` }).from(dailyUsage).where(gte(dailyUsage.usageDate, utcUsageDate(new Date(Date.now() - 13 * 86_400_000)))).groupBy(dailyUsage.usageDate).orderBy(dailyUsage.usageDate),
     db.select({ userId: usageEvents.userId, requestCount: sql<number>`coalesce(count(${usageEvents.id}), 0)`, totalTokens: sql<number>`coalesce(sum(${usageEvents.totalTokens}), 0)`, lastActivityAt: sql<Date | null>`max(${usageEvents.createdAt})` }).from(usageEvents).groupBy(usageEvents.userId),
     db.select({ totalTokens: sql<number>`coalesce(sum(${dailyUsage.totalTokens}), 0)`, totalRequests: sql<number>`coalesce(sum(${dailyUsage.requestCount}), 0)` }).from(dailyUsage),
     db.select({ provider: emailProvider, accountCount: sql<number>`count(id)` }).from(users).where(sql`${users.email} is not null and ${users.email} like '%@%'`).groupBy(emailProvider).orderBy(desc(sql`count(id)`), emailProvider),
-    db.select({ modelId: usageEvents.modelId, accountCount: sql<number>`count(distinct ${usageEvents.userId})`, requestCount: sql<number>`coalesce(count(${usageEvents.id}), 0)`, totalTokens: sql<number>`coalesce(sum(${usageEvents.totalTokens}), 0)` }).from(usageEvents).where(eq(usageEvents.status, "success")).groupBy(usageEvents.modelId).orderBy(desc(sql`count(${usageEvents.id})`), desc(sql`sum(${usageEvents.totalTokens})`), usageEvents.modelId),
+    allAccountModelUsagePromise,
     db.select({ count: sql<number>`count(*)` }).from(users).where(ne(users.openId, ADMIN_SESSION_PRINCIPAL_OPEN_ID)),
   ]);
   const providerTelemetry = getProviderCredentialTelemetry({
@@ -6451,6 +7030,7 @@ export async function getAdminAuditExport() {
 
 export async function setModelEnabled(modelId: string, enabled: boolean) {
   adminOverviewCache = null;
+  bustCache("model_availability_snapshot");
   const db = await getDb();
   if (!db) return false;
   const result = await db.update(modelConfigs).set({ enabled }).where(eq(modelConfigs.modelId, modelId));
@@ -6501,6 +7081,7 @@ export async function getModelMinTier(modelId: string): Promise<UserTier> {
 
 export async function setModelMinTier(modelId: string, minTier: UserTier) {
   adminOverviewCache = null;
+  bustCache("model_availability_snapshot");
   modelTierCache.delete(modelId);
   const db = await getDb();
   if (!db) return false;
@@ -6508,25 +7089,30 @@ export async function setModelMinTier(modelId: string, minTier: UserTier) {
   return result[0].affectedRows > 0;
 }
 
-const modelAccessCache = new Map<string, { access: { isPayg: boolean; isBundle: boolean }; expiresAt: number }>();
+const modelAccessCache = new Map<string, { access: { isPayg: boolean; isBundle: boolean; isTokenPlan: boolean }; expiresAt: number }>();
 const MODEL_ACCESS_CACHE_TTL_MS = 15_000;
 
-export async function getModelAccess(modelId: string): Promise<{ isPayg: boolean; isBundle: boolean }> {
+export async function getModelAccess(modelId: string): Promise<{ isPayg: boolean; isBundle: boolean; isTokenPlan: boolean }> {
   const cached = modelAccessCache.get(modelId);
   if (cached && Date.now() < cached.expiresAt) {
     return cached.access;
   }
   try {
     const db = await getDb();
-    if (!db) return { isPayg: false, isBundle: true };
-    const rows = await db.select({ isPayg: modelConfigs.isPayg, isBundle: modelConfigs.isBundle }).from(modelConfigs).where(eq(modelConfigs.modelId, modelId)).limit(1);
+    if (!db) return { isPayg: false, isBundle: true, isTokenPlan: false };
+    const rows = await db.select({
+      isPayg: modelConfigs.isPayg,
+      isBundle: modelConfigs.isBundle,
+      isTokenPlan: modelConfigs.isTokenPlan,
+    }).from(modelConfigs).where(eq(modelConfigs.modelId, modelId)).limit(1);
     const isPayg = Boolean(rows[0]?.isPayg);
     const isBundle = rows[0]?.isBundle === undefined || rows[0]?.isBundle === null ? true : Boolean(rows[0]?.isBundle);
-    const access = { isPayg, isBundle };
+    const isTokenPlan = Boolean(rows[0]?.isTokenPlan);
+    const access = { isPayg, isBundle, isTokenPlan };
     modelAccessCache.set(modelId, { access, expiresAt: Date.now() + MODEL_ACCESS_CACHE_TTL_MS });
     return access;
   } catch {
-    return { isPayg: false, isBundle: true };
+    return { isPayg: false, isBundle: true, isTokenPlan: false };
   }
 }
 
@@ -6540,19 +7126,42 @@ export async function getModelIsBundle(modelId: string): Promise<boolean> {
   return access.isBundle;
 }
 
+export async function getModelIsTokenPlan(modelId: string): Promise<boolean> {
+  const access = await getModelAccess(modelId);
+  return access.isTokenPlan;
+}
+
 export async function setModelAccess(
   modelId: string,
-  access: { isPayg?: boolean; isBundle?: boolean }
+  access: { isPayg?: boolean; isBundle?: boolean; isTokenPlan?: boolean }
 ): Promise<boolean> {
   adminOverviewCache = null;
+  bustCache("model_availability_snapshot");
   modelAccessCache.delete(modelId);
   const db = await getDb();
   if (!db) return false;
   const updates: Record<string, boolean> = {};
   if (access.isPayg !== undefined) updates.isPayg = access.isPayg;
   if (access.isBundle !== undefined) updates.isBundle = access.isBundle;
+  if (access.isTokenPlan !== undefined) updates.isTokenPlan = access.isTokenPlan;
+
+  const existing = await db.select().from(modelConfigs).where(eq(modelConfigs.modelId, modelId)).limit(1);
+  if (existing.length === 0) {
+    await db.insert(modelConfigs).values({
+      modelId,
+      displayName: modelId,
+      description: "",
+      capabilities: ["reasoning", "coding", "streaming"],
+      providerSlug: "fxqidian",
+      enabled: true,
+      isPayg: access.isPayg ?? false,
+      isBundle: access.isBundle ?? true,
+      isTokenPlan: access.isTokenPlan ?? false,
+    }).catch(() => undefined);
+    return true;
+  }
   const result = await db.update(modelConfigs).set(updates).where(eq(modelConfigs.modelId, modelId));
-  return result[0].affectedRows > 0;
+  return (result[0]?.affectedRows ?? 0) > 0 || true;
 }
 
 export async function setModelIsPayg(modelId: string, isPayg: boolean): Promise<boolean> {
@@ -6561,6 +7170,10 @@ export async function setModelIsPayg(modelId: string, isPayg: boolean): Promise<
 
 export async function setModelIsBundle(modelId: string, isBundle: boolean): Promise<boolean> {
   return setModelAccess(modelId, { isBundle });
+}
+
+export async function setModelIsTokenPlan(modelId: string, isTokenPlan: boolean): Promise<boolean> {
+  return setModelAccess(modelId, { isTokenPlan });
 }
 
 
@@ -6594,6 +7207,8 @@ export function clearUserTierCache(userId?: number) {
 
 export async function setProviderEnabled(slug: string, enabled: boolean) {
   adminOverviewCache = null;
+  bustCache("model_availability_snapshot");
+  bustCache("all_multimodal_providers");
   const db = await getDb();
   if (!db) return { updated: false, disabledModels: 0 };
   return db.transaction(async tx => {
@@ -6610,6 +7225,8 @@ export async function setProviderEnabled(slug: string, enabled: boolean) {
 
 export async function setProviderSupportsVision(slug: string, supportsVision: boolean) {
   adminOverviewCache = null;
+  bustCache("model_availability_snapshot");
+  bustCache("all_multimodal_providers");
   const db = await getDb();
   if (!db) return { updated: false };
   const res = await db.update(providerConfigs).set({ supportsVision, updatedAt: new Date() }).where(eq(providerConfigs.slug, slug));
@@ -6618,6 +7235,8 @@ export async function setProviderSupportsVision(slug: string, supportsVision: bo
 
 export async function setProviderSupportsDocuments(slug: string, supportsDocuments: boolean) {
   adminOverviewCache = null;
+  bustCache("model_availability_snapshot");
+  bustCache("all_multimodal_providers");
   const db = await getDb();
   if (!db) return { updated: false };
   const res = await db.update(providerConfigs).set({ supportsDocuments, updatedAt: new Date() }).where(eq(providerConfigs.slug, slug));
@@ -6637,80 +7256,82 @@ export type MultimodalProviderCandidate = {
 };
 
 export async function findAllMultimodalProviders(): Promise<MultimodalProviderCandidate[]> {
-  const results: MultimodalProviderCandidate[] = [];
-  try {
-    const [opus, sonnet, fable, qwen, glm, deepseek, kimi, gpt6] = await Promise.all([
-      getClaudeOpus5RuntimeConfig().catch(() => ({ providers: [] })),
-      getSonnet46RuntimeConfig().catch(() => ({ providers: [] })),
-      getClaudeFable5NvidiaRuntimeConfig().catch(() => ({ providers: [] })),
-      getQwen38MaxRuntimeConfig().catch(() => ({ providers: [] })),
-      getGlm53RuntimeConfig().catch(() => ({ providers: [] })),
-      getDeepseekV4ProRuntimeConfig().catch(() => ({ providers: [] })),
-      getKimiK3RuntimeConfig().catch(() => ({ providers: [] })),
-      getGpt6AstraRuntimeConfig().catch(() => ({ providers: [] })),
-    ]);
+  return cached("all_multimodal_providers", 60_000, async () => {
+    const results: MultimodalProviderCandidate[] = [];
+    try {
+      const [opus, sonnet, fable, qwen, glm, deepseek, kimi, gpt6] = await Promise.all([
+        getClaudeOpus5RuntimeConfig().catch(() => ({ providers: [] })),
+        getSonnet46RuntimeConfig().catch(() => ({ providers: [] })),
+        getClaudeFable5NvidiaRuntimeConfig().catch(() => ({ providers: [] })),
+        getQwen38MaxRuntimeConfig().catch(() => ({ providers: [] })),
+        getGlm53RuntimeConfig().catch(() => ({ providers: [] })),
+        getDeepseekV4ProRuntimeConfig().catch(() => ({ providers: [] })),
+        getKimiK3RuntimeConfig().catch(() => ({ providers: [] })),
+        getGpt6AstraRuntimeConfig().catch(() => ({ providers: [] })),
+      ]);
 
-    const allConfigs = [opus, sonnet, fable, qwen, glm, deepseek, kimi, gpt6];
-    const seenIds = new Set<string>();
+      const allConfigs = [opus, sonnet, fable, qwen, glm, deepseek, kimi, gpt6];
+      const seenIds = new Set<string>();
 
-    for (const cfg of allConfigs) {
-      if (!cfg?.providers) continue;
-      for (const p of cfg.providers) {
-        const hasVision = p.supportsVision === true;
-        const hasDocs = p.supportsDocuments === true;
-        if (p.enabled !== false && (hasVision || hasDocs) && p.baseUrl && p.apiKeys?.length) {
-          const key = `${p.baseUrl}::${p.model}::${p.id}`;
-          if (!seenIds.has(key)) {
-            seenIds.add(key);
-            results.push({
-              source: "managed",
-              id: p.id,
-              label: p.label,
-              baseUrl: p.baseUrl,
-              model: p.model,
-              apiKeys: p.apiKeys,
-              apiKeyEnabled: p.apiKeyEnabled,
-              supportsVision: hasVision,
-              supportsDocuments: hasDocs,
-            });
+      for (const cfg of allConfigs) {
+        if (!cfg?.providers) continue;
+        for (const p of cfg.providers) {
+          const hasVision = p.supportsVision === true;
+          const hasDocs = p.supportsDocuments === true;
+          if (p.enabled !== false && (hasVision || hasDocs) && p.baseUrl && p.apiKeys?.length) {
+            const key = `${p.baseUrl}::${p.model}::${p.id}`;
+            if (!seenIds.has(key)) {
+              seenIds.add(key);
+              results.push({
+                source: "managed",
+                id: p.id,
+                label: p.label,
+                baseUrl: p.baseUrl,
+                model: p.model,
+                apiKeys: p.apiKeys,
+                apiKeyEnabled: p.apiKeyEnabled,
+                supportsVision: hasVision,
+                supportsDocuments: hasDocs,
+              });
+            }
           }
         }
       }
+    } catch (err) {
+      console.warn("[findAllMultimodalProviders] error loading managed runtimes", err);
     }
-  } catch (err) {
-    console.warn("[findAllMultimodalProviders] error loading managed runtimes", err);
-  }
 
-  try {
-    const db = await getDb();
-    if (db) {
-      const rows = await db
-        .select()
-        .from(providerConfigs)
-        .where(
-          and(
-            eq(providerConfigs.enabled, true),
-            or(eq(providerConfigs.supportsVision, true), eq(providerConfigs.supportsDocuments, true))
-          )
-        );
-      for (const row of rows) {
-        results.push({
-          source: "upstream",
-          id: row.slug,
-          label: row.displayName,
-          baseUrl: row.baseUrl,
-          model: "",
-          apiKeys: [],
-          supportsVision: row.supportsVision === true,
-          supportsDocuments: row.supportsDocuments === true,
-        });
+    try {
+      const db = await getDb();
+      if (db) {
+        const rows = await db
+          .select()
+          .from(providerConfigs)
+          .where(
+            and(
+              eq(providerConfigs.enabled, true),
+              or(eq(providerConfigs.supportsVision, true), eq(providerConfigs.supportsDocuments, true))
+            )
+          );
+        for (const row of rows) {
+          results.push({
+            source: "upstream",
+            id: row.slug,
+            label: row.displayName,
+            baseUrl: row.baseUrl,
+            model: "",
+            apiKeys: [],
+            supportsVision: row.supportsVision === true,
+            supportsDocuments: row.supportsDocuments === true,
+          });
+        }
       }
+    } catch (err) {
+      console.warn("[findAllMultimodalProviders] error loading upstream providers", err);
     }
-  } catch (err) {
-    console.warn("[findAllMultimodalProviders] error loading upstream providers", err);
-  }
 
-  return results;
+    return results;
+  });
 }
 
 export async function setAccountControl(input: { userId: number; isSuspended?: boolean; dailyRequestLimit?: number; dailyTokenLimit?: number }) {
@@ -6854,27 +7475,68 @@ export async function grantAdminAccountCredit(input: {
   userId: number;
   amountNanos: number;
   actorUserId: number;
-  balanceType?: "bundle" | "payg";
+  balanceType?: "bundle" | "payg" | "tokens";
+  amountTokens?: number;
 }) {
   const db = await getDb();
   if (!db) throw new Error("TokenForge database is unavailable");
   const amountNanos = Math.max(0, Math.trunc(input.amountNanos));
-  if (!amountNanos) throw new Error("Credit grant amount must be positive");
+  const amountTokens = input.amountTokens ? Math.max(0, Math.trunc(input.amountTokens)) : 0;
+  if (!amountNanos && !amountTokens) throw new Error("Credit grant amount must be positive");
   const user = (await db.select({ id: users.id }).from(users).where(eq(users.id, input.userId)).limit(1))[0];
   if (!user) return null;
   await ensureCreditAccount(input.userId);
-  const isPayg = input.balanceType === "payg";
+  const balanceType = input.balanceType ?? "bundle";
+
   return db.transaction(async tx => {
     const giveawayId = randomBytes(12).toString("hex");
-    const announcementNote = isPayg
-      ? "An administrator added PAYG balance to your TokenForge account."
-      : "An administrator added credits to your TokenForge account.";
 
-    if (isPayg) {
+    if (balanceType === "tokens") {
+      const tokensToAdd = amountTokens || amountNanos;
+      const mTokens = (tokensToAdd / 1_000_000).toLocaleString();
+      const announcementNote = `An administrator added ${mTokens}M coding tokens to your TokenForge account.`;
+      await tx
+        .update(creditAccounts)
+        .set({ codingPlanTokens: sql`${creditAccounts.codingPlanTokens} + ${tokensToAdd}` })
+        .where(eq(creditAccounts.userId, input.userId));
+
+      const account = (await tx.select().from(creditAccounts).where(eq(creditAccounts.userId, input.userId)).limit(1))[0];
+      const balanceNanos = account?.balanceNanos ?? 0;
+      const paygBalanceNanos = Number(account?.paygBalanceNanos ?? 0);
+      const codingPlanTokens = Number((account as any)?.codingPlanTokens ?? tokensToAdd);
+
+      await tx.insert(creditLedger).values({
+        userId: input.userId,
+        kind: "manual_adjustment",
+        amountNanos: 0,
+        balanceAfterNanos: codingPlanTokens,
+        referenceId: `admin-tokens:${giveawayId}:${input.userId}`,
+        note: announcementNote,
+      });
+      await tx.insert(creditGiveaways).values({
+        id: giveawayId,
+        actorUserId: input.actorUserId,
+        amountNanos: 0,
+        recipientCount: 1,
+        totalAmountNanos: 0,
+        announcementNote,
+      });
+      await tx.insert(creditGiveawayNotifications).values({ giveawayId, userId: input.userId });
+      return {
+        amountNanos,
+        amountTokens: tokensToAdd,
+        balanceNanos,
+        paygBalanceNanos,
+        codingPlanTokens,
+        balanceType: "tokens" as const,
+      };
+    } else if (balanceType === "payg") {
+      const announcementNote = "An administrator added PAYG balance to your TokenForge account.";
       await tx.update(creditAccounts).set({ paygBalanceNanos: sql`${creditAccounts.paygBalanceNanos} + ${amountNanos}` }).where(eq(creditAccounts.userId, input.userId));
-      const account = (await tx.select({ balanceNanos: creditAccounts.balanceNanos, paygBalanceNanos: creditAccounts.paygBalanceNanos }).from(creditAccounts).where(eq(creditAccounts.userId, input.userId)).limit(1))[0];
+      const account = (await tx.select().from(creditAccounts).where(eq(creditAccounts.userId, input.userId)).limit(1))[0];
       const balanceNanos = account?.balanceNanos ?? 0;
       const paygBalanceNanos = Number(account?.paygBalanceNanos ?? amountNanos);
+      const codingPlanTokens = Number((account as any)?.codingPlanTokens ?? 0);
       await tx.insert(creditLedger).values({
         userId: input.userId,
         kind: "manual_adjustment",
@@ -6892,12 +7554,14 @@ export async function grantAdminAccountCredit(input: {
         announcementNote,
       });
       await tx.insert(creditGiveawayNotifications).values({ giveawayId, userId: input.userId });
-      return { amountNanos, balanceNanos, paygBalanceNanos, balanceType: "payg" as const };
+      return { amountNanos, balanceNanos, paygBalanceNanos, codingPlanTokens, balanceType: "payg" as const };
     } else {
+      const announcementNote = "An administrator added credits to your TokenForge account.";
       await tx.update(creditAccounts).set({ balanceNanos: sql`${creditAccounts.balanceNanos} + ${amountNanos}` }).where(eq(creditAccounts.userId, input.userId));
-      const account = (await tx.select({ balanceNanos: creditAccounts.balanceNanos, paygBalanceNanos: creditAccounts.paygBalanceNanos }).from(creditAccounts).where(eq(creditAccounts.userId, input.userId)).limit(1))[0];
+      const account = (await tx.select().from(creditAccounts).where(eq(creditAccounts.userId, input.userId)).limit(1))[0];
       const balanceNanos = account?.balanceNanos ?? amountNanos;
       const paygBalanceNanos = Number(account?.paygBalanceNanos ?? 0);
+      const codingPlanTokens = Number((account as any)?.codingPlanTokens ?? 0);
       await tx.insert(creditLedger).values({
         userId: input.userId,
         kind: "manual_adjustment",
@@ -6915,31 +7579,33 @@ export async function grantAdminAccountCredit(input: {
         announcementNote,
       });
       await tx.insert(creditGiveawayNotifications).values({ giveawayId, userId: input.userId });
-      return { amountNanos, balanceNanos, paygBalanceNanos, balanceType: "bundle" as const };
+      return { amountNanos, balanceNanos, paygBalanceNanos, codingPlanTokens, balanceType: "bundle" as const };
     }
   });
 }
 
-/** Sets an account's credit balance or PAYG balance directly to a specified target amount (in nanodollars). */
+/** Sets an account's credit balance, PAYG balance, or coding tokens directly to a specified target amount. */
 export async function setAdminAccountCredit(input: {
   userId: number;
   targetAmountNanos: number;
   actorUserId: number;
-  balanceType?: "bundle" | "payg";
+  balanceType?: "bundle" | "payg" | "tokens";
+  targetTokens?: number;
   note?: string;
 }) {
   const db = await getDb();
   if (!db) throw new Error("TokenForge database is unavailable");
   const targetAmountNanos = Math.max(0, Math.trunc(input.targetAmountNanos));
+  const targetTokens = input.targetTokens !== undefined ? Math.max(0, Math.trunc(input.targetTokens)) : undefined;
   const user = (await db.select({ id: users.id }).from(users).where(eq(users.id, input.userId)).limit(1))[0];
   if (!user) return null;
   await ensureCreditAccount(input.userId);
-  const isPayg = input.balanceType === "payg";
+  const balanceType = input.balanceType ?? "bundle";
 
   return db.transaction(async tx => {
     const existing = (
       await tx
-        .select({ balanceNanos: creditAccounts.balanceNanos, paygBalanceNanos: creditAccounts.paygBalanceNanos })
+        .select()
         .from(creditAccounts)
         .where(eq(creditAccounts.userId, input.userId))
         .limit(1)
@@ -6947,10 +7613,44 @@ export async function setAdminAccountCredit(input: {
 
     const currentBalanceNanos = existing?.balanceNanos ?? 0;
     const currentPaygBalanceNanos = Number(existing?.paygBalanceNanos ?? 0);
-    const targetUsd = (targetAmountNanos / 1_000_000_000).toFixed(2);
+    const currentCodingTokens = Number((existing as any)?.codingPlanTokens ?? 0);
     const adjustmentId = randomBytes(12).toString("hex");
 
-    if (isPayg) {
+    if (balanceType === "tokens") {
+      const finalTargetTokens = targetTokens !== undefined ? targetTokens : targetAmountNanos;
+      const diffTokens = finalTargetTokens - currentCodingTokens;
+      await tx
+        .update(creditAccounts)
+        .set({ codingPlanTokens: finalTargetTokens })
+        .where(eq(creditAccounts.userId, input.userId));
+
+      const targetM = (finalTargetTokens / 1_000_000).toLocaleString();
+      const defaultNote = diffTokens < 0
+        ? `Administrator reduced coding tokens to ${targetM}M tokens.`
+        : `Administrator adjusted coding tokens to ${targetM}M tokens.`;
+      const note = input.note?.trim() || defaultNote;
+
+      await tx.insert(creditLedger).values({
+        userId: input.userId,
+        kind: "manual_adjustment",
+        amountNanos: 0,
+        balanceAfterNanos: finalTargetTokens,
+        referenceId: `admin-set-tokens:${adjustmentId}:${input.userId}`,
+        note,
+      });
+
+      return {
+        targetAmountNanos,
+        targetTokens: finalTargetTokens,
+        diffNanos: 0,
+        diffTokens,
+        balanceNanos: currentBalanceNanos,
+        paygBalanceNanos: currentPaygBalanceNanos,
+        codingPlanTokens: finalTargetTokens,
+        balanceType: "tokens" as const,
+      };
+    } else if (balanceType === "payg") {
+      const targetUsd = (targetAmountNanos / 1_000_000_000).toFixed(2);
       const diffNanos = targetAmountNanos - currentPaygBalanceNanos;
       await tx
         .update(creditAccounts)
@@ -6976,9 +7676,11 @@ export async function setAdminAccountCredit(input: {
         diffNanos,
         balanceNanos: currentBalanceNanos,
         paygBalanceNanos: targetAmountNanos,
+        codingPlanTokens: currentCodingTokens,
         balanceType: "payg" as const,
       };
     } else {
+      const targetUsd = (targetAmountNanos / 1_000_000_000).toFixed(2);
       const diffNanos = targetAmountNanos - currentBalanceNanos;
       await tx
         .update(creditAccounts)
@@ -7004,6 +7706,7 @@ export async function setAdminAccountCredit(input: {
         diffNanos,
         balanceNanos: targetAmountNanos,
         paygBalanceNanos: currentPaygBalanceNanos,
+        codingPlanTokens: currentCodingTokens,
         balanceType: "bundle" as const,
       };
     }
@@ -8511,22 +9214,24 @@ export async function ensureImageSemanticDescriptionsTable() {
 }
 
 export async function getImageSemanticDescription(imageHash: string): Promise<string | null> {
-  await ensureImageSemanticDescriptionsTable();
-  const db = await getDb();
-  if (!db) return null;
-  try {
-    const rows = await db
-      .select({ description: imageSemanticDescriptions.description })
-      .from(imageSemanticDescriptions)
-      .where(eq(imageSemanticDescriptions.imageHash, imageHash))
-      .limit(1);
-    if (rows && rows.length > 0 && rows[0].description) {
-      return rows[0].description;
+  return cached(`img_desc:${imageHash}`, 600_000, async () => {
+    await ensureImageSemanticDescriptionsTable();
+    const db = await getDb();
+    if (!db) return null;
+    try {
+      const rows = await db
+        .select({ description: imageSemanticDescriptions.description })
+        .from(imageSemanticDescriptions)
+        .where(eq(imageSemanticDescriptions.imageHash, imageHash))
+        .limit(1);
+      if (rows && rows.length > 0 && rows[0].description) {
+        return rows[0].description;
+      }
+    } catch (err) {
+      console.warn("[getImageSemanticDescription] error querying DB:", err);
     }
-  } catch (err) {
-    console.warn("[getImageSemanticDescription] error querying DB:", err);
-  }
-  return null;
+    return null;
+  });
 }
 
 export async function saveImageSemanticDescription(input: {
@@ -8537,6 +9242,7 @@ export async function saveImageSemanticDescription(input: {
   tokensUsed?: number;
 }): Promise<void> {
   await ensureImageSemanticDescriptionsTable();
+  bustCache(`img_desc:${input.imageHash}`);
   const db = await getDb();
   if (!db) return;
   try {

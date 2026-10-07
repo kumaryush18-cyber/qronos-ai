@@ -4,9 +4,8 @@ import type { Request, Response, NextFunction } from "express";
  * Validates whether an incoming HTTP Origin header is authorized.
  * - Non-browser or same-origin requests (no Origin header) are allowed.
  * - Explicit "null" origins (sandboxed iframes, opaque contexts) are blocked.
- * - Origins matching the request Host or X-Forwarded-Host are allowed.
+ * - Origins matching the request Host or explicitly configured APP_URL are allowed.
  * - Localhost and loopback IPs are allowed for local development.
- * - Trusted preview platforms (.run.app, .ai.studio, .web.app) and configured APP_URL are allowed.
  */
 export function isAllowedOrigin(origin: string | undefined, req: Request): boolean {
   if (!origin) return true;
@@ -16,8 +15,8 @@ export function isAllowedOrigin(origin: string | undefined, req: Request): boole
     const originUrl = new URL(origin);
     const originHost = originUrl.host.toLowerCase();
 
-    // 1. Compare against request host headers
-    const reqHost = (req.headers["x-forwarded-host"] || req.headers.host || "")
+    // 1. Compare strictly against authoritative request host (never untrusted X-Forwarded-Host)
+    const reqHost = (req.headers.host || "")
       .toString()
       .toLowerCase()
       .split(",")[0]
@@ -36,7 +35,7 @@ export function isAllowedOrigin(origin: string | undefined, req: Request): boole
       return true;
     }
 
-    // 3. Match explicitly declared application URLs in environment
+    // 3. Match explicitly declared canonical application URLs in environment
     const allowedEnvUrls = [
       process.env.APP_URL,
       process.env.VITE_APP_URL,
@@ -50,15 +49,6 @@ export function isAllowedOrigin(origin: string | undefined, req: Request): boole
           return true;
         }
       } catch {}
-    }
-
-    // 4. Allow trusted deployment and preview domains
-    if (
-      originHost.endsWith(".run.app") ||
-      originHost.endsWith(".ai.studio") ||
-      originHost.endsWith(".web.app")
-    ) {
-      return true;
     }
 
     return false;
@@ -92,7 +82,7 @@ export function createStrictCors(options: { allowCredentials?: boolean } = {}) {
     res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
     res.setHeader(
       "Access-Control-Allow-Headers",
-      "Content-Type, Authorization, x-admin-key, x-admin-secret, x-admin-passcode"
+      "Content-Type, Authorization, x-request-id"
     );
 
     if (req.method === "OPTIONS") {

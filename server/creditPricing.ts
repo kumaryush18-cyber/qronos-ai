@@ -13,7 +13,7 @@ export const TOKENFORGE_TOKEN_BASELINE = 11_000_000_000;
 export const TOKENFORGE_TOKEN_HISTORICAL = 0;
 
 function platformCreditRate(modelId: string, upstreamUsdPerMillion: number) {
-  if (modelId === "gpt-6-astra" || modelId === "claude-opus-5") {
+  if (modelId === "gpt-6-astra" || modelId === "claude-opus-5" || modelId === "claude-opus-5.5" || modelId === "gpt-6-sol") {
     return Number(upstreamUsdPerMillion.toFixed(6));
   }
   return Number((upstreamUsdPerMillion * TOKENFORGE_PLATFORM_CHARGE_MULTIPLIER).toFixed(6));

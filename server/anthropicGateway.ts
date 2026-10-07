@@ -45,6 +45,11 @@ import {
   finalizeProviderLabel,
   type ProviderRequestContext,
 } from "./openaiGateway";
+import {
+  isCacheDebugEnabled,
+  recordCacheDebugEvent,
+  generateSessionId,
+} from "./cacheDebugger";
 import { CLUSTER_PROTOCOL_PROVIDER_SLUG, getTokenForgeProviderSlug, isTokenForgeModelId, normalizeModelIdentifier, type TokenForgeModelId } from "./modelCatalogue";
 import { MultimodalRoutingError, payloadContainsVisualData, payloadContainsDocumentData, pruneOldImagesAndDeriveContent } from "./modelCapabilityRouter";
 
@@ -67,7 +72,7 @@ function readWithIdleTimeout(reader: ReadableStreamDefaultReader<Uint8Array>) {
 }
 
 export function providerResponseStartTimeoutMs(model: TokenForgeModelId) {
-  return model === "claude-opus-5" || model === "gpt-6-astra"
+  return model === "claude-opus-5" || model === "claude-opus-5.5" || model === "gpt-6-astra" || model === "gpt-6-sol"
     ? CLAUDE_OPUS5_RESPONSE_START_TIMEOUT_MS
     : PROVIDER_TIMEOUT_MS;
 }
@@ -78,7 +83,7 @@ type AnthropicBlock = { type?: unknown; text?: unknown; id?: unknown; name?: unk
 // TokenRouter exposes the validated Claude routes through OpenAI-compatible Chat
 // Completions. Keep both customer-facing Claude models on the same converter so
 // Claude Code receives consistent Anthropic response, tool, and SSE semantics.
-const OPENAI_TRANSLATED_MESSAGES_MODELS = new Set(["qwen3.8-27b", "qwen3.8-max", "claude-fable-5.1", "claude-fable-5", "claude-opus-5", "glm-5.3", "claude-sonnet-4.6", "deepseek-v4-pro", "gpt-6-astra", "kimi-k3"]);
+const OPENAI_TRANSLATED_MESSAGES_MODELS = new Set(["qwen3.8-27b", "qwen3.8-max", "claude-fable-5.1", "claude-fable-5", "claude-opus-5", "claude-opus-5.5", "gpt-6-sol", "glm-5.3", "claude-sonnet-4.6", "deepseek-v4-pro", "gpt-6-astra", "kimi-k3"]);
 
 type NativeTokenRouterMessagesInput = {
   model: "claude-fable-5.1";
@@ -162,12 +167,11 @@ export function prepareNativeTokenRouterMessagesRequest(raw: AnthropicRequest): 
   const maxTokens = typeof raw.max_tokens === "number" ? raw.max_tokens : undefined;
   const model = raw.model as NativeTokenRouterMessagesInput["model"];
   const startGuidance = String(modelScopedGuidanceAnchor(model, "start").content ?? "");
-  const endGuidance = String(modelScopedGuidanceAnchor(model, "end").content ?? "");
   const system = raw.system === undefined
-    ? endGuidance
+    ? startGuidance
     : typeof raw.system === "string"
-      ? `${startGuidance}\n\n${raw.system}\n\n${endGuidance}`
-      : [{ type: "text", text: startGuidance }, ...raw.system, { type: "text", text: `\n\n${endGuidance}` }];
+      ? `${startGuidance}\n\n${raw.system}`
+      : [{ type: "text", text: startGuidance }, ...raw.system];
   return { ...raw, model, messages: raw.messages, system, stream, max_tokens: maxTokens, reasoning_effort: "xhigh" as const };
 }
 
@@ -212,6 +216,24 @@ export function translateAnthropicRequest(raw: AnthropicRequest, privateGlmToolC
 
   const messages: TokenForgeChatMessage[] = [];
   const systemInstructions: string[] = raw.system === undefined ? [] : [systemToText(raw.system)];
+
+  // Helper to append a user turn without creating consecutive user messages,
+  // merging adjacent user text or inlined system reminders smoothly.
+  function appendUserTurn(content: string | unknown[]) {
+    if (messages.length > 0 && messages[messages.length - 1].role === "user") {
+      const prev = messages[messages.length - 1];
+      if (typeof prev.content === "string" && typeof content === "string") {
+        prev.content = `${prev.content}\n\n${content}`;
+        return;
+      }
+      const prevParts = typeof prev.content === "string" ? [{ type: "text", text: prev.content }] : Array.isArray(prev.content) ? [...prev.content] : [];
+      const newParts = typeof content === "string" ? [{ type: "text", text: content }] : Array.isArray(content) ? content : [];
+      prev.content = [...prevParts, ...newParts];
+      return;
+    }
+    messages.push({ role: "user", content: content as any });
+  }
+
   for (let messageIndex = 0; messageIndex < raw.messages.length; messageIndex += 1) {
     const candidate = raw.messages[messageIndex];
     if (!candidate || typeof candidate !== "object") throw new AnthropicBridgeError(400, "invalid_request_error", `messages[${messageIndex}] must be an object.`);
@@ -219,19 +241,29 @@ export function translateAnthropicRequest(raw: AnthropicRequest, privateGlmToolC
     if (message.role === "system" || message.role === "developer") {
       const instruction = contentToText(message.content).trim();
       if (!instruction) throw new AnthropicBridgeError(400, "invalid_request_error", `messages[${messageIndex}].content must contain instruction text.`);
-      systemInstructions.push(instruction);
+      // If this is the root first message and no raw.system was specified, it becomes the root system instruction
+      if (messageIndex === 0 && systemInstructions.length === 0) {
+        systemInstructions.push(instruction);
+      } else {
+        // In-line mid-conversation system reminders without creating consecutive user turns or mutating messages[0]
+        appendUserTurn(`<system-reminder>\n${instruction}\n</system-reminder>`);
+      }
       continue;
     }
     if (message.role === "tool" || message.role === "function") {
       const result = contentToText(message.content).trim();
       if (!result) throw new AnthropicBridgeError(400, "invalid_request_error", `messages[${messageIndex}].content must contain tool output.`);
       const label = message.role === "tool" ? "Tool result" : "Function result";
-      messages.push({ role: "user", content: `[${label}]\n${result}` });
+      appendUserTurn(`[${label}]\n${result}`);
       continue;
     }
     if (message.role !== "user" && message.role !== "assistant") throw new AnthropicBridgeError(400, "invalid_request_error", `messages[${messageIndex}] must be user or assistant.`);
     if (typeof message.content === "string") {
-      messages.push({ role: message.role, content: message.content });
+      if (message.role === "user") {
+        appendUserTurn(message.content);
+      } else {
+        messages.push({ role: message.role, content: message.content });
+      }
       continue;
     }
     if (!Array.isArray(message.content)) throw new AnthropicBridgeError(400, "invalid_request_error", `messages[${messageIndex}].content must be a string or content-block array.`);
@@ -337,9 +369,9 @@ export function translateAnthropicRequest(raw: AnthropicRequest, privateGlmToolC
           const parts: unknown[] = [];
           if (text) parts.push({ type: "text", text });
           parts.push(...imageParts);
-          messages.push({ role: "user", content: parts } as TokenForgeChatMessage);
+          appendUserTurn(parts);
         } else if (text) {
-          messages.push({ role: "user", content: text });
+          appendUserTurn(text);
         }
         continue;
       }
@@ -350,9 +382,9 @@ export function translateAnthropicRequest(raw: AnthropicRequest, privateGlmToolC
         const parts: unknown[] = [];
         if (combinedText) parts.push({ type: "text", text: combinedText });
         parts.push(...imageParts);
-        messages.push({ role: "user", content: parts } as TokenForgeChatMessage);
+        appendUserTurn(parts);
       } else {
-        messages.push({ role: "user", content: combinedText });
+        appendUserTurn(combinedText);
       }
     }
   }
@@ -378,6 +410,8 @@ export function translateAnthropicRequest(raw: AnthropicRequest, privateGlmToolC
     stream: raw.stream === true,
     ...(maxTokens !== undefined ? { max_tokens: maxTokens } : {}),
     ...(temperature !== undefined ? { temperature } : {}),
+    ...((raw as any).reasoning_effort ? { reasoning_effort: (raw as any).reasoning_effort } : {}),
+    ...((raw as any).reasoningEffort ? { reasoning_effort: (raw as any).reasoningEffort } : {}),
     // This bridge policy is deliberately model-scoped and not caller-configurable.
     ...(model === "kimi-k3" ? { reasoning_effort: "max" } : {}),
     ...(model === "claude-fable-5.1" ? { reasoning_effort: "xhigh" } : {}),
@@ -546,7 +580,8 @@ async function handleNativeTokenRouterMessagesRequest(req: Request, res: Respons
   if (!quota) return respondError(res, requestId, 503, "api_error", "Account status is temporarily unavailable. Retry shortly.");
   if (quota.suspended) return respondError(res, requestId, 403, "permission_error", "This account is currently suspended.");
 
-  const keyGroup = ((key as any).keyGroup as "payg" | "bundle") || "bundle";
+  const keyGroup = ((key as any).keyGroup as "payg" | "bundle" | "token_plan" | "tokens" | "coding_plan") || "bundle";
+  const isTokenPlan = keyGroup === "token_plan" || keyGroup === "tokens" || keyGroup === "coding_plan";
   const pricingTier: PricingTier = keyGroup === "payg" ? "payg" : "bundle";
   const creditsEnabled = await isUserCreditsEnabled(key.userId);
   if (keyGroup === "bundle" && !creditsEnabled) {
@@ -555,11 +590,20 @@ async function handleNativeTokenRouterMessagesRequest(req: Request, res: Respons
       requestId,
       403,
       "permission_error",
-      "Credit bundle system is currently disabled for this account. Please use a Tier 1 (Pay-As-You-Go) API key."
+      "Credit bundle system is currently disabled for this account. Please use a Tier 1 (Pay-As-You-Go) or Tier 2 (Token Plan) API key."
     );
   }
 
   const modelAccess = await getModelAccess(model);
+  if (isTokenPlan && !modelAccess.isTokenPlan) {
+    return respondError(
+      res,
+      requestId,
+      403,
+      "permission_error",
+      `Access denied: The model '${model}' does not have the Token Plan tag enabled. Please ask an administrator to enable the Token Plan tag for '${model}', or use a PAYG / standard API key.`
+    );
+  }
   if (keyGroup === "payg" && !modelAccess.isPayg) {
     return respondError(
       res,
@@ -575,14 +619,26 @@ async function handleNativeTokenRouterMessagesRequest(req: Request, res: Respons
       requestId,
       403,
       "permission_error",
-      `Access denied: The model '${model}' is not enabled for Tier 2 (Credit Bundles) access. Please generate and use a Tier 1 (Pay-As-You-Go) API key.`
+      `Access denied: The model '${model}' is not enabled for Tier 2 (Credit Bundles) access. Please generate and use a Tier 1 (Pay-As-You-Go) or Token Plan API key.`
     );
   }
 
   const estimatedInputTokens = estimateNativeAnthropicInputTokens(input);
   const reservedNanos = calculateCreditChargeNanos(model, estimatedInputTokens, normalizedBillableMaxOutputTokens(input.max_tokens), pricingTier);
   const reservation = await reserveCredit(key.userId, reservedNanos, requestId, { keyGroup });
-  if (!reservation.authorized) return respondError(res, requestId, 402, "permission_error", "Your TokenForge promotional credit balance cannot cover this request’s maximum estimated cost.");
+  if (!reservation.authorized) {
+    return respondError(
+      res,
+      requestId,
+      402,
+      "permission_error",
+      isTokenPlan
+        ? "Your Token Plan (Coding Tokens) balance is exhausted (0 tokens remaining). Please top up your coding tokens in your dashboard."
+        : keyGroup === "payg"
+        ? "Your Pay-As-You-Go (PAYG) balance cannot cover this request’s maximum estimated cost. Please top up your PAYG balance in your dashboard."
+        : "Your TokenForge promotional credit balance cannot cover this request’s maximum estimated cost. Please purchase a credit package or recharge in your dashboard."
+    );
+  }
 
   const aborter = new AbortController();
   const timeout = setTimeout(() => aborter.abort(), providerResponseStartTimeoutMs(model));
@@ -633,7 +689,14 @@ async function handleNativeTokenRouterMessagesRequest(req: Request, res: Respons
     const outputText = response.content?.map(c => typeof c === "object" && c && "text" in c ? (c as { text: string }).text : "").join("\n") ?? "";
     const tokens = normalizedTokens(usageFrom(response), estimatedInputTokens, outputText);
     const chargeNanos = calculateCreditChargeNanos(model, tokens.inputTokens, tokens.outputTokens, pricingTier);
-    const settlement = await settleReservedCredit({ userId: key.userId, requestId, reservedNanos, finalChargeNanos: chargeNanos, keyGroup });
+    const settlement = await settleReservedCredit({
+      userId: key.userId,
+      requestId,
+      reservedNanos,
+      finalChargeNanos: chargeNanos,
+      usedTokens: tokens.totalTokens ?? (tokens.inputTokens + tokens.outputTokens),
+      keyGroup,
+    });
     await recordUsage({ requestId, userId: key.userId, apiKeyId: key.id, modelId: model, source: "api", stream: false, status: "success", ...tokens, chargeNanos: settlement.chargedNanos, sourceIpHash: ipHash, provider: finalizeProviderLabel(providerLabel, multimodalTag || isMultimodal), latencyMs: Date.now() - startedAt });
     res.setHeader("request-id", requestId);
     res.setHeader("x-request-id", requestId);
@@ -761,7 +824,8 @@ export function registerAnthropicMessagesGateway(app: Express) {
     };
     if (!(await isModelAvailable(model))) return respondError(res, requestId, 503, "api_error", "The requested model is temporarily unavailable. Retry shortly or choose another available model.");
 
-    const keyGroup = ((key as any).keyGroup as "payg" | "bundle") || "bundle";
+    const keyGroup = ((key as any).keyGroup as "payg" | "bundle" | "token_plan" | "tokens" | "coding_plan") || "bundle";
+    const isTokenPlan = keyGroup === "token_plan" || keyGroup === "tokens" || keyGroup === "coding_plan";
     const pricingTier: PricingTier = keyGroup === "payg" ? "payg" : "bundle";
     const creditsEnabled = await isUserCreditsEnabled(key.userId);
 
@@ -771,11 +835,21 @@ export function registerAnthropicMessagesGateway(app: Express) {
         requestId,
         403,
         "permission_error",
-        "Credit bundle system is currently disabled for this account. Please use a Tier 1 (Pay-As-You-Go) API key."
+        "Credit bundle system is currently disabled for this account. Please use a Tier 1 (Pay-As-You-Go) or Tier 2 (Token Plan) API key."
       );
     }
 
     const modelAccess = await getModelAccess(model);
+
+    if (isTokenPlan && !modelAccess.isTokenPlan) {
+      return respondError(
+        res,
+        requestId,
+        403,
+        "permission_error",
+        `Access denied: The model '${model}' does not have the Token Plan tag enabled. Please ask an administrator to enable the Token Plan tag for '${model}', or use a PAYG / standard API key.`
+      );
+    }
 
     if (keyGroup === "payg" && !modelAccess.isPayg) {
       return respondError(
@@ -793,7 +867,7 @@ export function registerAnthropicMessagesGateway(app: Express) {
         requestId,
         403,
         "permission_error",
-        `Access denied: The model '${model}' is not enabled for Tier 2 (Credit Bundles) access. Please generate and use a Tier 1 (Pay-As-You-Go) API key.`
+        `Access denied: The model '${model}' is not enabled for Tier 2 (Credit Bundles) access. Please generate and use a Tier 1 (Pay-As-You-Go) or Token Plan API key.`
       );
     }
 
@@ -832,7 +906,9 @@ export function registerAnthropicMessagesGateway(app: Express) {
         requestId,
         402,
         "permission_error",
-        keyGroup === "payg"
+        isTokenPlan
+          ? "Your Token Plan (Coding Tokens) balance is exhausted (0 tokens remaining). Please top up your coding tokens in your dashboard."
+          : keyGroup === "payg"
           ? "Your Pay-As-You-Go (PAYG) balance cannot cover this request’s maximum estimated cost. Please top up your PAYG balance in your dashboard."
           : "Your TokenForge credit bundle balance cannot cover this request’s maximum estimated cost. Please purchase a credit package or recharge in your dashboard."
       );
@@ -850,11 +926,19 @@ export function registerAnthropicMessagesGateway(app: Express) {
     const multimodalTag = isVisual
       ? visualAnalysis.analysis.tag
       : (isDocument ? "(document)" : "");
+    const rawBodyString = typeof (req as any).rawBody === "object" && (req as any).rawBody ? (req as any).rawBody.toString("utf-8") : JSON.stringify(raw);
+    const firstUserMsg = Array.isArray(raw.messages) ? raw.messages.find(m => m?.role === "user")?.content : undefined;
+    const firstUserText = typeof firstUserMsg === "string" ? firstUserMsg : Array.isArray(firstUserMsg) ? (firstUserMsg.find((p: any) => p?.type === "text")?.text || "") : "";
+    const sessionId = generateSessionId(key.userId, firstUserText);
+
     const providerContext: ProviderRequestContext = {
       userId: key.userId,
       providerLabel: undefined,
       isMultimodal,
       multimodalTag,
+      incomingBodyString: rawBodyString,
+      sessionId,
+      source: "api_anthropic",
     };
     try {
       upstream = await forwardProviderRequest(model, upstreamInput, aborter.signal, providerContext);
@@ -916,8 +1000,33 @@ export function registerAnthropicMessagesGateway(app: Express) {
         const outputText = response.content?.map(c => typeof c === "object" && c && "text" in c ? (c as { text: string }).text : "").join("\n") ?? "";
         const tokens = normalizedTokens(usageFrom(payload), estimatedInputTokens, outputText);
         const chargeNanos = calculateCreditChargeNanos(model, tokens.inputTokens, tokens.outputTokens, pricingTier);
-        const settlement = await settleReservedCredit({ userId: key.userId, requestId, reservedNanos, finalChargeNanos: chargeNanos, keyGroup });
+        const settlement = await settleReservedCredit({
+          userId: key.userId,
+          requestId,
+          reservedNanos,
+          finalChargeNanos: chargeNanos,
+          usedTokens: tokens.totalTokens ?? (tokens.inputTokens + tokens.outputTokens),
+          keyGroup,
+        });
         await recordUsage({ requestId, userId: key.userId, apiKeyId: key.id, modelId: model, source: "api", stream: false, status: "success", ...tokens, chargeNanos: settlement.chargedNanos, sourceIpHash: ipHash, provider: finalizeProviderLabel(providerContext.providerLabel, providerContext), latencyMs: Date.now() - startedAt });
+        if (isCacheDebugEnabled()) {
+          const usageReported = usageFrom(payload);
+          const cached = Number((usageReported as any).cached_tokens ?? (usageReported as any).prompt_tokens_details?.cached_tokens ?? (usageReported as any).cache_read_input_tokens ?? 0);
+          recordCacheDebugEvent({
+            sessionId,
+            model: String(model),
+            providerLabel: finalizeProviderLabel(providerContext.providerLabel, providerContext) || "unknown",
+            source: "api_anthropic",
+            incomingBody: rawBodyString,
+            upstreamBody: providerContext.capturedUpstreamBodyString || JSON.stringify(upstreamInput),
+            promptTokens: tokens.inputTokens ?? estimatedInputTokens,
+            cachedTokens: cached,
+            completionTokens: tokens.outputTokens ?? 0,
+            totalTokens: tokens.totalTokens ?? (tokens.inputTokens + tokens.outputTokens),
+            latencyMs: Date.now() - startedAt,
+            status: upstream.status,
+          });
+        }
         res.setHeader("request-id", requestId);
         res.setHeader("x-request-id", requestId);
         res.setHeader("x-tokenforge-credit-balance", String(settlement.balanceNanos));
@@ -1068,8 +1177,33 @@ export function registerAnthropicMessagesGateway(app: Express) {
       }
       const tokens = normalizedTokens(usage, estimatedInputTokens, streamedOutputText);
       const chargeNanos = failed ? 0 : calculateCreditChargeNanos(model, tokens.inputTokens, tokens.outputTokens, pricingTier);
-      const settlement = await settleReservedCredit({ userId: key.userId, requestId, reservedNanos, finalChargeNanos: chargeNanos, keyGroup, releaseReason: failed ? "Anthropic Messages stream was cancelled" : undefined });
+      const settlement = await settleReservedCredit({
+        userId: key.userId,
+        requestId,
+        reservedNanos,
+        finalChargeNanos: chargeNanos,
+        usedTokens: tokens.totalTokens ?? (tokens.inputTokens + tokens.outputTokens),
+        keyGroup,
+        releaseReason: failed ? "Anthropic Messages stream was cancelled" : undefined,
+      });
       await recordUsage({ requestId, userId: key.userId, apiKeyId: key.id, modelId: model, source: "api", stream: true, status: failed ? "cancelled" : "success", ...tokens, chargeNanos: settlement.chargedNanos, sourceIpHash: ipHash, provider: finalizeProviderLabel(providerContext.providerLabel, providerContext), latencyMs: Date.now() - startedAt, errorMessage: failed ? (failedMessage ?? "The selected provider stream was cancelled.") : undefined });
+      if (isCacheDebugEnabled()) {
+        const cached = Number((usage as any).cached_tokens ?? (usage as any).prompt_tokens_details?.cached_tokens ?? (usage as any).cache_read_input_tokens ?? 0);
+        recordCacheDebugEvent({
+          sessionId,
+          model: String(model),
+          providerLabel: finalizeProviderLabel(providerContext.providerLabel, providerContext) || "unknown",
+          source: "api_anthropic",
+          incomingBody: rawBodyString,
+          upstreamBody: providerContext.capturedUpstreamBodyString || JSON.stringify(upstreamInput),
+          promptTokens: tokens.inputTokens ?? estimatedInputTokens,
+          cachedTokens: cached,
+          completionTokens: tokens.outputTokens ?? 0,
+          totalTokens: tokens.totalTokens ?? (tokens.inputTokens + tokens.outputTokens),
+          latencyMs: Date.now() - startedAt,
+          status: upstream?.status ?? 200,
+        });
+      }
       if (!failed && (await isUserMessageLoggingEnabled(key.userId))) {
         void recordUserInteractionLog({
           userId: key.userId,

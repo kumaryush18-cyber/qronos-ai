@@ -90,3 +90,119 @@ export const CRYPTO_TIERS: CryptoTier[] = [
   { id: "crypto_100", name: "Power Plan", usd: 100, credits: 40000, creditsNanos: 40000 * 1_000_000_000 },
   { id: "crypto_200", name: "Ultra Plan", usd: 200, credits: 100000, creditsNanos: 100000 * 1_000_000_000 },
 ];
+
+export interface CodingPlanTier {
+  id: string;
+  name: string;
+  tokens: number;
+  tokensMillions: number;
+  amountUsd: number;
+  amountInr: number;
+  scanAmountUsd: number;
+  scanAmountInr: number;
+  popular?: boolean;
+  badge?: string;
+  description: string;
+  features: string[];
+}
+
+export const CODING_PLAN_TIERS: CodingPlanTier[] = [
+  {
+    id: "coding_starter_25",
+    name: "Coding Starter",
+    tokens: 250_000_000,
+    tokensMillions: 250,
+    amountUsd: 25,
+    amountInr: 2400,
+    scanAmountUsd: 26,
+    scanAmountInr: 2496,
+    popular: true,
+    badge: "MOST POPULAR",
+    description: "250 Million tokens · 10M tokens / $1 · Designed for daily software engineering and agent loops",
+    features: [
+      "250 Million tokens dedicated quota",
+      "Claude Opus 5, Sonnet 4.6 & 3.7",
+      "GLM 5.3, Qwen 3.8 Max, DeepSeek V4 Pro",
+      "GPT-6 Astra & Kimi K3 Coder",
+      "Full tool-use & multi-file coding context",
+      "Zero monthly expiry while account active",
+    ],
+  },
+  {
+    id: "coding_pro_50",
+    name: "Coding Pro",
+    tokens: 500_000_000,
+    tokensMillions: 500,
+    amountUsd: 50,
+    amountInr: 4800,
+    scanAmountUsd: 51,
+    scanAmountInr: 4896,
+    popular: false,
+    badge: "BEST VALUE",
+    description: "500 Million tokens · Heavy engineering, multi-repo indexing, and large contexts",
+    features: [
+      "500 Million tokens dedicated quota",
+      "Priority upstream provider throughput",
+      "All coding, reasoning & frontier models",
+      "High-concurrency parallel stream dispatch",
+      "Sub-10ms edge routing & load balancing",
+      "Dedicated pinned provider option",
+    ],
+  },
+  {
+    id: "coding_power_100",
+    name: "Coding Power",
+    tokens: 1_000_000_000,
+    tokensMillions: 1000,
+    amountUsd: 100,
+    amountInr: 9600,
+    scanAmountUsd: 101,
+    scanAmountInr: 9696,
+    popular: false,
+    badge: "TEAM SCALE",
+    description: "1.0 Billion tokens · High-throughput teams, auto-refactoring, and automated CI pipelines",
+    features: [
+      "1,000 Million (1 Billion) tokens",
+      "Maximum concurrency allocation",
+      "Enterprise VIP failover routing",
+      "Multi-agent swarm continuous runs",
+      "Team-wide API key sharing support",
+      "Zero rate limit throttling",
+    ],
+  },
+  {
+    id: "coding_ultra_200",
+    name: "Coding Ultra",
+    tokens: 2_200_000_000,
+    tokensMillions: 2200,
+    amountUsd: 200,
+    amountInr: 19200,
+    scanAmountUsd: 201,
+    scanAmountInr: 19296,
+    popular: false,
+    badge: "+200M BONUS",
+    description: "2.2 Billion tokens · Includes 200M bonus tokens · Maximum compute capacity for enterprises",
+    features: [
+      "2.2 Billion tokens (Includes 200M bonus)",
+      "Maximum cluster priority & bandwidth",
+      "Enterprise SLA & dedicated support",
+      "Continuous autonomous agents",
+      "Unlimited prompt caching support",
+    ],
+  },
+];
+
+export function getCodingPlanTier(idOrUsd: string | number): CodingPlanTier | undefined {
+  if (typeof idOrUsd === "number") {
+    return CODING_PLAN_TIERS.find((t) => t.amountUsd === idOrUsd || t.tokensMillions === idOrUsd);
+  }
+  const clean = String(idOrUsd || "").trim().toLowerCase();
+  return CODING_PLAN_TIERS.find(
+    (t) =>
+      t.id.toLowerCase() === clean ||
+      t.name.toLowerCase() === clean ||
+      String(t.amountUsd) === clean ||
+      String(t.tokensMillions) === clean
+  );
+}
+

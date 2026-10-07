@@ -29,7 +29,8 @@ Format your output cleanly in markdown without conversational filler (do NOT say
 
 // In-memory LRU cache
 const MAX_CACHE_SIZE = 5000;
-const _memoryCache = new Map<string, { description: string; cachedAt: number }>();
+const NEGATIVE_CACHE_TTL_MS = 300_000; // 5 minutes for negative cache
+const _memoryCache = new Map<string, { description: string | null; cachedAt: number }>();
 
 // In-flight deduplication to prevent duplicate concurrent upstream distillation calls
 const _inFlightDistillations = new Map<string, Promise<string | null>>();
@@ -58,17 +59,19 @@ export function getCachedImageDescriptionSync(imageHash: string): string | null 
 export async function getImageSemanticDescriptionWithCache(imageHash: string): Promise<string | null> {
   if (!imageHash) return null;
 
-  // 1. Check memory cache
+  // 1. Check memory cache (including cached nulls within TTL)
   const mem = _memoryCache.get(imageHash);
-  if (mem) return mem.description;
+  if (mem) {
+    if (mem.description !== null || Date.now() - mem.cachedAt < NEGATIVE_CACHE_TTL_MS) {
+      return mem.description;
+    }
+  }
 
   // 2. Check persistent database
   try {
     const dbDescription = await getImageSemanticDescription(imageHash);
-    if (dbDescription) {
-      setMemoryCache(imageHash, dbDescription);
-      return dbDescription;
-    }
+    setMemoryCache(imageHash, dbDescription ?? null);
+    return dbDescription ?? null;
   } catch (err) {
     console.warn("[SemanticDistillation] Error reading from DB cache:", err);
   }
@@ -76,7 +79,7 @@ export async function getImageSemanticDescriptionWithCache(imageHash: string): P
   return null;
 }
 
-function setMemoryCache(imageHash: string, description: string): void {
+function setMemoryCache(imageHash: string, description: string | null): void {
   if (_memoryCache.size >= MAX_CACHE_SIZE) {
     const oldestKey = _memoryCache.keys().next().value;
     if (oldestKey) _memoryCache.delete(oldestKey);

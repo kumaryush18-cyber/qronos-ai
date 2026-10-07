@@ -1,6 +1,7 @@
 node_modules
 dist
 .git
+.github
 *.sql
 *.sql.gz
 manus_data.sql
@@ -8,4 +9,10 @@ manus_filtered.sql
 missing_final.sql
 missing_tables.sql
 import_to_aiven.mjs
-.git
+.env
+.env.*
+*.test.ts
+*.test.tsx
+audit-notes.md
+*.md
+

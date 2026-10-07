@@ -247,10 +247,12 @@ export function InferenceControlsSection({
   onModelQueryChange,
   onProviderToggle,
   onProviderVisionToggle,
+  onProviderDocumentsToggle,
   onModelToggle,
   onModelTierChange,
   onModelPaygToggle,
   onModelBundleToggle,
+  onModelTokenPlanToggle,
   providerPending,
   providerVisionPending,
   providerDocumentsPending,
@@ -258,6 +260,7 @@ export function InferenceControlsSection({
   modelTierPending,
   modelPaygPending,
   modelBundlePending,
+  modelTokenPlanPending,
 }: {
   providers: Array<{ slug: string; displayName: string; enabled: boolean; supportsVision?: boolean; supportsDocuments?: boolean }>;
   models: ManagedModelOverviewItem[];
@@ -271,6 +274,7 @@ export function InferenceControlsSection({
   onModelTierChange?: (modelId: string, minTier: UserTier) => void;
   onModelPaygToggle?: (modelId: string, isPayg: boolean) => void;
   onModelBundleToggle?: (modelId: string, isBundle: boolean) => void;
+  onModelTokenPlanToggle?: (modelId: string, isTokenPlan: boolean) => void;
   providerPending: boolean;
   providerVisionPending?: boolean;
   providerDocumentsPending?: boolean;
@@ -278,14 +282,16 @@ export function InferenceControlsSection({
   modelTierPending?: boolean;
   modelPaygPending?: boolean;
   modelBundlePending?: boolean;
+  modelTokenPlanPending?: boolean;
 }) {
-  const [tierFilter, setTierFilter] = React.useState<"all" | "free" | "paid" | "payg" | "bundle">("all");
+  const [tierFilter, setTierFilter] = React.useState<"all" | "free" | "paid" | "token_plan" | "payg" | "bundle">("all");
 
   const telemetryFor = (providerSlug: string) =>
     telemetry.find((provider) => provider.providerSlug === providerSlug);
 
   const freeCount = models.filter((m) => (m.minTier || "free") === "free").length;
   const paidCount = models.length - freeCount;
+  const tokenPlanCount = models.filter((m) => Boolean(m.isTokenPlan)).length;
   const paygCount = models.filter((m) => Boolean(m.isPayg)).length;
   const bundleCount = models.filter((m) => m.isBundle !== false).length;
 
@@ -294,6 +300,7 @@ export function InferenceControlsSection({
     const isFree = (model.minTier || "free") === "free";
     if (tierFilter === "free") return matchesSearch && isFree;
     if (tierFilter === "paid") return matchesSearch && !isFree;
+    if (tierFilter === "token_plan") return matchesSearch && Boolean(model.isTokenPlan);
     if (tierFilter === "payg") return matchesSearch && Boolean(model.isPayg);
     if (tierFilter === "bundle") return matchesSearch && model.isBundle !== false;
     return matchesSearch;
@@ -416,6 +423,15 @@ export function InferenceControlsSection({
               </button>
               <button
                 type="button"
+                onClick={() => setTierFilter("token_plan")}
+                className={`rounded px-2.5 py-1 text-[11px] font-medium transition-colors ${
+                  tierFilter === "token_plan" ? "bg-cyan-500/20 text-cyan-300 shadow-sm" : "text-[#858697] hover:text-cyan-400"
+                }`}
+              >
+                Token Plan ({tokenPlanCount})
+              </button>
+              <button
+                type="button"
                 onClick={() => setTierFilter("payg")}
                 className={`rounded px-2.5 py-1 text-[11px] font-medium transition-colors ${
                   tierFilter === "payg" ? "bg-rose-500/20 text-rose-300 shadow-sm" : "text-[#858697] hover:text-rose-400"
@@ -441,6 +457,7 @@ export function InferenceControlsSection({
               const isPaid = currentTier !== "free";
               const isPayg = Boolean(model.isPayg);
               const isBundle = model.isBundle !== false;
+              const isTokenPlan = Boolean(model.isTokenPlan);
               return (
                 <div
                   key={model.modelId}
@@ -453,6 +470,11 @@ export function InferenceControlsSection({
                         {isPaid && <Lock size={9} />}
                         {tierConfig.badge}
                       </span>
+                      {isTokenPlan && (
+                        <span className="inline-flex items-center gap-1 rounded border border-cyan-500/40 bg-cyan-500/15 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-cyan-300">
+                          Token Plan
+                        </span>
+                      )}
                       {isPayg && (
                         <span className="inline-flex items-center gap-1 rounded border border-rose-500/40 bg-rose-500/15 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-rose-300">
                           PAYG
@@ -469,6 +491,22 @@ export function InferenceControlsSection({
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
+                    {/* Token Plan Toggle Button */}
+                    <button
+                      type="button"
+                      onClick={() => onModelTokenPlanToggle?.(model.modelId, !isTokenPlan)}
+                      disabled={modelTokenPlanPending}
+                      title={isTokenPlan ? "Click to disable Token Plan access" : "Click to enable Token Plan access (Tier 2 API keys)"}
+                      className={`inline-flex items-center gap-1.5 px-2 py-1 rounded text-[10px] font-semibold transition-colors cursor-pointer border ${
+                        isTokenPlan
+                          ? "bg-cyan-500/20 text-cyan-300 border-cyan-500/40 hover:bg-cyan-500/30"
+                          : "bg-white/5 text-neutral-400 border-white/10 hover:bg-white/10 hover:text-white"
+                      }`}
+                    >
+                      <span className={`w-1.5 h-1.5 rounded-full ${isTokenPlan ? "bg-cyan-400 animate-pulse" : "bg-neutral-500"}`} />
+                      <span>{isTokenPlan ? "Token Plan Active" : "+ Token Plan"}</span>
+                    </button>
+
                     {/* PAYG Toggle Button */}
                     <button
                       type="button"

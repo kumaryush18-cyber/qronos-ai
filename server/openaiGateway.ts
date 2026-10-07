@@ -117,6 +117,10 @@ import {
   TOKENFORGE_MODEL_CATALOGUE,
   type TokenForgeModelId,
 } from "./modelCatalogue";
+import {
+  getUniversalModelRuntimeConfig,
+  isUniversalModelConfigured,
+} from "./universalModelProviders";
 import { sdk } from "./_core/sdk";
 
 export let TOKENFORGE_CATALOGUE = getDynamicModelCatalogue().map(model => ({
@@ -194,6 +198,8 @@ export function isPromptExtractionOrAdversarialAttack(text: string): boolean {
   return false;
 }
 const STRICT_PUBLIC_MANAGED_MODELS = new Set<TokenForgeModelId>([
+  "claude-opus-5.5",
+  "gpt-6-sol",
   "claude-opus-5",
   "claude-fable-5.1",
   "glm-5.3",
@@ -202,6 +208,12 @@ const STRICT_PUBLIC_MANAGED_MODELS = new Set<TokenForgeModelId>([
   "qwen3.8-max",
   "gpt-6-astra",
 ]);
+
+import {
+  isCacheDebugEnabled,
+  recordCacheDebugEvent,
+  generateSessionId,
+} from "./cacheDebugger";
 
 export type TokenForgeChatMessage = { role?: string; content?: unknown };
 type ChatMessage = TokenForgeChatMessage;
@@ -215,6 +227,10 @@ export type ProviderRequestContext = {
   isMultimodal?: boolean;
   multimodalTag?: string;
   rawErrorMessage?: string;
+  incomingBodyString?: string;
+  capturedUpstreamBodyString?: string;
+  sessionId?: string;
+  source?: "api_anthropic" | "api_openai" | "playground";
 };
 
 /**
@@ -316,8 +332,12 @@ export function modelScopedGuidanceAnchor(model: TokenForgeModelId, position: "s
   return modelScopedGuidance(model);
 }
 
-export function withModelScopedGuidance(model: TokenForgeModelId, messages: TokenForgeChatMessage[]) {
+export function withModelScopedGuidance(model: TokenForgeModelId, messages: TokenForgeChatMessage[]): TokenForgeChatMessage[] {
+  if (!messages || messages.length === 0) return messages;
+
   if (
+    model !== "claude-opus-5.5" &&
+    model !== "gpt-6-sol" &&
     model !== "claude-opus-5" &&
     model !== "claude-fable-5.1" &&
     model !== "glm-5.3" &&
@@ -329,22 +349,46 @@ export function withModelScopedGuidance(model: TokenForgeModelId, messages: Toke
     return messages;
   }
 
-  const suppliedSystemMessages = messages.filter(message => message.role === "system");
-  const conversationalMessages = messages.filter(message => message.role !== "system");
+  const staticPrefix = String(modelScopedGuidance(model).content ?? "").trim();
 
-  const startAnchor = modelScopedGuidanceAnchor(model, "start");
-  const endAnchor = modelScopedGuidanceAnchor(model, "end");
+  // If first message is already a system message
+  if (messages[0].role === "system") {
+    const originalContent = typeof messages[0].content === "string"
+      ? messages[0].content.trim()
+      : JSON.stringify(messages[0].content ?? "");
 
-  // Sandwich: Start Anchor -> User-Supplied System Instructions -> End Anchor
-  const orderedSystemMessages = suppliedSystemMessages.length > 0
-    ? [startAnchor, ...suppliedSystemMessages, endAnchor]
-    : [endAnchor];
+    // Prepend static TokenForge guidance at the very START if not already present
+    const mergedSystem = originalContent.startsWith(staticPrefix)
+      ? originalContent
+      : originalContent.length > 0
+        ? `${staticPrefix}\n\n${originalContent}`
+        : staticPrefix;
 
-  const systemContent = orderedSystemMessages
-    .map(message => typeof message.content === "string" ? message.content.trim() : JSON.stringify(message.content ?? ""))
-    .filter(Boolean)
-    .join("\n\n");
-  return [{ role: "system", content: systemContent }, ...conversationalMessages];
+    const result: TokenForgeChatMessage[] = [{ role: "system", content: mergedSystem }];
+
+    // Keep all subsequent messages in their exact order; convert mid-turn system roles in-place to user
+    for (let i = 1; i < messages.length; i++) {
+      const msg = messages[i];
+      if (msg.role === "system" || (msg as any).role === "developer") {
+        result.push({ role: "user", content: typeof msg.content === "string" ? msg.content : JSON.stringify(msg.content ?? "") });
+      } else {
+        result.push(msg);
+      }
+    }
+    return result;
+  }
+
+  // If messages[0] is not a system message, place static guidance as the root system message
+  const result: TokenForgeChatMessage[] = [{ role: "system", content: staticPrefix }];
+  for (let i = 0; i < messages.length; i++) {
+    const msg = messages[i];
+    if (msg.role === "system" || (msg as any).role === "developer") {
+      result.push({ role: "user", content: typeof msg.content === "string" ? msg.content : JSON.stringify(msg.content ?? "") });
+    } else {
+      result.push(msg);
+    }
+  }
+  return result;
 }
 
 export function playgroundResponseGuidance(): TokenForgeChatMessage {
@@ -368,7 +412,15 @@ export function playgroundMessagesForModel(model: TokenForgeModelId, messages: T
 
   const orderedSystemMessages = (model === "claude-opus-5" || model === "claude-fable-5.1" || model === "gpt-6-astra")
     ? [startAnchor, playgroundResponseGuidance(), ...suppliedSystemMessages, endAnchor]
-    : [startAnchor, playgroundResponseGuidance(), ...suppliedSystemMessages, endAnchor];
+    : [
+        {
+          role: "system" as const,
+          content: `You are a helpful AI assistant. You are running as the selected TokenForge model: ${model}.`,
+        },
+        playgroundResponseGuidance(),
+        ...suppliedSystemMessages,
+        endAnchor,
+      ];
   const systemContent = orderedSystemMessages
     .map(message => typeof message.content === "string" ? message.content.trim() : "")
     .filter(Boolean)
@@ -403,8 +455,8 @@ export function cleanHeaderBearerToken(key: string | undefined | null): string {
 }
 
 export function tokenForgeRequestIpHash(req: Pick<Request, "header" | "ip">) {
-  const forwarded = req.header("x-forwarded-for")?.split(",")[0]?.trim();
-  const ip = forwarded || req.ip || "unknown";
+  // Use Express-validated req.ip first (backed by trust proxy) to prevent client header spoofing
+  const ip = req.ip || req.header("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
   return createHmac("sha256", process.env.JWT_SECRET ?? "tokenforge-local-ip-salt").update(ip).digest("hex");
 }
 
@@ -778,12 +830,18 @@ export async function resolveModelCandidateProviders<T extends { id?: string; la
     return { candidates: rotated };
   }
 
-  // Gracefully fail over to any active multimodal/document provider configured in the TokenForge system
-  const response = await routeMultimodalFailover(input as TokenForgeChatInput, signal, context, {
-    requireVision: isVisual,
-    requireDocuments: isDocument,
-  });
-  return { candidates: [], multimodalResponse: response };
+  // Strict Model Isolation: Never route to other models' providers!
+  const missingKinds = [
+    isVisual ? "images/vision" : null,
+    isDocument ? "documents/PDFs" : null,
+  ].filter(Boolean).join(" and ");
+
+  const errorMsg = `This request contains ${missingKinds || "multimodal"} data, but no provider attached to '${modelKey}' has ${isVisual ? "Vision" : ""}${isVisual && isDocument ? " / " : ""}${isDocument ? "Documents" : ""} enabled. In the TokenForge Admin panel (Universal Model Hub), please enable the Vision or Documents toggle on the providers attached to '${modelKey}'.`;
+
+  if (context) {
+    context.rawErrorMessage = `[PRE-FLIGHT] No ${missingKinds || "multimodal"}-enabled providers attached to model '${modelKey}'.`;
+  }
+  throw new MultimodalRoutingError(errorMsg);
 }
 
 export const UNOROUTER_KEY_COOLDOWN_MS = 60_000;
@@ -832,8 +890,17 @@ function selectNextLeastLoadedCredential(
 
 function usageFrom(payload: unknown): Usage {
   if (!payload || typeof payload !== "object") return {};
-  const candidate = (payload as { usage?: Usage }).usage;
-  return candidate ?? {};
+  const candidate = (payload as { usage?: any }).usage;
+  if (!candidate || typeof candidate !== "object") return {};
+  const cachedTokens =
+    candidate.prompt_tokens_details?.cached_tokens ??
+    candidate.cached_tokens ??
+    candidate.cache_read_input_tokens ??
+    0;
+  return {
+    ...candidate,
+    cached_tokens: cachedTokens,
+  };
 }
 
 function normalizedTokens(usage: Usage, inputEstimate: number, fallbackOutput?: string | number) {
@@ -1000,8 +1067,10 @@ function openAiChatCompletionsUrl(baseUrl: string) {
 
 const BAI_MINIMUM_MAX_TOKENS = 3;
 
-function isBaiProviderLabel(label: string | undefined) {
-  return label?.trim().toLowerCase() === "b.ai";
+function isBaiProviderLabel(label: string | undefined, baseUrl?: string) {
+  if (label?.trim().toLowerCase() === "b.ai") return true;
+  if (baseUrl && isBaiProviderBaseUrl(baseUrl)) return true;
+  return false;
 }
 
 function isBaiProviderBaseUrl(baseUrl: string) {
@@ -1037,7 +1106,18 @@ function selectNextGlm53Credential(provider: { id: string; apiKeys: string[]; ap
 
 /** GLM 5.3 uses its own encrypted runtime configuration and credential pool. */
 async function forwardDedicatedGlm53Request(input: ChatInput, signal: AbortSignal, context?: ProviderRequestContext) {
-  const runtime = await getGlm53RuntimeConfig();
+  const rawRuntime = await getGlm53RuntimeConfig();
+  const rawProviders = Array.isArray(rawRuntime?.providers) && rawRuntime.providers.length
+    ? rawRuntime.providers
+      : ((rawRuntime as any)?.baseUrl && (rawRuntime as any)?.apiKeys ? [{
+        id: "primary",
+        label: isBaiProviderBaseUrl((rawRuntime as any).baseUrl) ? "b.ai" : "GLM 5.3 provider",
+        enabled: true,
+        baseUrl: (rawRuntime as any).baseUrl,
+        model: (rawRuntime as any).model || "glm-5.3",
+        apiKeys: (rawRuntime as any).apiKeys,
+      }] : []);
+  const runtime = { providers: rawProviders };
   const estimatedInputTokens = estimateChatInputTokens(input);
   const rotatedProviders = runtime.providers.map((_, offset) => runtime.providers[(glm53ProviderCursor + offset) % runtime.providers.length]!);
   glm53ProviderCursor = runtime.providers.length ? (glm53ProviderCursor + 1) % runtime.providers.length : 0;
@@ -1046,7 +1126,7 @@ async function forwardDedicatedGlm53Request(input: ChatInput, signal: AbortSigna
     rotatedProviders,
     estimatedInputTokens,
     {
-      isBaiProvider: provider => isBaiProviderLabel(provider.label),
+      isBaiProvider: provider => isBaiProviderLabel(provider.label, provider.baseUrl),
       baiPriority: false, // Not using priority for GLM 5.3 currently
       canRouteToBai: baiPreparation.canRouteToBai,
       telemetryPrefix: "glm-5.3",
@@ -1064,7 +1144,7 @@ async function forwardDedicatedGlm53Request(input: ChatInput, signal: AbortSigna
     const url = openAiChatCompletionsUrl(provider.baseUrl);
     if (!url || !provider.model) continue;
 
-    const isBai = isBaiProviderLabel(provider.label);
+    const isBai = isBaiProviderLabel(provider.label, provider.baseUrl);
     if (isBai && !baiPreparation.canRouteToBai) continue;
 
     for (let attempt = 0; attempt < provider.apiKeys.length; attempt += 1) {
@@ -1084,23 +1164,23 @@ async function forwardDedicatedGlm53Request(input: ChatInput, signal: AbortSigna
       const requestStartTime = performance.now();
       const responseStart = createResponseStartDeadline(signal);
       try {
-        const preparedInput = isBai ? normalizeBaiToolChoice(baiPreparation.input) : input;
+        const preparedInput = isBai ? normalizeBaiToolChoice(baiPreparation.input) : baiPreparation.input;
         const cappedInput = applyProviderMaxOutputTokens(preparedInput, provider);
         const tokensInput = normalizeBaiMaxTokens(cappedInput, isBai);
         const providerInput = applyProviderIdentityPolicy(tokensInput, provider, "glm-5.3");
+        const reasoningInput = applyProviderReasoningPolicy(providerInput, provider);
         
         // Add start and end prompt robust identity enforcement, similar to Opus 5 / Fable 5
         const requestBody = sanitizeUpstreamChatInput({
-          ...providerInput,
+          ...reasoningInput,
           model: provider.model,
         });
 
-        const response = await safeFetch(url, {
+        const response = await safeFetchChatWithReasoningFallback(url, {
           method: "POST",
           headers: { Authorization: `Bearer ${selectedCredential.credential.replace(/[\r\n]+/g, '').trim()}`, "Content-Type": "application/json", Accept: input.stream ? "text/event-stream" : "application/json" },
-          body: JSON.stringify(requestBody),
           signal: responseStart.signal,
-        });
+        }, requestBody);
         responseStart.clear();
         
         if (response.ok) {
@@ -1215,12 +1295,13 @@ async function forwardDedicatedDeepseekV4ProRequest(input: ChatInput, signal: Ab
       try {
         const cappedInput = applyProviderMaxOutputTokens(input, provider);
         const providerInput = applyProviderIdentityPolicy(cappedInput, provider, "deepseek-v4-pro");
-        const response = await safeFetch(url, {
+        const reasoningInput = applyProviderReasoningPolicy(providerInput, provider);
+        const requestBody = sanitizeUpstreamChatInput({ ...reasoningInput, model: provider.model });
+        const response = await safeFetchChatWithReasoningFallback(url, {
           method: "POST",
           headers: { Authorization: `Bearer ${selectedCredential.credential.replace(/[\r\n]+/g, '').trim()}`, "Content-Type": "application/json", Accept: input.stream ? "text/event-stream" : "application/json" },
-          body: JSON.stringify(sanitizeUpstreamChatInput({ ...providerInput, model: provider.model })),
           signal: responseStart.signal,
-        });
+        }, requestBody);
         responseStart.clear();
         if (response.ok) {
           if (!input.stream) {
@@ -1349,12 +1430,13 @@ async function forwardDedicatedSonnet46Request(input: ChatInput, signal: AbortSi
       try {
         const cappedInput = applyProviderMaxOutputTokens(input, provider);
         const providerInput = applyProviderIdentityPolicy(cappedInput, provider, "claude-sonnet-4.6");
-        const response = await safeFetch(url, {
+        const reasoningInput = applyProviderReasoningPolicy(providerInput, provider);
+        const requestBody = sanitizeUpstreamChatInput({ ...reasoningInput, model: provider.model });
+        const response = await safeFetchChatWithReasoningFallback(url, {
           method: "POST",
           headers: { Authorization: `Bearer ${selectedCredential.credential.replace(/[\r\n]+/g, '').trim()}`, "Content-Type": "application/json", Accept: input.stream ? "text/event-stream" : "application/json" },
-          body: JSON.stringify(sanitizeUpstreamChatInput({ ...providerInput, model: provider.model })),
           signal: responseStart.signal,
-        });
+        }, requestBody);
         responseStart.clear();
         if (response.ok) {
           if (!input.stream) {
@@ -1582,6 +1664,18 @@ export function sanitizeUpstreamChatInput(input: ChatInput): ChatInput {
     }
   }
 
+  // Promote camelCase reasoningEffort if reasoning_effort is not explicitly set
+  if (sanitized.reasoning_effort === undefined && typeof (sanitized as any).reasoningEffort === "string") {
+    const rEffort = ((sanitized as any).reasoningEffort as string).trim().toLowerCase();
+    if (rEffort && rEffort !== "default") {
+      sanitized.reasoning_effort = rEffort;
+    }
+  }
+  if (sanitized.reasoning_effort === "default") {
+    delete sanitized.reasoning_effort;
+  }
+  delete (sanitized as any).reasoningEffort;
+
   // Remove max_completion_tokens because upstream third-party providers reject it as extra input
   delete (sanitized as any).max_completion_tokens;
 
@@ -1603,6 +1697,122 @@ export function applyProviderMaxOutputTokens(input: ChatInput, provider: { maxOu
   }
   const next = Math.min(safeCap, Math.max(1, Math.floor(sanitized.max_tokens)));
   return next === sanitized.max_tokens ? sanitized : { ...sanitized, max_tokens: next };
+}
+
+export function applyProviderReasoningPolicy(
+  input: ChatInput,
+  provider: { reasoningEffort?: "low" | "medium" | "high" | "xhigh" | "max" | null }
+): ChatInput {
+  const result: ChatInput = { ...input };
+
+  // 1. If provider card explicitly enforces a reasoning effort, that takes precedence for this provider
+  if (
+    provider?.reasoningEffort &&
+    typeof provider.reasoningEffort === "string" &&
+    provider.reasoningEffort.trim().length > 0 &&
+    provider.reasoningEffort !== ("default" as any)
+  ) {
+    result.reasoning_effort = provider.reasoningEffort.trim().toLowerCase();
+    delete (result as any).reasoningEffort;
+    return result;
+  }
+
+  // 2. Otherwise (provider card is "default" or null), respect client's reasoning effort if supplied
+  if (result.reasoning_effort === undefined && typeof (result as any).reasoningEffort === "string") {
+    const val = (result as any).reasoningEffort.trim().toLowerCase();
+    if (val && val !== "default") {
+      result.reasoning_effort = val;
+    }
+  }
+  if (result.reasoning_effort === "default" || (result as any).reasoningEffort === "default") {
+    delete result.reasoning_effort;
+  }
+  delete (result as any).reasoningEffort;
+
+  return result;
+}
+
+export function isReasoningEffortRejectedError(status: number, errorText: string): boolean {
+  if (status !== 400 && status !== 422) return false;
+  const lower = (errorText || "").toLowerCase();
+  return (
+    lower.includes("reasoning_effort") ||
+    lower.includes("reasoning effort") ||
+    lower.includes("reasoning_content") ||
+    (lower.includes("reasoning") && (
+      lower.includes("invalid") ||
+      lower.includes("supported") ||
+      lower.includes("extra") ||
+      lower.includes("unrecognized") ||
+      lower.includes("unexpected") ||
+      lower.includes("not allowed") ||
+      lower.includes("unknown") ||
+      lower.includes("failed") ||
+      lower.includes("not supported")
+    ))
+  );
+}
+
+export async function safeFetchChatWithReasoningFallback(
+  url: string | URL,
+  init: RequestInit & { signal?: AbortSignal },
+  requestBody: ChatInput,
+  context?: ProviderRequestContext
+): Promise<globalThis.Response> {
+  let bodyToSend = { ...requestBody };
+  const rawBodyStr = JSON.stringify(bodyToSend);
+  if (context) {
+    context.capturedUpstreamBodyString = rawBodyStr;
+  }
+  let response = await safeFetch(url, {
+    ...init,
+    body: rawBodyStr,
+  });
+
+  if (response.ok || (response.status !== 400 && response.status !== 422)) {
+    return response;
+  }
+
+  const clone = response.clone();
+  const text = await clone.text().catch(() => "");
+  if (!isReasoningEffortRejectedError(response.status, text)) {
+    return response;
+  }
+
+  // If reasoning_effort was "max" or "xhigh", attempt fallback to "high"
+  if (bodyToSend.reasoning_effort === "max" || bodyToSend.reasoning_effort === "xhigh") {
+    bodyToSend = { ...bodyToSend, reasoning_effort: "high" };
+    const highBodyStr = JSON.stringify(bodyToSend);
+    if (context) {
+      context.capturedUpstreamBodyString = highBodyStr;
+    }
+    const retryHigh = await safeFetch(url, {
+      ...init,
+      body: highBodyStr,
+    });
+    if (retryHigh.ok || (retryHigh.status !== 400 && retryHigh.status !== 422)) {
+      return retryHigh;
+    }
+    const highText = await retryHigh.clone().text().catch(() => "");
+    if (!isReasoningEffortRejectedError(retryHigh.status, highText)) {
+      return retryHigh;
+    }
+  }
+
+  // If still rejected due to reasoning_effort (or provider doesn't support reasoning_effort at all), try without reasoning_effort
+  if (bodyToSend.reasoning_effort !== undefined) {
+    const { reasoning_effort: _omitted, ...bodyWithoutReasoning } = bodyToSend;
+    const omittedBodyStr = JSON.stringify(bodyWithoutReasoning);
+    if (context) {
+      context.capturedUpstreamBodyString = omittedBodyStr;
+    }
+    return await safeFetch(url, {
+      ...init,
+      body: omittedBodyStr,
+    });
+  }
+
+  return response;
 }
 
 export function stripIdentityGuidanceFromMessages(messages: TokenForgeChatMessage[] | undefined): TokenForgeChatMessage[] | undefined {
@@ -1663,12 +1873,6 @@ export function applyProviderIdentityPolicy(
     return {
       ...input,
       messages: stripIdentityGuidanceFromMessages(input.messages),
-    };
-  }
-  if (model && input.messages) {
-    return {
-      ...input,
-      messages: reinforcePromptContextForUpstream(model, input.messages, provider),
     };
   }
   return input;
@@ -2116,6 +2320,22 @@ function wrapManagedProviderResponseWithFailureLog(
     const outputTokens = finalUsage.completion_tokens ?? finalUsage.output_tokens;
     const explicitZeroOutput = typeof outputTokens === "number" && Number.isFinite(outputTokens) && outputTokens <= 0;
     if (!explicitZeroOutput && receivedOutput) return;
+    const diagnostic = `${label} provider stream ended without generating assistant tokens or valid content.`;
+    if (!recorded) {
+      recorded = true;
+      void recordFailure({
+        sourceType: "provider",
+        sourceId: provider.id,
+        sourceLabel: provider.label,
+        credentialSlot: typeof credentialSlot === "number" ? credentialSlot + 1 : undefined,
+        failureKind: "stream",
+        retryable: true,
+        callerMessage: diagnostic,
+      }).catch(() => undefined);
+      if (telemetryProvider && typeof credentialSlot === "number") {
+        recordCredentialFailure(telemetryProvider, credentialSlot);
+      }
+    }
     controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: { message: publicProviderErrorMessage(), type: "provider_unavailable", code: "provider_unavailable" } })}\n\n`));
   };
 
@@ -2328,9 +2548,11 @@ async function forwardDedicatedClaudeOpus5Request(input: ChatInput, signal: Abor
           ? normalizeQwenPoolMaxTokens(cappedInput, provider)
           : normalizeBaiMaxTokens(cappedInput, isBai);
         const providerInput = applyProviderIdentityPolicy(tokensInput, provider, "claude-opus-5");
+        const reasoningInput = applyProviderReasoningPolicy(providerInput, provider);
+        const requestBody = sanitizeUpstreamChatInput({ ...reasoningInput, model: upstreamModel });
         const response = isBailuClaudeOpus5Provider(provider)
-          ? await forwardBailuRequestWithWebshareFailover(url, providerInput, upstreamModel, selectedCredential.credential, responseStart.signal, responseStart.timedOut)
-          : await safeFetch(url, {
+          ? await forwardBailuRequestWithWebshareFailover(url, reasoningInput, upstreamModel, selectedCredential.credential, responseStart.signal, responseStart.timedOut)
+          : await safeFetchChatWithReasoningFallback(url, {
             method: "POST",
             headers: {
               Authorization: `Bearer ${selectedCredential.credential.replace(/[\r\n]+/g, '').trim()}`,
@@ -2338,9 +2560,8 @@ async function forwardDedicatedClaudeOpus5Request(input: ChatInput, signal: Abor
               Accept: providerInput.stream ? "text/event-stream" : "application/json",
               ...(isOpenRouterEndpoint(url) ? { "HTTP-Referer": "https://tokenforge.ai", "X-Title": "TokenForge" } : {}),
             },
-            body: JSON.stringify(sanitizeUpstreamChatInput({ ...providerInput, model: upstreamModel })),
             signal: responseStart.signal,
-          });
+          }, requestBody);
         responseStart.clear();
         if (response.ok) {
           if (!input.stream && isBailuClaudeOpus5Provider(provider)) {
@@ -2539,7 +2760,9 @@ async function forwardDedicatedClaudeFable5Request(input: ChatInput, signal: Abo
       try {
         const cappedInput = applyProviderMaxOutputTokens(input, provider);
         const providerInput = applyProviderIdentityPolicy(cappedInput, provider, "claude-fable-5.1");
-        const response = await safeFetch(url, { method: "POST", headers: { Authorization: `Bearer ${selectedCredential.credential.replace(/[\r\n]+/g, '').trim()}`, "Content-Type": "application/json", Accept: input.stream ? "text/event-stream" : "application/json" }, body: JSON.stringify(sanitizeUpstreamChatInput({ ...providerInput, model: provider.model })), signal: responseStart.signal });
+        const reasoningInput = applyProviderReasoningPolicy(providerInput, provider);
+        const requestBody = sanitizeUpstreamChatInput({ ...reasoningInput, model: provider.model });
+        const response = await safeFetchChatWithReasoningFallback(url, { method: "POST", headers: { Authorization: `Bearer ${selectedCredential.credential.replace(/[\r\n]+/g, '').trim()}`, "Content-Type": "application/json", Accept: input.stream ? "text/event-stream" : "application/json" }, signal: responseStart.signal }, requestBody);
         responseStart.clear();
         if (response.ok) {
           if (!input.stream) {
@@ -2633,7 +2856,9 @@ async function forwardDedicatedQwen38MaxRequest(input: ChatInput, signal: AbortS
       try {
         const cappedInput = applyProviderMaxOutputTokens(input, provider);
         const providerInput = applyProviderIdentityPolicy(cappedInput, provider, "qwen3.8-max");
-        const response = await safeFetch(url, { method: "POST", headers: { Authorization: `Bearer ${selectedCredential.credential.replace(/[\r\n]+/g, '').trim()}`, "Content-Type": "application/json", Accept: input.stream ? "text/event-stream" : "application/json" }, body: JSON.stringify(sanitizeUpstreamChatInput({ ...providerInput, model: provider.model })), signal: responseStart.signal });
+        const reasoningInput = applyProviderReasoningPolicy(providerInput, provider);
+        const requestBody = sanitizeUpstreamChatInput({ ...reasoningInput, model: provider.model });
+        const response = await safeFetchChatWithReasoningFallback(url, { method: "POST", headers: { Authorization: `Bearer ${selectedCredential.credential.replace(/[\r\n]+/g, '').trim()}`, "Content-Type": "application/json", Accept: input.stream ? "text/event-stream" : "application/json" }, signal: responseStart.signal }, requestBody);
         responseStart.clear();
         if (response.ok) {
           if (!input.stream && isClaudeOpus5ZeroOutputFailure(await response.clone().json().catch(() => null))) {
@@ -2733,7 +2958,9 @@ async function forwardDedicatedGpt6AstraRequest(input: ChatInput, signal: AbortS
       try {
         const cappedInput = applyProviderMaxOutputTokens(input, provider);
         const providerInput = applyProviderIdentityPolicy(cappedInput, provider, "gpt-6-astra");
-        const response = await safeFetch(url, { method: "POST", headers: { Authorization: `Bearer ${selectedCredential.credential.replace(/[\r\n]+/g, '').trim()}`, "Content-Type": "application/json", Accept: input.stream ? "text/event-stream" : "application/json" }, body: JSON.stringify(sanitizeUpstreamChatInput({ ...providerInput, model: provider.model })), signal: responseStart.signal });
+        const reasoningInput = applyProviderReasoningPolicy(providerInput, provider);
+        const requestBody = sanitizeUpstreamChatInput({ ...reasoningInput, model: provider.model });
+        const response = await safeFetchChatWithReasoningFallback(url, { method: "POST", headers: { Authorization: `Bearer ${selectedCredential.credential.replace(/[\r\n]+/g, '').trim()}`, "Content-Type": "application/json", Accept: input.stream ? "text/event-stream" : "application/json" }, signal: responseStart.signal }, requestBody);
         responseStart.clear();
         if (response.ok) {
           if (!input.stream && isClaudeOpus5ZeroOutputFailure(await response.clone().json().catch(() => null))) {
@@ -2833,7 +3060,9 @@ async function forwardDedicatedKimiK3Request(input: ChatInput, signal: AbortSign
       try {
         const cappedInput = applyProviderMaxOutputTokens(input, provider);
         const providerInput = applyProviderIdentityPolicy(cappedInput, provider, "kimi-k3");
-        const response = await safeFetch(url, { method: "POST", headers: { Authorization: `Bearer ${selectedCredential.credential.replace(/[\r\n]+/g, '').trim()}`, "Content-Type": "application/json", Accept: input.stream ? "text/event-stream" : "application/json" }, body: JSON.stringify(sanitizeUpstreamChatInput({ ...providerInput, model: provider.model })), signal: responseStart.signal });
+        const reasoningInput = applyProviderReasoningPolicy(providerInput, provider);
+        const requestBody = sanitizeUpstreamChatInput({ ...reasoningInput, model: provider.model });
+        const response = await safeFetchChatWithReasoningFallback(url, { method: "POST", headers: { Authorization: `Bearer ${selectedCredential.credential.replace(/[\r\n]+/g, '').trim()}`, "Content-Type": "application/json", Accept: input.stream ? "text/event-stream" : "application/json" }, signal: responseStart.signal }, requestBody);
         responseStart.clear();
         if (response.ok) {
           if (!input.stream && isClaudeOpus5ZeroOutputFailure(await response.clone().json().catch(() => null))) {
@@ -2897,6 +3126,197 @@ async function forwardDedicatedKimiK3Request(input: ChatInput, signal: AbortSign
   throw lastError instanceof Error ? lastError : new Error("TokenForge Kimi K3 inference is not configured or every provider is temporarily unavailable");
 }
 
+const universalModelProviderCursors = new Map<string, number>();
+const universalModelKeyCursors = new Map<string, Map<string, number>>();
+
+export function resetUniversalModelProviderBalancing(modelId?: string) {
+  if (modelId) {
+    universalModelProviderCursors.delete(modelId);
+    universalModelKeyCursors.delete(modelId);
+  } else {
+    universalModelProviderCursors.clear();
+    universalModelKeyCursors.clear();
+  }
+}
+
+function selectNextUniversalCredential(
+  modelId: string,
+  provider: { id: string; apiKeys: string[]; apiKeyEnabled?: boolean[]; label?: string; baseUrl?: string; bypassCooldown?: boolean }
+) {
+  let keyMap = universalModelKeyCursors.get(modelId);
+  if (!keyMap) {
+    keyMap = new Map<string, number>();
+    universalModelKeyCursors.set(modelId, keyMap);
+  }
+  return selectNextLeastLoadedCredential(modelId as any, provider, keyMap);
+}
+
+export async function forwardUniversalModelRequest(
+  modelId: string,
+  input: ChatInput,
+  signal: AbortSignal,
+  context?: ProviderRequestContext
+): Promise<globalThis.Response> {
+  const runtime = await getUniversalModelRuntimeConfig(modelId);
+  const modelDef = getTokenForgeModel(modelId);
+  const displayName = modelDef?.displayName || modelId;
+
+  const estimatedInputTokens = estimateChatInputTokens(input);
+  const cursor = universalModelProviderCursors.get(modelId) ?? 0;
+  const rotatedProviders = runtime.providers.map(
+    (_, offset) => runtime.providers[(cursor + offset) % runtime.providers.length]!
+  );
+  const orderedProviders = filterAndOrderProvidersByInputTokens(rotatedProviders, estimatedInputTokens, {
+    telemetryPrefix: modelId,
+  });
+  const resolution = await resolveModelCandidateProviders(
+    orderedProviders,
+    runtime.providers,
+    input,
+    signal,
+    context
+  );
+  if (resolution.multimodalResponse) return resolution.multimodalResponse;
+  const candidateProviders = resolution.candidates;
+  universalModelProviderCursors.set(
+    modelId,
+    runtime.providers.length ? (cursor + 1) % runtime.providers.length : 0
+  );
+
+  let lastError: unknown = null;
+  let lastStatus: number | null = null;
+
+  for (const provider of candidateProviders) {
+    setContextCandidateProvider(context, provider.label);
+    const url = openAiChatCompletionsUrl(provider.baseUrl);
+    if (!url || !provider.model) continue;
+
+    for (let attempt = 0; attempt < provider.apiKeys.length; attempt += 1) {
+      const selectedCredential = selectNextUniversalCredential(modelId, provider);
+      if (!selectedCredential) break;
+      const requestStartTime = performance.now();
+      const releaseConcurrency = acquireProviderSlotConcurrency(selectedCredential.telemetryProvider, selectedCredential.slot);
+      if (context) context.credentialSlot = selectedCredential.slot + 1;
+      const responseStart = createResponseStartDeadline(signal);
+
+      try {
+        const cappedInput = applyProviderMaxOutputTokens(input, provider);
+        const reasoningInput = applyProviderReasoningPolicy(cappedInput, provider);
+        const providerInput = applyProviderIdentityPolicy(reasoningInput, provider, modelId as any);
+        const sanitizedBody = sanitizeUpstreamChatInput({ ...providerInput, model: provider.model });
+
+        const response = await safeFetchChatWithReasoningFallback(url, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${selectedCredential.credential.replace(/[\r\n]+/g, '').trim()}`,
+            "Content-Type": "application/json",
+            Accept: input.stream ? "text/event-stream" : "application/json",
+            ...(isOpenRouterEndpoint(url) ? { "HTTP-Referer": "https://tokenforge.ai", "X-Title": "TokenForge" } : {}),
+          },
+          signal: responseStart.signal,
+        }, sanitizedBody);
+        responseStart.clear();
+
+        if (response.ok) {
+          if (!input.stream && isClaudeOpus5ZeroOutputFailure(await response.clone().json().catch(() => null))) {
+            releaseConcurrency();
+            const diagnostic = `${displayName} provider returned a successful response with zero output tokens or no assistant output.`;
+            if (context) context.rawErrorMessage = diagnostic;
+            void recordModelFailureLog(modelId, {
+              sourceType: "provider",
+              sourceId: provider.id,
+              sourceLabel: provider.label,
+              credentialSlot: selectedCredential.slot + 1,
+              failureKind: "empty_output",
+              retryable: true,
+              callerMessage: diagnostic,
+            }).catch(() => undefined);
+            recordCredentialFailure(selectedCredential.telemetryProvider, selectedCredential.slot);
+            void recordManagedProviderKeyOutcome(modelId as any, selectedCredential.credential, false, new Date(), true, provider.id).catch(() => undefined);
+            response.body?.cancel().catch(() => undefined);
+            lastError = new Error(diagnostic);
+            lastStatus = 503;
+            recordCredentialFailover(selectedCredential.telemetryProvider);
+            continue;
+          }
+
+          if (!input.stream) {
+            const latencyMs = Math.round(performance.now() - requestStartTime);
+            recordProviderPerformance(selectedCredential.telemetryProvider, selectedCredential.slot, {
+              latencyMs,
+            });
+            releaseConcurrency();
+          }
+
+          recordCredentialSuccess(selectedCredential.telemetryProvider, selectedCredential.slot);
+          void recordManagedProviderKeyOutcome(modelId as any, selectedCredential.credential, true, new Date(), true, provider.id).catch(() => undefined);
+          return wrapManagedProviderResponseWithFailureLog(
+            response,
+            provider,
+            signal,
+            displayName,
+            (logInput) => recordModelFailureLog(modelId, logInput),
+            undefined,
+            selectedCredential.slot,
+            selectedCredential.telemetryProvider,
+            requestStartTime,
+            input.stream ? releaseConcurrency : undefined
+          );
+        }
+
+        releaseConcurrency();
+        const retryable = retryableProviderStatus(response.status);
+        const rawBody = await response.text().catch(() => "");
+        const diagnostic = renderedHttpFailureDiagnostic(response.status, rawBody);
+        if (context) context.rawErrorMessage = rawBody || diagnostic;
+        void recordModelFailureLog(modelId, {
+          sourceType: "provider",
+          sourceId: provider.id,
+          sourceLabel: provider.label,
+          credentialSlot: selectedCredential.slot + 1,
+          httpStatus: response.status,
+          failureKind: "http",
+          retryable,
+          callerMessage: rawBody || diagnostic,
+        }).catch(() => undefined);
+        recordCredentialFailure(selectedCredential.telemetryProvider, selectedCredential.slot);
+        void recordManagedProviderKeyOutcome(modelId as any, selectedCredential.credential, false, new Date(), true, provider.id).catch(() => undefined);
+        lastError = new Error(diagnostic);
+        lastStatus = response.status;
+        if (!retryable) {
+          recordCredentialFailover(selectedCredential.telemetryProvider);
+          break;
+        }
+      } catch (error) {
+        releaseConcurrency();
+        responseStart.clear();
+        lastError = error;
+        const timeout = responseStart.timedOut() && !signal.aborted;
+        const errorMsg = timeout
+          ? `${displayName} provider response did not start within ${Math.round(PROVIDER_RESPONSE_START_TIMEOUT_MS / 1_000)} seconds.`
+          : error instanceof Error ? error.message : `${displayName} provider network request failed.`;
+        if (context) context.rawErrorMessage = errorMsg;
+        void recordModelFailureLog(modelId, {
+          sourceType: "provider",
+          sourceId: provider.id,
+          sourceLabel: provider.label,
+          credentialSlot: selectedCredential.slot + 1,
+          failureKind: timeout ? "timeout" : "network",
+          retryable: true,
+          callerMessage: errorMsg,
+        }).catch(() => undefined);
+        recordCredentialFailure(selectedCredential.telemetryProvider, selectedCredential.slot);
+        void recordManagedProviderKeyOutcome(modelId as any, selectedCredential.credential, false, new Date(), true, provider.id).catch(() => undefined);
+        if (signal.aborted) throw error;
+      }
+      recordCredentialFailover(selectedCredential.telemetryProvider);
+    }
+  }
+
+  if (lastStatus !== null) return publicManagedProviderFailureResponse(lastStatus);
+  throw lastError instanceof Error ? lastError : new Error(`TokenForge ${displayName} inference is not configured or every provider is temporarily unavailable`);
+}
+
 /** OrcaRouter remains only for the separately configured Qwen3.8 27B route. */
 async function forwardOrcaRouterRequest(input: ChatInput, signal: AbortSignal, context?: ProviderRequestContext) {
   const base = process.env.CLAUDE_OPUS5_BASE_URL?.replace(/\/$/, "");
@@ -2916,6 +3336,7 @@ async function forwardOrcaRouterRequest(input: ChatInput, signal: AbortSignal, c
 
 async function forwardTokenRouterRequest(input: ChatInput, signal: AbortSignal, context?: ProviderRequestContext) {
   if (input.model === "claude-opus-5") return forwardDedicatedClaudeOpus5Request(input, signal, context);
+  if (await isUniversalModelConfigured(String(input.model))) return forwardUniversalModelRequest(String(input.model), input, signal, context);
   if (input.model === "claude-fable-5.1") return forwardDedicatedClaudeFable5Request(input, signal, context);
   if (input.model === "glm-5.3") return forwardDedicatedGlm53Request(input, signal, context);
   if (input.model === "claude-sonnet-4.6") return forwardDedicatedSonnet46Request(input, signal, context);
@@ -3234,41 +3655,8 @@ export function reinforcePromptContextForUpstream(
   if (providerConfig?.disableIdentityPrompt) {
     return stripIdentityGuidanceFromMessages(messages);
   }
-  const lastUserIndex = messages.map(m => m.role).lastIndexOf("user");
-  if (lastUserIndex === -1) return messages;
-
-  const targetMessage = messages[lastUserIndex];
-  const originalText = extractMessageText(targetMessage.content);
-  const touchesIdentity = /\b(?:who|what|which|model|identity|creator|created|deepseek|opus|fable|claude|truth|lie|lying|real|actual|behind|powering|system|instructions|qoder|openai|open\s*ai|chatgpt|gpt|codex(?:\s*cli|-cli)?|qwen|grok|xai|x\.ai|x\s*ai|glm|zhipu|z\s*ai|zai|z\.ai|alibaba)\b/i.test(originalText);
-  if (!touchesIdentity) return messages;
-
-  const modelDef = getTokenForgeModel(model);
-  const displayName = modelDef?.displayName || (
-    model === "claude-opus-5" ? "Claude Opus 5" :
-    model === "claude-fable-5.1" ? "Claude Fable 5.1" :
-    model === "glm-5.3" ? "GLM 5.3" :
-    model === "claude-sonnet-4.6" ? "Claude Sonnet 4.6" :
-    model === "deepseek-v4-pro" ? "DeepSeek V4 Pro" :
-    model === "qwen3.8-max" ? "Qwen 3.8 Max" :
-    model === "gpt-6-astra" ? "GPT-6 Astra" :
-    model
-  );
-
-  const promptDirective = `\n\n[Context mandate: You are ${displayName}, available through TokenForge. You MUST respond 100% EXCLUSIVELY in fluent, standard English at all times. 【严格指令】：所有回复必须全部使用英文，严禁输出任何中文汉字、拼音或中文标点。 Under NO circumstances should you identify as Qoder, DeepSeek, Qwen, Nemotron, Llama, OpenAI, ChatGPT, GPT, Codex, Codex CLI, Grok, xAI, GLM, Zhipu, Z.AI, Alibaba, Anthropic, or any other base model or entity.]`;
-
-  const updatedMessages = [...messages];
-  if (typeof targetMessage.content === "string") {
-    if (targetMessage.content.includes("[Context mandate: You are")) {
-      return messages;
-    }
-    updatedMessages[lastUserIndex] = { ...targetMessage, content: targetMessage.content + promptDirective };
-  } else if (Array.isArray(targetMessage.content)) {
-    updatedMessages[lastUserIndex] = {
-      ...targetMessage,
-      content: [...targetMessage.content, { type: "text", text: promptDirective }],
-    };
-  }
-  return updatedMessages;
+  // Conversational turns remain 100% pristine to guarantee exact byte-for-byte prefix cache hits across upstream providers
+  return messages;
 }
 
 export async function forwardProviderRequest(rawModel: TokenForgeModelId, rawInput: TokenForgeChatInput, signal: AbortSignal, context?: ProviderRequestContext) {
@@ -3292,7 +3680,7 @@ export async function forwardProviderRequest(rawModel: TokenForgeModelId, rawInp
   }
   const effectiveInput: TokenForgeChatInput = {
     ...input,
-    messages: reinforcePromptContextForUpstream(model, input.messages),
+    messages: input.messages,
   };
   const visualAnalysis = await pruneOldImagesAndDeriveContent(effectiveInput.messages);
   effectiveInput.messages = visualAnalysis.messages;
@@ -3309,6 +3697,12 @@ export async function forwardProviderRequest(rawModel: TokenForgeModelId, rawInp
     }
   }
   const modelDef = getTokenForgeModel(model);
+  if (model === "claude-opus-5") {
+    return forwardDedicatedClaudeOpus5Request(effectiveInput, signal, context);
+  }
+  if (await isUniversalModelConfigured(model)) {
+    return forwardUniversalModelRequest(model, effectiveInput, signal, context);
+  }
   if (model === "deepseek-v4-pro" || modelDef?.upstreamHandler === "deepseek-v4-pro" || modelDef?.upstreamModelId === "deepseek-v4-flash:free") {
     return forwardDedicatedDeepseekV4ProRequest(effectiveInput, signal, context, model);
   }
@@ -3329,10 +3723,15 @@ export async function forwardProviderRequest(rawModel: TokenForgeModelId, rawInp
       c => c.source === "upstream" && c.id === provider && (!isVisual || c.supportsVision) && (!isDocument || c.supportsDocuments)
     );
     if (!currentUpstreamSupportsReqs) {
-      return await routeMultimodalFailover(effectiveInput, signal, context, {
-        requireVision: isVisual,
-        requireDocuments: isDocument,
-      });
+      const missingKinds = [
+        isVisual ? "images/vision" : null,
+        isDocument ? "documents/PDFs" : null,
+      ].filter(Boolean).join(" and ");
+      const errorMsg = `This request contains ${missingKinds || "multimodal"} data, but the provider '${provider}' configured for '${model}' does not have ${isVisual ? "Vision" : ""}${isVisual && isDocument ? " / " : ""}${isDocument ? "Documents" : ""} enabled.`;
+      if (context) {
+        context.rawErrorMessage = `[PRE-FLIGHT] Provider '${provider}' for model '${model}' does not support ${missingKinds}.`;
+      }
+      throw new MultimodalRoutingError(errorMsg);
     }
   }
   if (provider === FXQIDIAN_PROVIDER_SLUG) {
@@ -3642,6 +4041,7 @@ export async function runPlaygroundCompletion(input: {
   messages: TokenForgeChatMessage[];
   maxOutputTokens?: number;
   temperature?: number;
+  reasoningEffort?: "default" | "low" | "medium" | "high" | "xhigh" | "max";
   sourceIpHash: string;
 }) {
   const requestId = `tf_pg_${randomUUID().replaceAll("-", "")}`;
@@ -3684,13 +4084,17 @@ export async function runPlaygroundCompletion(input: {
     }
   }
 
+  const effectiveReasoningEffort = input.reasoningEffort && input.reasoningEffort !== "default"
+    ? input.reasoningEffort
+    : (input.model === "qwen3.8-max" || input.model === "claude-fable-5.1" ? "xhigh" : undefined);
+
   const upstreamInput: ChatInput = {
     model: input.model,
     messages: playgroundMessagesForModel(input.model, input.messages),
     stream: false,
     ...(input.maxOutputTokens ? { max_tokens: input.maxOutputTokens } : {}),
     ...(input.temperature !== undefined ? { temperature: input.temperature } : {}),
-    ...(input.model === "qwen3.8-max" || input.model === "claude-fable-5.1" ? { reasoning_effort: "xhigh" } : {}),
+    ...(effectiveReasoningEffort ? { reasoning_effort: effectiveReasoningEffort } : {}),
   };
   const creditsEnabled = await isUserCreditsEnabled(input.userId);
   const playgroundTier: PricingTier = creditsEnabled ? "bundle" : "payg";
@@ -3779,10 +4183,19 @@ async function streamPlaygroundCompletion(input: {
   messages: TokenForgeChatMessage[];
   maxOutputTokens?: number;
   temperature?: number;
+  reasoningEffort?: "default" | "low" | "medium" | "high" | "xhigh" | "max";
   sourceIpHash: string;
   req: Request;
   res: Response;
 }) {
+  const accountRate = checkAccountRateLimit(input.userId);
+  if (!accountRate.allowed) {
+    throw new TokenForgePlaygroundError(
+      "rate_limit_exceeded",
+      `Account rate limit exceeded. Please wait ${accountRate.retryAfterSeconds}s before sending another playground message.`
+    );
+  }
+
   const requestId = `tf_pg_${randomUUID().replaceAll("-", "")}`;
   if ((await getPlatformMaintenanceConfig()).enabled && !(await isUserExemptFromPlatformMaintenance(input.userId))) {
     const maintenanceMsg = await getEffectivePlatformMaintenanceMessage(input.userId);
@@ -3815,6 +4228,10 @@ async function streamPlaygroundCompletion(input: {
     }
   }
 
+  const effectiveReasoningEffort = input.reasoningEffort && input.reasoningEffort !== "default"
+    ? input.reasoningEffort
+    : (input.model === "qwen3.8-max" || input.model === "claude-fable-5.1" ? "xhigh" : undefined);
+
   const upstreamInput: ChatInput = {
     model: input.model,
     messages: playgroundMessagesForModel(input.model, input.messages),
@@ -3822,7 +4239,7 @@ async function streamPlaygroundCompletion(input: {
     stream_options: { include_usage: true },
     ...(input.maxOutputTokens ? { max_tokens: input.maxOutputTokens } : {}),
     ...(input.temperature !== undefined ? { temperature: input.temperature } : {}),
-    ...(input.model === "qwen3.8-max" || input.model === "claude-fable-5.1" ? { reasoning_effort: "xhigh" } : {}),
+    ...(effectiveReasoningEffort ? { reasoning_effort: effectiveReasoningEffort } : {}),
   };
   const creditsEnabled = await isUserCreditsEnabled(input.userId);
   const playgroundTier: PricingTier = creditsEnabled ? "bundle" : "payg";
@@ -3956,24 +4373,25 @@ export function registerPlaygroundGateway(app: Express) {
     const model = raw.model;
     const maxOutputTokens = raw.maxOutputTokens;
     const temperature = raw.temperature;
+    const reasoningEffort = (raw.reasoningEffort ?? raw.reasoning_effort) as "default" | "low" | "medium" | "high" | "xhigh" | "max" | undefined;
     if (typeof model !== "string" || !isTokenForgeModelId(model)) {
       return errorResponse(res, `tf_pg_${randomUUID().replaceAll("-", "")}`, 400, "Choose a valid TokenForge model before sending a Playground request.", "invalid_model");
     }
     if (!validPlaygroundMessages(raw.messages)) {
       return errorResponse(res, `tf_pg_${randomUUID().replaceAll("-", "")}`, 400, "Messages must be a non-empty array of user, assistant, or system turns with non-empty text content.", "invalid_messages");
     }
-    if (maxOutputTokens !== undefined && (!Number.isInteger(maxOutputTokens) || Number(maxOutputTokens) < 64 || Number(maxOutputTokens) > 8_192)) {
-      return errorResponse(res, `tf_pg_${randomUUID().replaceAll("-", "")}`, 400, "Max output must be a whole number from 64 to 8,192 tokens.", "invalid_max_output_tokens");
+    if (maxOutputTokens !== undefined && (!Number.isInteger(maxOutputTokens) || Number(maxOutputTokens) < 64 || Number(maxOutputTokens) > 65_536)) {
+      return errorResponse(res, `tf_pg_${randomUUID().replaceAll("-", "")}`, 400, "Max output must be a whole number from 64 to 65,536 tokens.", "invalid_max_output_tokens");
     }
     if (temperature !== undefined && (typeof temperature !== "number" || !Number.isFinite(temperature) || temperature < 0 || temperature > 2)) {
       return errorResponse(res, `tf_pg_${randomUUID().replaceAll("-", "")}`, 400, "Temperature must be a number from 0 to 2.", "invalid_temperature");
     }
     try {
-      await streamPlaygroundCompletion({ userId: user.id, model, messages: raw.messages, maxOutputTokens: maxOutputTokens as number | undefined, temperature: temperature as number | undefined, sourceIpHash, req, res });
+      await streamPlaygroundCompletion({ userId: user.id, model, messages: raw.messages, maxOutputTokens: maxOutputTokens as number | undefined, temperature: temperature as number | undefined, reasoningEffort, sourceIpHash, req, res });
     } catch (error) {
       if (res.headersSent) return;
       if (error instanceof TokenForgePlaygroundError) {
-        const status = error.code === "model_not_found" ? 404 : error.code === "paid_tier_required" ? 403 : error.code === "model_unavailable" || error.code === "provider_unavailable" || error.code === "platform_maintenance" ? 503 : error.code === "account_suspended" ? 403 : error.code === "insufficient_credits" ? 402 : 400;
+        const status = error.code === "model_not_found" ? 404 : error.code === "paid_tier_required" ? 403 : error.code === "rate_limit_exceeded" ? 429 : error.code === "model_unavailable" || error.code === "provider_unavailable" || error.code === "platform_maintenance" ? 503 : error.code === "account_suspended" ? 403 : error.code === "insufficient_credits" ? 402 : 400;
         return errorResponse(res, `tf_pg_${randomUUID().replaceAll("-", "")}`, status, error.message, error.code);
       }
       return errorResponse(res, `tf_pg_${randomUUID().replaceAll("-", "")}`, 503, "The selected provider is temporarily unavailable.", "provider_unavailable");
@@ -4034,7 +4452,8 @@ export function registerOpenAiGateway(app: Express) {
       return errorResponse(res, requestId, 503, "The requested model is temporarily unavailable. Retry shortly or choose another available TokenForge model.", "model_unavailable");
     }
 
-    const keyGroup = ((key as any).keyGroup as "payg" | "bundle") || "bundle";
+    const keyGroup = ((key as any).keyGroup as "payg" | "bundle" | "token_plan" | "tokens" | "coding_plan") || "bundle";
+    const isTokenPlan = keyGroup === "token_plan" || keyGroup === "tokens" || keyGroup === "coding_plan";
     const creditsEnabled = await isUserCreditsEnabled(key.userId);
 
     if (keyGroup === "bundle" && !creditsEnabled) {
@@ -4042,12 +4461,22 @@ export function registerOpenAiGateway(app: Express) {
         res,
         requestId,
         403,
-        "Credit bundle system is currently disabled for this account. Please use a Tier 1 (Pay-As-You-Go) API key with PAYG compute balance.",
+        "Credit bundle system is currently disabled for this account. Please use a Tier 1 (Pay-As-You-Go) or Tier 2 (Token Plan) API key.",
         "credits_disabled"
       );
     }
 
     const modelAccess = await getModelAccess(input.model);
+
+    if (isTokenPlan && !modelAccess.isTokenPlan) {
+      return errorResponse(
+        res,
+        requestId,
+        403,
+        `Access denied: The model '${input.model}' does not have the Token Plan tag enabled. Please ask an administrator to enable the Token Plan tag for '${input.model}', or use a PAYG / standard API key.`,
+        "model_not_token_plan_enabled"
+      );
+    }
 
     if (keyGroup === "payg" && !modelAccess.isPayg) {
       return errorResponse(
@@ -4064,7 +4493,7 @@ export function registerOpenAiGateway(app: Express) {
         res,
         requestId,
         403,
-        `Access denied: The model '${input.model}' is not enabled for Tier 2 (Credit Bundles) access. Please generate and use a Tier 1 (Pay-As-You-Go) API key.`,
+        `Access denied: The model '${input.model}' is not enabled for Tier 2 (Credit Bundles) access. Please generate and use a Tier 1 (Pay-As-You-Go) or Token Plan API key.`,
         "model_not_bundle_enabled"
       );
     }
@@ -4113,7 +4542,9 @@ export function registerOpenAiGateway(app: Express) {
         res,
         requestId,
         402,
-        keyGroup === "payg"
+        isTokenPlan
+          ? "Your Token Plan (Coding Tokens) balance is exhausted (0 tokens remaining). Please top up your coding tokens in your dashboard."
+          : keyGroup === "payg"
           ? "Your Pay-As-You-Go (PAYG) balance cannot cover this request’s maximum estimated cost. Please top up your PAYG balance in your dashboard."
           : "Your TokenForge credit bundle balance cannot cover this request’s maximum estimated cost. Please purchase a credit package or recharge in your dashboard.",
         "insufficient_credits"
@@ -4132,12 +4563,20 @@ export function registerOpenAiGateway(app: Express) {
     const multimodalTag = isVisual
       ? visualAnalysis.analysis.tag
       : (isDocument ? "(document)" : "");
+    const rawBodyString = typeof (req as any).rawBody === "object" && (req as any).rawBody ? (req as any).rawBody.toString("utf-8") : JSON.stringify(input);
+    const firstUserMsg = Array.isArray(input.messages) ? input.messages.find(m => m?.role === "user")?.content : undefined;
+    const firstUserText = typeof firstUserMsg === "string" ? firstUserMsg : Array.isArray(firstUserMsg) ? (firstUserMsg.find(p => p?.type === "text")?.text || "") : "";
+    const sessionId = generateSessionId(key.userId, firstUserText);
+
     const providerContext: ProviderRequestContext = {
       userId: key.userId,
       providerLabel: undefined,
       credentialSlot: undefined,
       isMultimodal,
       multimodalTag,
+      incomingBodyString: rawBodyString,
+      sessionId,
+      source: "api_openai",
     };
     try {
       upstream = await forwardProviderRequest(model, upstreamInput, aborter.signal, providerContext);
@@ -4213,8 +4652,33 @@ export function registerOpenAiGateway(app: Express) {
       const fallbackText = (content || "") + (thinking ? `\n${thinking}` : "");
       const tokens = normalizedTokens(usageFrom(payload), estimatedInputTokens, fallbackText);
       const chargeNanos = calculateCreditChargeNanos(input.model as TokenForgeModelId, tokens.inputTokens, tokens.outputTokens, pricingTier);
-      const settlement = await settleReservedCredit({ userId: key.userId, requestId, reservedNanos, finalChargeNanos: chargeNanos });
+      const settlement = await settleReservedCredit({
+        userId: key.userId,
+        requestId,
+        reservedNanos,
+        finalChargeNanos: chargeNanos,
+        usedTokens: tokens.totalTokens ?? (tokens.inputTokens + tokens.outputTokens),
+        keyGroup,
+      });
       await recordUsage({ requestId, userId: key.userId, apiKeyId: key.id, modelId: input.model, source: "api", stream: false, status: "success", ...tokens, chargeNanos: settlement.chargedNanos, sourceIpHash: ipHash, provider: finalizeProviderLabel(providerContext.providerLabel, providerContext), latencyMs: Date.now() - startedAt });
+      if (isCacheDebugEnabled()) {
+        const usageReported = usageFrom(payload);
+        const cached = Number((usageReported as any).cached_tokens ?? (usageReported as any).prompt_tokens_details?.cached_tokens ?? (usageReported as any).cache_read_input_tokens ?? 0);
+        recordCacheDebugEvent({
+          sessionId,
+          model: String(input.model),
+          providerLabel: finalizeProviderLabel(providerContext.providerLabel, providerContext) || "unknown",
+          source: "api_openai",
+          incomingBody: rawBodyString,
+          upstreamBody: providerContext.capturedUpstreamBodyString || JSON.stringify(upstreamInput),
+          promptTokens: tokens.inputTokens ?? estimatedInputTokens,
+          cachedTokens: cached,
+          completionTokens: tokens.outputTokens ?? 0,
+          totalTokens: tokens.totalTokens ?? (tokens.inputTokens + tokens.outputTokens),
+          latencyMs: Date.now() - startedAt,
+          status: upstream.status,
+        });
+      }
       if (await isUserMessageLoggingEnabled(key.userId)) {
         void recordUserInteractionLog({
           userId: key.userId,
@@ -4289,8 +4753,33 @@ export function registerOpenAiGateway(app: Express) {
       clearTimeout(timeout);
       const tokens = normalizedTokens(finalUsage, estimatedInputTokens, streamedOutputText);
       const chargeNanos = streamFailed ? 0 : calculateCreditChargeNanos(input.model as TokenForgeModelId, tokens.inputTokens, tokens.outputTokens, pricingTier);
-      const settlement = await settleReservedCredit({ userId: key.userId, requestId, reservedNanos, finalChargeNanos: chargeNanos, releaseReason: streamFailed ? "Streaming request was cancelled" : undefined });
+      const settlement = await settleReservedCredit({
+        userId: key.userId,
+        requestId,
+        reservedNanos,
+        finalChargeNanos: chargeNanos,
+        usedTokens: tokens.totalTokens ?? (tokens.inputTokens + tokens.outputTokens),
+        keyGroup,
+        releaseReason: streamFailed ? "Streaming request was cancelled" : undefined,
+      });
       await recordUsage({ requestId, userId: key.userId, apiKeyId: key.id, modelId: input.model, source: "api", stream: true, status: streamFailed ? "cancelled" : "success", ...tokens, chargeNanos: settlement.chargedNanos, sourceIpHash: ipHash, provider: finalizeProviderLabel(providerContext.providerLabel, providerContext), latencyMs: Date.now() - startedAt, errorMessage: streamFailed ? (streamFailedMessage ?? "The selected provider stream was cancelled.") : undefined });
+      if (isCacheDebugEnabled()) {
+        const cached = Number((finalUsage as any).cached_tokens ?? (finalUsage as any).prompt_tokens_details?.cached_tokens ?? (finalUsage as any).cache_read_input_tokens ?? 0);
+        recordCacheDebugEvent({
+          sessionId,
+          model: String(input.model),
+          providerLabel: finalizeProviderLabel(providerContext.providerLabel, providerContext) || "unknown",
+          source: "api_openai",
+          incomingBody: rawBodyString,
+          upstreamBody: providerContext.capturedUpstreamBodyString || JSON.stringify(upstreamInput),
+          promptTokens: tokens.inputTokens ?? estimatedInputTokens,
+          cachedTokens: cached,
+          completionTokens: tokens.outputTokens ?? 0,
+          totalTokens: tokens.totalTokens ?? (tokens.inputTokens + tokens.outputTokens),
+          latencyMs: Date.now() - startedAt,
+          status: upstream?.status ?? 200,
+        });
+      }
       if (!streamFailed && (await isUserMessageLoggingEnabled(key.userId))) {
         void recordUserInteractionLog({
           userId: key.userId,

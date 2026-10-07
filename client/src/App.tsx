@@ -132,6 +132,12 @@ function Router() {
       <Route path={"/dashboard/admin/:rest*"}>
         {(params) => <Redirect to={`/admin/${params.rest ?? ""}`} />}
       </Route>
+      <Route path={"/debug/cache"}>
+        <RouteBoundary><AdminDashboard initialSection="cache" /></RouteBoundary>
+      </Route>
+      <Route path={"/admin/cache"}>
+        <RouteBoundary><AdminDashboard initialSection="cache" /></RouteBoundary>
+      </Route>
       <Route path={"/admin/settings"}>
         <RouteBoundary><AdminSettings /></RouteBoundary>
       </Route>

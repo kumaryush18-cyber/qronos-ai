@@ -471,6 +471,11 @@ export function ClaudeOpus5ProviderBalancerPanel({
                             Documents / PDF
                           </span>
                         )}
+                        {draft.reasoningEffort && (
+                          <span className="rounded bg-purple-400/20 px-1.5 py-0.2 text-[8px] font-bold uppercase tracking-wider text-purple-300 border border-purple-400/30">
+                            ⚡ {draft.reasoningEffort} effort
+                          </span>
+                        )}
                         {(draft.pinnedUserEmails?.length ?? 0) > 0 && (
                           <span className="rounded border border-[#c9ff73]/30 bg-[#c9ff73]/15 px-1.5 py-0.2 text-[8px] font-bold uppercase tracking-wider text-[#c9ff73]">
                             📌 {draft.pinnedUserEmails!.length} Pinned User{draft.pinnedUserEmails!.length === 1 ? "" : "s"}
@@ -873,6 +878,63 @@ export function ClaudeOpus5ProviderBalancerPanel({
                     }
                   }}
                 />
+              </div>
+              <div className="mt-3.5 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-white/10 bg-white/[0.03] p-3">
+                <div className="max-w-xl">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-semibold text-[#dedfe7]">Reasoning Effort Override</span>
+                    {draft.reasoningEffort && draft.reasoningEffort !== "" ? (
+                      <Badge className="border border-purple-400/30 bg-purple-400/15 text-[9px] text-purple-300 font-bold uppercase tracking-wider">
+                        ⚡ {draft.reasoningEffort} effort enforced
+                      </Badge>
+                    ) : (
+                      <Badge className="border border-white/10 bg-white/5 text-[9px] text-[#858697]">
+                        Default (Client Pass-through)
+                      </Badge>
+                    )}
+                  </div>
+                  <p className="mt-1 text-[10px] text-[#858697]">
+                    Select a reasoning effort to override all requests routed to this provider (<strong>low</strong>, <strong>high</strong>, <strong>xhigh</strong>, <strong>max</strong>). If set to <strong>Default</strong>, TokenForge accepts whatever Claude Code or the client sends.
+                  </p>
+                </div>
+                <div className="w-full sm:w-64">
+                  <select
+                    id={`${draft.id}-reasoning-effort`}
+                    value={draft.reasoningEffort || ""}
+                    onChange={(event) => {
+                      const val = (event.target.value || "") as any;
+                      onChange(draft.id, (current) => ({
+                        ...current,
+                        reasoningEffort: val,
+                      }));
+                      if (onInstantSave) {
+                        const next = drafts.map((d) => (d.id === draft.id ? { ...d, reasoningEffort: val } : d));
+                        onInstantSave(next);
+                      }
+                    }}
+                    className="h-8 w-full rounded-md border border-white/12 bg-black/40 px-2.5 text-xs text-white focus:border-[#c9ff73] focus:outline-none cursor-pointer"
+                    disabled={disabled}
+                  >
+                    <option value="" className="bg-[#18181b] text-neutral-300">
+                      Default (Client Pass-through)
+                    </option>
+                    <option value="low" className="bg-[#18181b] text-white">
+                      low — Fast / minimal reasoning
+                    </option>
+                    <option value="medium" className="bg-[#18181b] text-white">
+                      medium — Standard reasoning effort
+                    </option>
+                    <option value="high" className="bg-[#18181b] text-white">
+                      high — Deep reasoning
+                    </option>
+                    <option value="xhigh" className="bg-[#18181b] text-white">
+                      xhigh — Extra high reasoning effort
+                    </option>
+                    <option value="max" className="bg-[#18181b] text-white">
+                      max — Maximum reasoning effort
+                    </option>
+                  </select>
+                </div>
               </div>
               <div className="mt-3.5 rounded-lg border border-white/10 bg-white/[0.03] p-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
@@ -1540,6 +1602,7 @@ export function ClaudeFable5ProviderBalancerPanel({ metrics }: { metrics?: Manag
         supportsVision: provider.supportsVision ?? false,
         supportsDocuments: provider.supportsDocuments ?? false,
         pinnedUserEmails: provider.pinnedUserEmails ?? [],
+        reasoningEffort: (provider as any).reasoningEffort ?? "",
         apiKeys: provider.apiKeyMasks.length ? provider.apiKeyMasks.map(() => "") : [""],
         apiKeyEnabled: provider.apiKeyMasks.length
           ? provider.apiKeyMasks.map((item) => item.enabled !== false)
@@ -1576,7 +1639,7 @@ export function ClaudeFable5ProviderBalancerPanel({ metrics }: { metrics?: Manag
         onAddProvider={(id) =>
           setDrafts((current) => [
             ...current,
-            { id, label: `Provider ${current.length + 1}`, enabled: true, baseUrl: "", model: "", apiKeys: [""], removedSlots: [], maxInputTokens: "", maxOutputTokens: "", disableIdentityPrompt: false, bypassCooldown: false, supportsVision: false, supportsDocuments: false, pinnedUserEmails: [] },
+            { id, label: `Provider ${current.length + 1}`, enabled: true, baseUrl: "", model: "", apiKeys: [""], removedSlots: [], maxInputTokens: "", maxOutputTokens: "", disableIdentityPrompt: false, bypassCooldown: false, supportsVision: false, supportsDocuments: false, pinnedUserEmails: [], reasoningEffort: "" },
           ])
         }
         onRemoveProvider={(id) => setDrafts((current) => current.filter((draft) => draft.id !== id))}
@@ -1588,6 +1651,7 @@ export function ClaudeFable5ProviderBalancerPanel({ metrics }: { metrics?: Manag
               maxInputTokens: draft.maxInputTokens !== undefined && draft.maxInputTokens !== "" ? Number(draft.maxInputTokens) : null,
               maxOutputTokens: draft.maxOutputTokens !== undefined && draft.maxOutputTokens !== "" ? Number(draft.maxOutputTokens) : null,
               pinnedUserEmails: draft.pinnedUserEmails ?? [],
+              reasoningEffort: draft.reasoningEffort ? (draft.reasoningEffort as any) : null,
             })),
           })
         }
@@ -1599,6 +1663,7 @@ export function ClaudeFable5ProviderBalancerPanel({ metrics }: { metrics?: Manag
               maxInputTokens: draft.maxInputTokens !== undefined && draft.maxInputTokens !== "" ? Number(draft.maxInputTokens) : null,
               maxOutputTokens: draft.maxOutputTokens !== undefined && draft.maxOutputTokens !== "" ? Number(draft.maxOutputTokens) : null,
               pinnedUserEmails: draft.pinnedUserEmails ?? [],
+              reasoningEffort: draft.reasoningEffort ? (draft.reasoningEffort as any) : null,
             })),
           })
         }
@@ -1632,6 +1697,7 @@ export function Sonnet46ProviderBalancerPanel({ metrics }: { metrics?: ManagedPr
         supportsVision: provider.supportsVision ?? false,
         supportsDocuments: provider.supportsDocuments ?? false,
         pinnedUserEmails: provider.pinnedUserEmails ?? [],
+        reasoningEffort: (provider as any).reasoningEffort ?? "",
         apiKeys: provider.apiKeyMasks.length ? provider.apiKeyMasks.map(() => "") : [""],
         apiKeyEnabled: provider.apiKeyMasks.length
           ? provider.apiKeyMasks.map((item) => item.enabled !== false)
@@ -1668,7 +1734,7 @@ export function Sonnet46ProviderBalancerPanel({ metrics }: { metrics?: ManagedPr
         onAddProvider={(id) =>
           setDrafts((current) => [
             ...current,
-            { id, label: `Provider ${current.length + 1}`, enabled: true, baseUrl: "", model: "", apiKeys: [""], removedSlots: [], disableIdentityPrompt: false, bypassCooldown: false, supportsVision: false, supportsDocuments: false, pinnedUserEmails: [] },
+            { id, label: `Provider ${current.length + 1}`, enabled: true, baseUrl: "", model: "", apiKeys: [""], removedSlots: [], disableIdentityPrompt: false, bypassCooldown: false, supportsVision: false, supportsDocuments: false, pinnedUserEmails: [], reasoningEffort: "" },
           ])
         }
         onRemoveProvider={(id) => setDrafts((current) => current.filter((draft) => draft.id !== id))}
@@ -1679,6 +1745,7 @@ export function Sonnet46ProviderBalancerPanel({ metrics }: { metrics?: ManagedPr
               removeSlots: draft.removedSlots,
               maxInputTokens: draft.maxInputTokens !== undefined && draft.maxInputTokens !== "" ? Number(draft.maxInputTokens) : null,
               pinnedUserEmails: draft.pinnedUserEmails ?? [],
+              reasoningEffort: draft.reasoningEffort ? (draft.reasoningEffort as any) : null,
             })),
           })
         }
@@ -1689,6 +1756,7 @@ export function Sonnet46ProviderBalancerPanel({ metrics }: { metrics?: ManagedPr
               removeSlots: draft.removedSlots,
               maxInputTokens: draft.maxInputTokens !== undefined && draft.maxInputTokens !== "" ? Number(draft.maxInputTokens) : null,
               pinnedUserEmails: draft.pinnedUserEmails ?? [],
+              reasoningEffort: draft.reasoningEffort ? (draft.reasoningEffort as any) : null,
             })),
           })
         }
@@ -1723,6 +1791,7 @@ export function Qwen38MaxProviderBalancerPanel({ metrics }: { metrics?: ManagedP
         supportsVision: provider.supportsVision ?? false,
         supportsDocuments: provider.supportsDocuments ?? false,
         pinnedUserEmails: provider.pinnedUserEmails ?? [],
+        reasoningEffort: (provider as any).reasoningEffort ?? "",
         apiKeys: provider.apiKeyMasks.length ? provider.apiKeyMasks.map(() => "") : [""],
         apiKeyEnabled: provider.apiKeyMasks.length
           ? provider.apiKeyMasks.map((item) => item.enabled !== false)
@@ -1759,7 +1828,7 @@ export function Qwen38MaxProviderBalancerPanel({ metrics }: { metrics?: ManagedP
         onAddProvider={(id) =>
           setDrafts((current) => [
             ...current,
-            { id, label: `Provider ${current.length + 1}`, enabled: true, baseUrl: "", model: "", apiKeys: [""], removedSlots: [], maxInputTokens: "", maxOutputTokens: "", disableIdentityPrompt: false, bypassCooldown: false, supportsVision: false, supportsDocuments: false, pinnedUserEmails: [] },
+            { id, label: `Provider ${current.length + 1}`, enabled: true, baseUrl: "", model: "", apiKeys: [""], removedSlots: [], maxInputTokens: "", maxOutputTokens: "", disableIdentityPrompt: false, bypassCooldown: false, supportsVision: false, supportsDocuments: false, pinnedUserEmails: [], reasoningEffort: "" },
           ])
         }
         onRemoveProvider={(id) => setDrafts((current) => current.filter((draft) => draft.id !== id))}
@@ -1771,6 +1840,7 @@ export function Qwen38MaxProviderBalancerPanel({ metrics }: { metrics?: ManagedP
               maxInputTokens: draft.maxInputTokens !== undefined && draft.maxInputTokens !== "" ? Number(draft.maxInputTokens) : null,
               maxOutputTokens: draft.maxOutputTokens !== undefined && draft.maxOutputTokens !== "" ? Number(draft.maxOutputTokens) : null,
               pinnedUserEmails: draft.pinnedUserEmails ?? [],
+              reasoningEffort: draft.reasoningEffort ? (draft.reasoningEffort as any) : null,
             })),
           })
         }
@@ -1782,6 +1852,7 @@ export function Qwen38MaxProviderBalancerPanel({ metrics }: { metrics?: ManagedP
               maxInputTokens: draft.maxInputTokens !== undefined && draft.maxInputTokens !== "" ? Number(draft.maxInputTokens) : null,
               maxOutputTokens: draft.maxOutputTokens !== undefined && draft.maxOutputTokens !== "" ? Number(draft.maxOutputTokens) : null,
               pinnedUserEmails: draft.pinnedUserEmails ?? [],
+              reasoningEffort: draft.reasoningEffort ? (draft.reasoningEffort as any) : null,
             })),
           })
         }
@@ -1816,6 +1887,7 @@ export function Gpt6AstraProviderBalancerPanel({ metrics }: { metrics?: ManagedP
         supportsVision: provider.supportsVision ?? false,
         supportsDocuments: provider.supportsDocuments ?? false,
         pinnedUserEmails: provider.pinnedUserEmails ?? [],
+        reasoningEffort: (provider as any).reasoningEffort ?? "",
         apiKeys: provider.apiKeyMasks.length ? provider.apiKeyMasks.map(() => "") : [""],
         apiKeyEnabled: provider.apiKeyMasks.length
           ? provider.apiKeyMasks.map((item) => item.enabled !== false)
@@ -1852,7 +1924,7 @@ export function Gpt6AstraProviderBalancerPanel({ metrics }: { metrics?: ManagedP
         onAddProvider={(id) =>
           setDrafts((current) => [
             ...current,
-            { id, label: `Provider ${current.length + 1}`, enabled: true, baseUrl: "", model: "", apiKeys: [""], removedSlots: [], maxInputTokens: "", maxOutputTokens: "", disableIdentityPrompt: false, bypassCooldown: false, supportsVision: false, supportsDocuments: false, pinnedUserEmails: [] },
+            { id, label: `Provider ${current.length + 1}`, enabled: true, baseUrl: "", model: "", apiKeys: [""], removedSlots: [], maxInputTokens: "", maxOutputTokens: "", disableIdentityPrompt: false, bypassCooldown: false, supportsVision: false, supportsDocuments: false, pinnedUserEmails: [], reasoningEffort: "" },
           ])
         }
         onRemoveProvider={(id) => setDrafts((current) => current.filter((draft) => draft.id !== id))}
@@ -1864,6 +1936,7 @@ export function Gpt6AstraProviderBalancerPanel({ metrics }: { metrics?: ManagedP
               maxInputTokens: draft.maxInputTokens !== undefined && draft.maxInputTokens !== "" ? Number(draft.maxInputTokens) : null,
               maxOutputTokens: draft.maxOutputTokens !== undefined && draft.maxOutputTokens !== "" ? Number(draft.maxOutputTokens) : null,
               pinnedUserEmails: draft.pinnedUserEmails ?? [],
+              reasoningEffort: draft.reasoningEffort ? (draft.reasoningEffort as any) : null,
             })),
           })
         }
@@ -1875,6 +1948,7 @@ export function Gpt6AstraProviderBalancerPanel({ metrics }: { metrics?: ManagedP
               maxInputTokens: draft.maxInputTokens !== undefined && draft.maxInputTokens !== "" ? Number(draft.maxInputTokens) : null,
               maxOutputTokens: draft.maxOutputTokens !== undefined && draft.maxOutputTokens !== "" ? Number(draft.maxOutputTokens) : null,
               pinnedUserEmails: draft.pinnedUserEmails ?? [],
+              reasoningEffort: draft.reasoningEffort ? (draft.reasoningEffort as any) : null,
             })),
           })
         }
@@ -1909,6 +1983,7 @@ export function KimiK3ProviderBalancerPanel({ metrics }: { metrics?: ManagedProv
         supportsVision: provider.supportsVision ?? false,
         supportsDocuments: provider.supportsDocuments ?? false,
         pinnedUserEmails: provider.pinnedUserEmails ?? [],
+        reasoningEffort: (provider as any).reasoningEffort ?? "",
         apiKeys: provider.apiKeyMasks.length ? provider.apiKeyMasks.map(() => "") : [""],
         apiKeyEnabled: provider.apiKeyMasks.length
           ? provider.apiKeyMasks.map((item) => item.enabled !== false)
@@ -1945,7 +2020,7 @@ export function KimiK3ProviderBalancerPanel({ metrics }: { metrics?: ManagedProv
         onAddProvider={(id) =>
           setDrafts((current) => [
             ...current,
-            { id, label: `Provider ${current.length + 1}`, enabled: true, baseUrl: "", model: "", apiKeys: [""], removedSlots: [], maxInputTokens: "", maxOutputTokens: "", disableIdentityPrompt: false, bypassCooldown: false, supportsVision: false, supportsDocuments: false, pinnedUserEmails: [] },
+            { id, label: `Provider ${current.length + 1}`, enabled: true, baseUrl: "", model: "", apiKeys: [""], removedSlots: [], maxInputTokens: "", maxOutputTokens: "", disableIdentityPrompt: false, bypassCooldown: false, supportsVision: false, supportsDocuments: false, pinnedUserEmails: [], reasoningEffort: "" },
           ])
         }
         onRemoveProvider={(id) => setDrafts((current) => current.filter((draft) => draft.id !== id))}
@@ -1957,6 +2032,7 @@ export function KimiK3ProviderBalancerPanel({ metrics }: { metrics?: ManagedProv
               maxInputTokens: draft.maxInputTokens !== undefined && draft.maxInputTokens !== "" ? Number(draft.maxInputTokens) : null,
               maxOutputTokens: draft.maxOutputTokens !== undefined && draft.maxOutputTokens !== "" ? Number(draft.maxOutputTokens) : null,
               pinnedUserEmails: draft.pinnedUserEmails ?? [],
+              reasoningEffort: draft.reasoningEffort ? (draft.reasoningEffort as any) : null,
             })),
           })
         }
@@ -1968,6 +2044,7 @@ export function KimiK3ProviderBalancerPanel({ metrics }: { metrics?: ManagedProv
               maxInputTokens: draft.maxInputTokens !== undefined && draft.maxInputTokens !== "" ? Number(draft.maxInputTokens) : null,
               maxOutputTokens: draft.maxOutputTokens !== undefined && draft.maxOutputTokens !== "" ? Number(draft.maxOutputTokens) : null,
               pinnedUserEmails: draft.pinnedUserEmails ?? [],
+              reasoningEffort: draft.reasoningEffort ? (draft.reasoningEffort as any) : null,
             })),
           })
         }
@@ -1994,6 +2071,7 @@ export function DeepseekV4ProProviderBalancerPanel({ metrics }: { metrics?: Mana
         ...provider,
         maxInputTokens: (provider as { maxInputTokens?: number }).maxInputTokens ?? "",
         pinnedUserEmails: provider.pinnedUserEmails ?? [],
+        reasoningEffort: (provider as any).reasoningEffort ?? "",
         apiKeys: provider.apiKeyMasks.length ? provider.apiKeyMasks.map(() => "") : [""],
         apiKeyEnabled: provider.apiKeyMasks.length
           ? provider.apiKeyMasks.map((item) => item.enabled !== false)
@@ -2030,7 +2108,7 @@ export function DeepseekV4ProProviderBalancerPanel({ metrics }: { metrics?: Mana
         onAddProvider={(id) =>
           setDrafts((current) => [
             ...current,
-            { id, label: `Provider ${current.length + 1}`, enabled: true, baseUrl: "", model: "", apiKeys: [""], removedSlots: [], bypassCooldown: false, supportsVision: false, supportsDocuments: false, pinnedUserEmails: [] },
+            { id, label: `Provider ${current.length + 1}`, enabled: true, baseUrl: "", model: "", apiKeys: [""], removedSlots: [], bypassCooldown: false, supportsVision: false, supportsDocuments: false, pinnedUserEmails: [], reasoningEffort: "" },
           ])
         }
         onRemoveProvider={(id) => setDrafts((current) => current.filter((draft) => draft.id !== id))}
@@ -2041,6 +2119,7 @@ export function DeepseekV4ProProviderBalancerPanel({ metrics }: { metrics?: Mana
               removeSlots: draft.removedSlots,
               maxInputTokens: draft.maxInputTokens !== undefined && draft.maxInputTokens !== "" ? Number(draft.maxInputTokens) : null,
               pinnedUserEmails: draft.pinnedUserEmails ?? [],
+              reasoningEffort: draft.reasoningEffort ? (draft.reasoningEffort as any) : null,
             })),
           })
         }
@@ -2051,6 +2130,7 @@ export function DeepseekV4ProProviderBalancerPanel({ metrics }: { metrics?: Mana
               removeSlots: draft.removedSlots,
               maxInputTokens: draft.maxInputTokens !== undefined && draft.maxInputTokens !== "" ? Number(draft.maxInputTokens) : null,
               pinnedUserEmails: draft.pinnedUserEmails ?? [],
+              reasoningEffort: draft.reasoningEffort ? (draft.reasoningEffort as any) : null,
             })),
           })
         }
@@ -2821,6 +2901,7 @@ export function ClaudeOpus5ProviderBalancerPanelWrapper({
         supportsVision: provider.supportsVision ?? false,
         supportsDocuments: provider.supportsDocuments ?? false,
         pinnedUserEmails: provider.pinnedUserEmails ?? [],
+        reasoningEffort: provider.reasoningEffort ?? "",
         apiKeys: provider.apiKeyMasks.length ? provider.apiKeyMasks.map(() => "") : [""],
         apiKeyEnabled: provider.apiKeyMasks.length
           ? provider.apiKeyMasks.map((item) => item.enabled !== false)
@@ -2874,6 +2955,7 @@ export function ClaudeOpus5ProviderBalancerPanelWrapper({
               supportsVision: false,
               supportsDocuments: false,
               pinnedUserEmails: [],
+              reasoningEffort: "",
             },
           ])
         }
@@ -2886,6 +2968,7 @@ export function ClaudeOpus5ProviderBalancerPanelWrapper({
               maxInputTokens: draft.maxInputTokens !== undefined && draft.maxInputTokens !== "" ? Number(draft.maxInputTokens) : null,
               maxOutputTokens: draft.maxOutputTokens !== undefined && draft.maxOutputTokens !== "" ? Number(draft.maxOutputTokens) : null,
               pinnedUserEmails: draft.pinnedUserEmails ?? [],
+              reasoningEffort: draft.reasoningEffort ? (draft.reasoningEffort as any) : null,
             })),
           })
         }
@@ -2897,6 +2980,7 @@ export function ClaudeOpus5ProviderBalancerPanelWrapper({
               maxInputTokens: draft.maxInputTokens !== undefined && draft.maxInputTokens !== "" ? Number(draft.maxInputTokens) : null,
               maxOutputTokens: draft.maxOutputTokens !== undefined && draft.maxOutputTokens !== "" ? Number(draft.maxOutputTokens) : null,
               pinnedUserEmails: draft.pinnedUserEmails ?? [],
+              reasoningEffort: draft.reasoningEffort ? (draft.reasoningEffort as any) : null,
             })),
           })
         }

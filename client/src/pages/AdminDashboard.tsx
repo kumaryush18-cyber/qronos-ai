@@ -62,9 +62,11 @@ import { AdminUserMessageInspector } from "@/components/admin/inspector/AdminUse
 import { TransactionsWorkspace } from "@/components/TransactionsWorkspace";
 import { PaymentsWorkspace } from "@/components/payments/PaymentsWorkspace";
 import { AdminPricingSection } from "@/components/admin/pricing/AdminPricingSection";
+import { CacheDebuggerTab } from "@/components/admin/CacheDebuggerTab";
 
 export type AdminSection =
   | "overview"
+  | "cache"
   | "accounts"
   | "user-logs"
   | "safety-audit"
@@ -89,18 +91,18 @@ export default function AdminDashboard({ initialSection }: { initialSection?: Ad
 
   const overview = trpc.admin.overview.useQuery(undefined, {
     enabled: isAdminSession,
-    refetchInterval: 30_000,
+    refetchInterval: 60_000,
     refetchIntervalInBackground: false,
     retry: 2,
     retryDelay: (attempt) => Math.min(1_000 * 2 ** attempt, 8_000),
   });
-  const flags = trpc.admin.flags.useQuery(undefined, { enabled: isAdminSession, refetchInterval: 15_000 });
-  const activityFeed = trpc.admin.activity.useQuery({ limit: 40 }, { enabled: isAdminSession, refetchInterval: 15_000 });
+  const flags = trpc.admin.flags.useQuery(undefined, { enabled: isAdminSession, refetchInterval: 45_000 });
+  const activityFeed = trpc.admin.activity.useQuery({ limit: 40 }, { enabled: isAdminSession, refetchInterval: 45_000 });
   const auditExport = trpc.admin.auditExport.useQuery(undefined, { enabled: false });
   const announcement = trpc.admin.announcement.useQuery(undefined, { enabled: isAdminSession });
   const specialReferralCampaign = trpc.admin.specialReferralCampaign.useQuery(undefined, {
     enabled: isAdminSession,
-    refetchInterval: 15_000,
+    refetchInterval: 60_000,
   });
 
   const utils = trpc.useUtils();
@@ -113,6 +115,9 @@ export default function AdminDashboard({ initialSection }: { initialSection?: Ad
       if (tab) return tab;
       if (window.location.pathname.includes("/admin/support") || window.location.pathname.includes("/admin/live-chat")) {
         return "live-chat";
+      }
+      if (window.location.pathname.includes("/debug/cache") || window.location.pathname.includes("/admin/cache")) {
+        return "cache";
       }
     }
     return "overview";
@@ -148,6 +153,14 @@ export default function AdminDashboard({ initialSection }: { initialSection?: Ad
     onSuccess: (data) => {
       utils.admin.overview.invalidate();
       toast.success(`Bundle access for ${data.modelId} set to ${data.isBundle ? "Bundle Enabled" : "Bundle Disabled"}`);
+    },
+    onError: (error) => toast.error(error.message),
+  });
+
+  const modelTokenPlanControl = trpc.admin.setModelIsTokenPlan.useMutation({
+    onSuccess: (data) => {
+      utils.admin.overview.invalidate();
+      toast.success(`Token Plan tag for ${data.modelId} set to ${data.isTokenPlan ? "Token Plan Enabled" : "Token Plan Disabled"}`);
     },
     onError: (error) => toast.error(error.message),
   });
@@ -380,6 +393,7 @@ export default function AdminDashboard({ initialSection }: { initialSection?: Ad
         {(
           [
             "overview",
+            "cache",
             "accounts",
             "user-logs",
             "safety-audit",
@@ -412,6 +426,8 @@ export default function AdminDashboard({ initialSection }: { initialSection?: Ad
           >
             {item === "overview"
               ? "Overview"
+              : item === "cache"
+              ? "Prompt Cache"
               : item === "accounts"
               ? "Accounts"
               : item === "user-logs"
@@ -448,6 +464,9 @@ export default function AdminDashboard({ initialSection }: { initialSection?: Ad
           </Button>
         ))}
       </div>
+      {section === "cache" && (
+        <CacheDebuggerTab />
+      )}
       {section === "user-logs" && (
         <AdminUserMessageInspector />
       )}
@@ -522,6 +541,7 @@ export default function AdminDashboard({ initialSection }: { initialSection?: Ad
           onModelTierChange={(modelId, minTier) => modelTierControl.mutate({ modelId: modelId as never, minTier })}
           onModelPaygToggle={(modelId, isPayg) => modelPaygControl.mutate({ modelId: modelId as never, isPayg })}
           onModelBundleToggle={(modelId, isBundle) => modelBundleControl.mutate({ modelId: modelId as never, isBundle })}
+          onModelTokenPlanToggle={(modelId, isTokenPlan) => modelTokenPlanControl.mutate({ modelId: modelId as never, isTokenPlan })}
           providerPending={providerControl.isPending}
           providerVisionPending={providerVisionControl.isPending}
           providerDocumentsPending={providerDocumentsControl.isPending}
@@ -529,6 +549,7 @@ export default function AdminDashboard({ initialSection }: { initialSection?: Ad
           modelTierPending={modelTierControl.isPending}
           modelPaygPending={modelPaygControl.isPending}
           modelBundlePending={modelBundleControl.isPending}
+          modelTokenPlanPending={modelTokenPlanControl.isPending}
         />
       )}
       {section === "providers" && <ManagedProviderSelector keyMetrics={managedProviderKeyMetrics} />}
@@ -630,6 +651,7 @@ export default function AdminDashboard({ initialSection }: { initialSection?: Ad
               </AlertDialogContent>
             </AlertDialog>
           </div>
+          {/* Pre-provision a GitHub account; exact, verified GitHub email match is required for activation; Awaiting verified GitHub login */}
           {body}
         </div>
       </div>

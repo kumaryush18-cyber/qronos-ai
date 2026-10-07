@@ -7,6 +7,19 @@ vi.mock("./db", () => ({
   releaseBaiCredentialCapacityLease: vi.fn(),
   releaseBailuWebshareProxySlot: vi.fn(),
   findActiveApiKey: vi.fn(),
+  getDb: vi.fn(async () => null),
+  fallbackPlatformSettings: new Map(),
+  lookupUserEmail: vi.fn(async () => null),
+  getPinnedUserRoutingPolicy: vi.fn(async () => ({ softPreference: true })),
+  isUserMessageLoggingEnabled: vi.fn(async () => false),
+  recordUserInteractionLog: vi.fn(async () => undefined),
+  findAllMultimodalProviders: vi.fn(async () => []),
+  recordModelFailureLog: vi.fn(async () => undefined),
+  recordGpt6AstraFailureLog: vi.fn(async () => undefined),
+  recordKimiK3FailureLog: vi.fn(async () => undefined),
+  getGpt6AstraQuotaStatus: vi.fn(async () => ({ canAccessApi: true })),
+  getGpt6AstraRuntimeConfig: vi.fn(async () => ({ providers: [] })),
+  getKimiK3RuntimeConfig: vi.fn(async () => ({ providers: [] })),
   getClaudeFable5NvidiaRuntimeConfig: vi.fn(),
   getClaudeOpus5RuntimeConfig: vi.fn(),
   getEligibleClaudeOpus5QwenModels: vi.fn(),
@@ -56,7 +69,7 @@ vi.mock("node:https", () => ({ default: { request: vi.fn() } }));
 vi.mock("socks-proxy-agent", () => ({ SocksProxyAgent: vi.fn().mockImplementation((proxyUrl: URL) => ({ destroy: vi.fn(), proxyUrl })) }));
 
 import { getBailuWebshareProxyPoolRuntimeConfig, getClaudeFable5NvidiaRuntimeConfig, getClaudeOpus5RuntimeConfig, getDeepseekV4ProRuntimeConfig, getEligibleClaudeOpus5QwenModels, getGlm53RuntimeConfig, getPlatformMaintenanceConfig, getPlaygroundMaintenanceConfig, getQwen38MaxRuntimeConfig, getQuotaStatus, getRenderNimProxyRuntimeConfig, getSonnet46RuntimeConfig, isBaiProviderCircuitEligible, isManagedProviderCredentialEnabled, isModelAvailable, loadBaiReasoningContinuation, loadOrcaRouterCredentialSlotCiphertexts, recordBaiProviderRateLimit, recordBaiProviderSuccess, recordClaudeFable5FailureLog, recordClaudeOpus5FailureLog, recordClaudeOpus5QwenModelUsage, recordDeepseekV4ProFailureLog, recordGlm53FailureLog, recordQwen38MaxFailureLog, recordSonnet46FailureLog, recordManagedProviderKeyOutcome, recordUsage, releaseBaiCredentialCapacityLease, releaseBailuWebshareProxySlot, reserveCredit, settleReservedCredit, storeBaiReasoningContinuation, tryAcquireBaiCredentialCapacityLease, tryAcquireBailuWebshareProxySlot } from "./db";
-import { forwardProviderRequest, modelScopedGuidance, playgroundMessagesForModel, playgroundResponseGuidance, PUBLIC_PROVIDER_ERROR_MESSAGE, resetBailuWebshareProxyPool, resetClaudeFable5ProviderBalancing, resetClaudeOpus5ProviderBalancing, resetDeepseekV4ProProviderBalancing, resetQwen38MaxProviderBalancing, resetSonnet46ProviderBalancing, runPlaygroundCompletion, sanitizeModelResponsePayload, sanitizeModelSseData, TokenForgePlaygroundError, withModelScopedGuidance, CLAUDE_FABLE5_ROTATING_IDENTITIES } from "./openaiGateway";
+import { forwardProviderRequest, modelScopedGuidance, playgroundMessagesForModel, playgroundResponseGuidance, PUBLIC_PROVIDER_ERROR_MESSAGE, resetBailuWebshareProxyPool, resetClaudeFable5ProviderBalancing, resetClaudeOpus5ProviderBalancing, resetDeepseekV4ProProviderBalancing, resetGlm53ProviderBalancing, resetQwen38MaxProviderBalancing, resetSonnet46ProviderBalancing, runPlaygroundCompletion, sanitizeModelResponsePayload, sanitizeModelSseData, TokenForgePlaygroundError, withModelScopedGuidance, CLAUDE_FABLE5_ROTATING_IDENTITIES } from "./openaiGateway";
 import https from "node:https";
 import { SocksProxyAgent } from "socks-proxy-agent";
 import { PassThrough, Readable } from "node:stream";
@@ -233,6 +246,7 @@ beforeEach(() => {
   void resetBailuWebshareProxyPool();
   resetDeepseekV4ProProviderBalancing();
   resetSonnet46ProviderBalancing();
+  resetGlm53ProviderBalancing();
   resetQwen38MaxProviderBalancing();
   resetFxqidianCredentialRotation();
   invalidateOrcaRouterCredentialPool();
