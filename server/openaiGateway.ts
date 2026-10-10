@@ -583,12 +583,128 @@ export function estimateTextTokens(text: unknown): number {
   return Math.max(1, Math.ceil(trimmed.length / 3.5));
 }
 
+export function tryExtractImageDimensions(dataOrUrl: string): { width: number; height: number } | null {
+  if (!dataOrUrl || typeof dataOrUrl !== "string") return null;
+  const match = dataOrUrl.match(/data:image\/[a-zA-Z0-9.+-]+;base64,([A-Za-z0-9+/=]+)/);
+  const base64Str = match ? match[1] : (dataOrUrl.length >= 16 && !dataOrUrl.startsWith("http") ? dataOrUrl : null);
+  if (!base64Str) return null;
+  try {
+    const headerSlice = base64Str.slice(0, 700);
+    const buf = Buffer.from(headerSlice, "base64");
+    if (buf.length < 10) return null;
+
+    // 1. PNG: 8 bytes signature (0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a)
+    // IHDR: 4 bytes len, 4 bytes "IHDR", 4 bytes width (BE), 4 bytes height (BE)
+    if (buf.length >= 24 && buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47) {
+      const width = buf.readUInt32BE(16);
+      const height = buf.readUInt32BE(20);
+      if (width > 0 && height > 0) return { width, height };
+    }
+
+    // 2. GIF: "GIF87a" or "GIF89a"
+    if (buf.length >= 10 && buf[0] === 0x47 && buf[1] === 0x49 && buf[2] === 0x46) {
+      const width = buf.readUInt16LE(6);
+      const height = buf.readUInt16LE(8);
+      if (width > 0 && height > 0) return { width, height };
+    }
+
+    // 3. JPEG: 0xFF, 0xD8
+    if (buf.length > 20 && buf[0] === 0xff && buf[1] === 0xd8) {
+      let offset = 2;
+      while (offset < buf.length - 8) {
+        if (buf[offset] !== 0xff) break;
+        while (offset < buf.length && buf[offset] === 0xff) offset++;
+        if (offset >= buf.length) break;
+        const marker = buf[offset];
+        offset++;
+        if (marker === 0xd8 || marker === 0xd9 || (marker >= 0xd0 && marker <= 0xd7)) continue;
+        if (offset + 2 > buf.length) break;
+        const len = buf.readUInt16BE(offset);
+        if (
+          marker === 0xc0 || marker === 0xc1 || marker === 0xc2 || marker === 0xc3 ||
+          marker === 0xc5 || marker === 0xc6 || marker === 0xc7 ||
+          marker === 0xc9 || marker === 0xca || marker === 0xcb ||
+          marker === 0xcd || marker === 0xce || marker === 0xcf
+        ) {
+          if (offset + 7 <= buf.length) {
+            const height = buf.readUInt16BE(offset + 3);
+            const width = buf.readUInt16BE(offset + 5);
+            if (width > 0 && height > 0) return { width, height };
+          }
+          break;
+        }
+        offset += len;
+      }
+    }
+
+    // 4. WebP: "RIFF" ... "WEBP"
+    if (buf.length >= 30 && buf.toString("ascii", 0, 4) === "RIFF" && buf.toString("ascii", 8, 12) === "WEBP") {
+      const type = buf.toString("ascii", 12, 16);
+      if (type === "VP8 " && buf.length >= 30) {
+        const width = buf.readUInt16LE(26) & 0x3fff;
+        const height = buf.readUInt16LE(28) & 0x3fff;
+        if (width > 0 && height > 0) return { width, height };
+      } else if (type === "VP8L" && buf.length >= 25) {
+        const b1 = buf[21];
+        const b2 = buf[22];
+        const b3 = buf[23];
+        const b4 = buf[24];
+        const width = 1 + (((b2 & 0x3f) << 8) | b1);
+        const height = 1 + (((b4 & 0x0f) << 10) | (b3 << 2) | ((b2 & 0xc0) >> 6));
+        if (width > 0 && height > 0) return { width, height };
+      } else if (type === "VP8X" && buf.length >= 30) {
+        const width = 1 + buf.readUIntLE(24, 3);
+        const height = 1 + buf.readUIntLE(27, 3);
+        if (width > 0 && height > 0) return { width, height };
+      }
+    }
+  } catch {
+    // Graceful fallback
+  }
+  return null;
+}
+
+export function estimateSingleImageTokens(part: unknown): number {
+  const MAX_IMAGE_TOKENS = 1600;
+
+  let rawData: string | null = null;
+  if (typeof part === "string") {
+    rawData = part;
+  } else if (part && typeof part === "object") {
+    const p = part as any;
+    if (typeof p.source?.data === "string") {
+      rawData = p.source.data;
+    } else if (typeof p.image_url?.url === "string") {
+      rawData = p.image_url.url;
+    } else if (typeof p.image_url === "string") {
+      rawData = p.image_url;
+    } else if (typeof p.url === "string") {
+      rawData = p.url;
+    }
+  }
+
+  if (rawData) {
+    const dims = tryExtractImageDimensions(rawData);
+    if (dims && dims.width > 0 && dims.height > 0) {
+      // Anthropic formula: (width * height) / 750, capped at 1600
+      const calculated = Math.ceil((dims.width * dims.height) / 750);
+      return Math.min(MAX_IMAGE_TOKENS, Math.max(1, calculated));
+    }
+  }
+
+  return MAX_IMAGE_TOKENS;
+}
+
 export function estimateMessageTokens(content: unknown): number {
   if (typeof content === "string") {
     const base64DataUris = content.match(/data:image\/[a-zA-Z0-9.+-]+;base64,[A-Za-z0-9+/=]+/g);
     if (base64DataUris && base64DataUris.length > 0) {
       const stripped = content.replace(/data:image\/[a-zA-Z0-9.+-]+;base64,[A-Za-z0-9+/=]+/g, "");
-      return Math.ceil(stripped.length / 4) + (base64DataUris.length * 1000);
+      let imageTokens = 0;
+      for (const uri of base64DataUris) {
+        imageTokens += estimateSingleImageTokens(uri);
+      }
+      return Math.ceil(stripped.length / 4) + imageTokens;
     }
     return Math.ceil(content.length / 4);
   }
@@ -597,8 +713,14 @@ export function estimateMessageTokens(content: unknown): number {
     for (const part of content) {
       if (!part || typeof part !== "object") continue;
       const p = part as any;
-      if (p.type === "image_url" || p.type === "image" || p.image_url) {
-        sum += 1000;
+      if (
+        p.type === "image_url" ||
+        p.type === "image" ||
+        p.image_url ||
+        p.source?.type === "base64" ||
+        p.source?.media_type?.startsWith("image/")
+      ) {
+        sum += estimateSingleImageTokens(p);
       } else if (p.type === "text" && typeof p.text === "string") {
         sum += estimateMessageTokens(p.text);
       } else {
@@ -607,7 +729,32 @@ export function estimateMessageTokens(content: unknown): number {
     }
     return sum;
   }
-  return Math.ceil(JSON.stringify(content ?? "").length / 4);
+  if (content && typeof content === "object") {
+    const p = content as any;
+    if (
+      p.type === "image" ||
+      p.type === "image_url" ||
+      p.image_url ||
+      p.source?.type === "base64" ||
+      p.source?.media_type?.startsWith("image/")
+    ) {
+      return estimateSingleImageTokens(p);
+    }
+    if (typeof p.text === "string") {
+      return estimateMessageTokens(p.text);
+    }
+    try {
+      const str = JSON.stringify(content, (key, value) => {
+        if (key === "data" && typeof value === "string" && value.length > 200) return "[image_data]";
+        if (typeof value === "string" && value.startsWith("data:image/")) return "[image_data]";
+        return value;
+      });
+      return Math.ceil(str.length / 4);
+    } catch {
+      return 50;
+    }
+  }
+  return 0;
 }
 
 export function estimateInputTokens(messages: ChatMessage[]) {
@@ -932,14 +1079,28 @@ function managedProviderBillableTokens(usage: Usage, inputEstimate: number) {
 /** A Claude Opus response with explicit zero output or no usable assistant output is a provider failure, never a successful caller response. */
 export function isClaudeOpus5ZeroOutputFailure(payload: unknown) {
   if (!payload || typeof payload !== "object") return true;
-  const usage = usageFrom(payload);
-  const explicitOutputTokens = usage.completion_tokens ?? usage.output_tokens;
-  if (typeof explicitOutputTokens === "number" && Number.isFinite(explicitOutputTokens) && explicitOutputTokens <= 0) return true;
-  const choice = (payload as { choices?: Array<{ message?: { content?: unknown; tool_calls?: unknown[] } }> }).choices?.[0];
+  const choice = (payload as { choices?: Array<{ message?: { content?: unknown; reasoning_content?: unknown; reasoning?: unknown; thinking?: unknown; tool_calls?: unknown[] } }> }).choices?.[0];
   const message = choice?.message;
   if (!message) return true;
   const hasText = typeof message.content === "string" && message.content.trim().length > 0;
   const hasToolCalls = Array.isArray(message.tool_calls) && message.tool_calls.length > 0;
+  const reasoning = message.reasoning_content ?? message.reasoning ?? message.thinking;
+  const hasReasoning = typeof reasoning === "string" && reasoning.trim().length > 0;
+
+  if (hasText || hasToolCalls) {
+    return false;
+  }
+
+  if (hasReasoning) {
+    message.content = reasoning;
+    (message as any).isReasoningPromoted = true;
+    return false;
+  }
+
+  const usage = usageFrom(payload);
+  const explicitOutputTokens = usage.completion_tokens ?? usage.output_tokens;
+  if (typeof explicitOutputTokens === "number" && Number.isFinite(explicitOutputTokens) && explicitOutputTokens <= 0) return true;
+
   return !hasText && !hasToolCalls;
 }
 
@@ -1642,8 +1803,8 @@ const QWEN_POOL_MAX_TOKENS = 32_768;
 
 function qwenPoolMaxOutputTokens(provider: { maxOutputTokens?: number }) {
   const configured = Number(provider.maxOutputTokens);
-  return Number.isFinite(configured)
-    ? Math.min(QWEN_POOL_MAX_TOKENS, Math.max(1, Math.trunc(configured)))
+  return Number.isFinite(configured) && configured > 0
+    ? Math.min(10_000_000, Math.max(1, Math.trunc(configured)))
     : QWEN_POOL_MAX_TOKENS;
 }
 
@@ -1692,11 +1853,8 @@ export function applyProviderMaxOutputTokens(input: ChatInput, provider: { maxOu
   if (!Number.isFinite(cap) || cap <= 0) return input;
   const sanitized = sanitizeUpstreamChatInput(input);
   const safeCap = Math.min(10_000_000, Math.max(1, Math.trunc(cap)));
-  if (typeof sanitized.max_tokens !== "number" || !Number.isFinite(sanitized.max_tokens)) {
-    return { ...sanitized, max_tokens: safeCap };
-  }
-  const next = Math.min(safeCap, Math.max(1, Math.floor(sanitized.max_tokens)));
-  return next === sanitized.max_tokens ? sanitized : { ...sanitized, max_tokens: next };
+  delete (sanitized as any).max_completion_tokens;
+  return { ...sanitized, max_tokens: safeCap };
 }
 
 export function applyProviderReasoningPolicy(
@@ -1879,10 +2037,14 @@ export function applyProviderIdentityPolicy(
 }
 
 function normalizeQwenPoolMaxTokens(input: ChatInput, provider: { maxOutputTokens?: number }): ChatInput {
+  const configured = Number(provider.maxOutputTokens);
+  if (Number.isFinite(configured) && configured > 0) {
+    const safeCap = Math.min(10_000_000, Math.max(1, Math.trunc(configured)));
+    return { ...input, max_tokens: safeCap };
+  }
   const cap = qwenPoolMaxOutputTokens(provider);
   if (typeof input.max_tokens !== "number" || !Number.isFinite(input.max_tokens)) return { ...input, max_tokens: cap };
-  const next = Math.min(cap, Math.max(1, Math.floor(input.max_tokens)));
-  return next === input.max_tokens ? input : { ...input, max_tokens: next };
+  return input;
 }
 
 let baiConsecutiveFailures = 0;
@@ -1923,10 +2085,7 @@ async function effectiveReservationMaxOutputTokens(model: TokenForgeModelId, inp
     const fableRuntime = await getClaudeFable5NvidiaRuntimeConfig();
     for (const provider of fableRuntime.providers) {
       if (provider.enabled !== false && provider.maxOutputTokens !== undefined && Number.isFinite(Number(provider.maxOutputTokens)) && Number(provider.maxOutputTokens) > 0) {
-        const cap = Math.min(10_000_000, Math.max(1, Math.trunc(Number(provider.maxOutputTokens))));
-        return typeof input.max_tokens === "number" && Number.isFinite(input.max_tokens)
-          ? Math.min(requestedMaxTokens, cap)
-          : cap;
+        return Math.min(10_000_000, Math.max(1, Math.trunc(Number(provider.maxOutputTokens))));
       }
     }
     return requestedMaxTokens;
@@ -1950,17 +2109,11 @@ async function effectiveReservationMaxOutputTokens(model: TokenForgeModelId, inp
   for (const provider of orderedProviders) {
     if (!provider.baseUrl.trim() || !provider.model.trim()) continue;
     if (provider.maxOutputTokens !== undefined && Number.isFinite(Number(provider.maxOutputTokens)) && Number(provider.maxOutputTokens) > 0) {
-      const cap = Math.min(10_000_000, Math.max(1, Math.trunc(Number(provider.maxOutputTokens))));
-      return typeof input.max_tokens === "number" && Number.isFinite(input.max_tokens)
-        ? Math.min(requestedMaxTokens, cap)
-        : cap;
+      return Math.min(10_000_000, Math.max(1, Math.trunc(Number(provider.maxOutputTokens))));
     }
     if (!isQwenClaudeOpus5Provider(provider)) return requestedMaxTokens;
     if ((await getEligibleClaudeOpus5QwenModels(provider)).length) {
-      const cap = qwenPoolMaxOutputTokens(provider);
-      return typeof input.max_tokens === "number" && Number.isFinite(input.max_tokens)
-        ? Math.min(requestedMaxTokens, cap)
-        : cap;
+      return qwenPoolMaxOutputTokens(provider);
     }
   }
   return requestedMaxTokens;
@@ -2320,6 +2473,10 @@ function wrapManagedProviderResponseWithFailureLog(
     const outputTokens = finalUsage.completion_tokens ?? finalUsage.output_tokens;
     const explicitZeroOutput = typeof outputTokens === "number" && Number.isFinite(outputTokens) && outputTokens <= 0;
     if (!explicitZeroOutput && receivedOutput) return;
+    if (baiReasoning.trim().length > 0) {
+      controller.enqueue(encoder.encode(`data: ${JSON.stringify({ choices: [{ delta: { content: baiReasoning } }] })}\n\n`));
+      return;
+    }
     const diagnostic = `${label} provider stream ended without generating assistant tokens or valid content.`;
     if (!recorded) {
       recorded = true;
@@ -4611,12 +4768,12 @@ export function registerOpenAiGateway(app: Express) {
     if (!input.stream) {
       clearTimeout(timeout);
       const payload = await upstream.json().catch(() => null);
-      if (!payload || isManagedProviderFailurePayload(payload) || ((input.model === "claude-opus-5" || input.model === "claude-fable-5.1" || input.model === "gpt-6-astra") && isClaudeOpus5ZeroOutputFailure(payload))) {
+      if (!payload || isManagedProviderFailurePayload(payload) || ((input.model === "claude-opus-5" || input.model === "claude-opus-5.5" || input.model === "claude-fable-5.1" || input.model === "gpt-6-astra") && isClaudeOpus5ZeroOutputFailure(payload))) {
         const message = publicProviderErrorMessage();
         const rawError = providerContext.rawErrorMessage || `[${providerContext.providerLabel || 'Upstream'}] Empty or zero-output response returned by provider.`;
         await settleReservedCredit({ userId: key.userId, requestId, reservedNanos, finalChargeNanos: 0, releaseReason: "Provider response was invalid" });
         await recordUsage({ requestId, userId: key.userId, apiKeyId: key.id, modelId: input.model, source: "api", stream: false, status: "provider_error", sourceIpHash: ipHash, provider: finalizeProviderLabel(providerContext.providerLabel, providerContext), latencyMs: Date.now() - startedAt, errorMessage: message, rawErrorMessage: rawError });
-        if ((input.model === "claude-opus-5" || input.model === "gpt-6-astra") && providerContext.providerLabel) {
+        if ((input.model === "claude-opus-5" || input.model === "claude-opus-5.5" || input.model === "gpt-6-astra") && providerContext.providerLabel) {
           const diagnostic = isClaudeOpus5ZeroOutputFailure(payload)
             ? `${input.model === "gpt-6-astra" ? "GPT-6 Astra" : "The provider"} returned a successful response with zero output tokens or no assistant output.`
             : "The provider returned an invalid or failure-envelope response.";
@@ -4647,9 +4804,16 @@ export function registerOpenAiGateway(app: Express) {
         return errorResponse(res, requestId, 503, message, "provider_unavailable");
       }
       const publicPayload = sanitizeModelResponsePayload(input.model as TokenForgeModelId, payload);
-      const content = textContentFrom(publicPayload);
-      const thinking = reasoningContentFrom(publicPayload);
-      const fallbackText = (content || "") + (thinking ? `\n${thinking}` : "");
+      let content = textContentFrom(publicPayload);
+      const thinking = reasoningContentFrom(publicPayload) || (payload as any)?.choices?.[0]?.message?.reasoning_content;
+      const wasReasoningPromoted = Boolean((payload as any)?.choices?.[0]?.message?.isReasoningPromoted);
+      const isReasoningOnly = wasReasoningPromoted || ((!content || !content.trim()) && Boolean(thinking && thinking.trim()));
+      if (isReasoningOnly && (!content || !content.trim()) && thinking) {
+        content = thinking;
+        const msg = (publicPayload as any)?.choices?.[0]?.message;
+        if (msg) msg.content = thinking;
+      }
+      const fallbackText = (content || "") + (thinking && !isReasoningOnly ? `\n${thinking}` : "");
       const tokens = normalizedTokens(usageFrom(payload), estimatedInputTokens, fallbackText);
       const chargeNanos = calculateCreditChargeNanos(input.model as TokenForgeModelId, tokens.inputTokens, tokens.outputTokens, pricingTier);
       const settlement = await settleReservedCredit({
@@ -4660,7 +4824,25 @@ export function registerOpenAiGateway(app: Express) {
         usedTokens: tokens.totalTokens ?? (tokens.inputTokens + tokens.outputTokens),
         keyGroup,
       });
-      await recordUsage({ requestId, userId: key.userId, apiKeyId: key.id, modelId: input.model, source: "api", stream: false, status: "success", ...tokens, chargeNanos: settlement.chargedNanos, sourceIpHash: ipHash, provider: finalizeProviderLabel(providerContext.providerLabel, providerContext), latencyMs: Date.now() - startedAt });
+      const reasoningDiagnosticTag = isReasoningOnly
+        ? "[ReasoningFallback: content was empty, returned reasoning]"
+        : undefined;
+      await recordUsage({
+        requestId,
+        userId: key.userId,
+        apiKeyId: key.id,
+        modelId: input.model,
+        source: "api",
+        stream: false,
+        status: "success",
+        ...tokens,
+        chargeNanos: settlement.chargedNanos,
+        sourceIpHash: ipHash,
+        provider: finalizeProviderLabel(providerContext.providerLabel, providerContext),
+        latencyMs: Date.now() - startedAt,
+        rawErrorMessage: reasoningDiagnosticTag,
+        reasoningReturned: isReasoningOnly,
+      });
       if (isCacheDebugEnabled()) {
         const usageReported = usageFrom(payload);
         const cached = Number((usageReported as any).cached_tokens ?? (usageReported as any).prompt_tokens_details?.cached_tokens ?? (usageReported as any).cache_read_input_tokens ?? 0);
@@ -4684,9 +4866,9 @@ export function registerOpenAiGateway(app: Express) {
           userId: key.userId,
           model: input.model as string,
           provider: finalizeProviderLabel(providerContext.providerLabel, providerContext),
-          source: "api",
+          source: isReasoningOnly ? "api:reasoning_returned" : "api",
           userInput: formatInspectionMessages(input.messages),
-          outputResponse: fallbackText || content || "",
+          outputResponse: (isReasoningOnly ? "[REASONING_FALLBACK]\n" : "") + (fallbackText || content || ""),
           ipAddress: (req.headers["x-forwarded-for"] as string) || req.ip || null,
         }).catch(() => undefined);
       }
@@ -4714,6 +4896,9 @@ export function registerOpenAiGateway(app: Express) {
     let buffer = "";
     let finalUsage: Usage = {};
     let streamedOutputText = "";
+    let streamedContentText = "";
+    let streamedReasoningText = "";
+    let isStreamReasoningPromoted = false;
     let streamFailed = false;
     let streamFailedMessage: string | undefined;
     req.on("close", () => aborter.abort());
@@ -4733,10 +4918,14 @@ export function registerOpenAiGateway(app: Express) {
             const parsed = JSON.parse(payload);
             finalUsage = { ...finalUsage, ...usageFrom(parsed) };
             const delta = parsed.choices?.[0]?.delta;
-            if (typeof delta?.content === "string") streamedOutputText += delta.content;
-            if (typeof delta?.reasoning_content === "string") streamedOutputText += delta.reasoning_content;
-            if (typeof delta?.reasoning === "string") streamedOutputText += delta.reasoning;
-            if (typeof delta?.thinking === "string") streamedOutputText += delta.thinking;
+            if (typeof delta?.content === "string") {
+              streamedContentText += delta.content;
+              streamedOutputText += delta.content;
+            }
+            const rPart = delta?.reasoning_content ?? delta?.reasoning ?? delta?.thinking;
+            if (typeof rPart === "string" && rPart) {
+              streamedReasoningText += rPart;
+            }
           } catch { /* passthrough malformed upstream event */ }
         }
         if (isStrictPublicManagedModel(input.model as TokenForgeModelId)) {
@@ -4745,6 +4934,20 @@ export function registerOpenAiGateway(app: Express) {
         } else {
           res.write(value);
         }
+      }
+
+      // If stream ended with no visible text content but produced reasoning, emit the reasoning as content
+      if (!streamFailed && !streamedContentText.trim() && streamedReasoningText.trim()) {
+        isStreamReasoningPromoted = true;
+        streamedOutputText = streamedReasoningText;
+        const fallbackChunk = {
+          id: `chatcmpl-${requestId}`,
+          object: "chat.completion.chunk",
+          created: Math.floor(Date.now() / 1000),
+          model: input.model,
+          choices: [{ index: 0, delta: { content: streamedReasoningText }, finish_reason: "stop" }],
+        };
+        res.write(`data: ${JSON.stringify(fallbackChunk)}\n\ndata: [DONE]\n\n`);
       }
     } catch {
       streamFailed = true;
@@ -4762,7 +4965,26 @@ export function registerOpenAiGateway(app: Express) {
         keyGroup,
         releaseReason: streamFailed ? "Streaming request was cancelled" : undefined,
       });
-      await recordUsage({ requestId, userId: key.userId, apiKeyId: key.id, modelId: input.model, source: "api", stream: true, status: streamFailed ? "cancelled" : "success", ...tokens, chargeNanos: settlement.chargedNanos, sourceIpHash: ipHash, provider: finalizeProviderLabel(providerContext.providerLabel, providerContext), latencyMs: Date.now() - startedAt, errorMessage: streamFailed ? (streamFailedMessage ?? "The selected provider stream was cancelled.") : undefined });
+      const streamReasoningTag = isStreamReasoningPromoted
+        ? "[ReasoningFallback: content was empty, returned reasoning]"
+        : undefined;
+      await recordUsage({
+        requestId,
+        userId: key.userId,
+        apiKeyId: key.id,
+        modelId: input.model,
+        source: "api",
+        stream: true,
+        status: streamFailed ? "cancelled" : "success",
+        ...tokens,
+        chargeNanos: settlement.chargedNanos,
+        sourceIpHash: ipHash,
+        provider: finalizeProviderLabel(providerContext.providerLabel, providerContext),
+        latencyMs: Date.now() - startedAt,
+        errorMessage: streamFailed ? (streamFailedMessage ?? "The selected provider stream was cancelled.") : undefined,
+        rawErrorMessage: streamFailed ? (streamFailedMessage ?? "The selected provider stream was cancelled.") : streamReasoningTag,
+        reasoningReturned: isStreamReasoningPromoted,
+      });
       if (isCacheDebugEnabled()) {
         const cached = Number((finalUsage as any).cached_tokens ?? (finalUsage as any).prompt_tokens_details?.cached_tokens ?? (finalUsage as any).cache_read_input_tokens ?? 0);
         recordCacheDebugEvent({
@@ -4785,9 +5007,9 @@ export function registerOpenAiGateway(app: Express) {
           userId: key.userId,
           model: input.model as string,
           provider: finalizeProviderLabel(providerContext.providerLabel, providerContext),
-          source: "api",
+          source: isStreamReasoningPromoted ? "api:reasoning_returned" : "api",
           userInput: formatInspectionMessages(input.messages),
-          outputResponse: streamedOutputText || "",
+          outputResponse: (isStreamReasoningPromoted ? "[REASONING_FALLBACK]\n" : "") + (streamedOutputText || ""),
           ipAddress: (req.headers["x-forwarded-for"] as string) || req.ip || null,
         }).catch(() => undefined);
       }

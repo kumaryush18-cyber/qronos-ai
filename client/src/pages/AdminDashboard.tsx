@@ -165,6 +165,18 @@ export default function AdminDashboard({ initialSection }: { initialSection?: Ad
     onError: (error) => toast.error(error.message),
   });
 
+  const modelCompactScalingControl = trpc.admin.setModelCompactScaling.useMutation({
+    onSuccess: (data) => {
+      utils.admin.overview.invalidate();
+      toast.success(
+        data.enabled
+          ? `Auto Compact Scaling enabled for ${data.modelId} (${data.triggerTokens.toLocaleString()} tokens)`
+          : `Auto Compact Scaling disabled for ${data.modelId}`
+      );
+    },
+    onError: (error) => toast.error(error.message),
+  });
+
 
   const providerControl = trpc.admin.setProviderEnabled.useMutation({
     onSuccess: (result) => {
@@ -542,6 +554,9 @@ export default function AdminDashboard({ initialSection }: { initialSection?: Ad
           onModelPaygToggle={(modelId, isPayg) => modelPaygControl.mutate({ modelId: modelId as never, isPayg })}
           onModelBundleToggle={(modelId, isBundle) => modelBundleControl.mutate({ modelId: modelId as never, isBundle })}
           onModelTokenPlanToggle={(modelId, isTokenPlan) => modelTokenPlanControl.mutate({ modelId: modelId as never, isTokenPlan })}
+          onModelCompactScalingToggle={(modelId, enabled, triggerTokens) =>
+            modelCompactScalingControl.mutate({ modelId, enabled, triggerTokens })
+          }
           providerPending={providerControl.isPending}
           providerVisionPending={providerVisionControl.isPending}
           providerDocumentsPending={providerDocumentsControl.isPending}
@@ -550,6 +565,7 @@ export default function AdminDashboard({ initialSection }: { initialSection?: Ad
           modelPaygPending={modelPaygControl.isPending}
           modelBundlePending={modelBundleControl.isPending}
           modelTokenPlanPending={modelTokenPlanControl.isPending}
+          modelCompactScalingPending={modelCompactScalingControl.isPending}
         />
       )}
       {section === "providers" && <ManagedProviderSelector keyMetrics={managedProviderKeyMetrics} />}

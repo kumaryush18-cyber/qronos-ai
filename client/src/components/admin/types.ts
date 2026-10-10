@@ -289,5 +289,7 @@ export type ManagedModelOverviewItem = {
   isPayg?: boolean;
   isBundle?: boolean;
   isTokenPlan?: boolean;
+  enableCompactScaling?: boolean;
+  compactTriggerTokens?: number;
 };
 

@@ -24,8 +24,8 @@ import {
   getTokenForgeModel,
   TOKENROUTER_PROVIDER_SLUG,
 } from "./modelCatalogue";
-import { getProviderCredentialTelemetry } from "./providerTelemetry";
 import {
+  getProviderCredentialTelemetry,
   getCredentialSlotTelemetry,
   type CredentialTelemetryProvider,
 } from "./providerCredentialTelemetry";

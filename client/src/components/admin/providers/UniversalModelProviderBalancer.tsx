@@ -231,6 +231,7 @@ export function UniversalModelProviderBalancer({
                 setInitializedForModel(null);
                 void utils.admin.universalModelProviderSettings.invalidate({ modelId: selectedModelId });
                 void utils.admin.listUniversalModels.invalidate();
+                void utils.admin.modelCompactScaling.invalidate({ modelId: selectedModelId });
               }}
               className="border-white/10 text-white hover:bg-white/8 h-8 px-2.5"
               title="Refresh models & settings"
@@ -410,6 +411,7 @@ export function UniversalModelProviderBalancer({
       {/* Universal Provider Balancer Panel */}
       <ClaudeOpus5ProviderBalancerPanel
         providerName={currentModelDisplayName}
+        modelId={selectedModelId}
         drafts={drafts}
         settings={settingsQuery.data as ClaudeOpus5SettingsData | undefined}
         metrics={metricsQuery.data || (metrics?.modelId === selectedModelId ? metrics : undefined)}

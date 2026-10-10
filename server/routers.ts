@@ -30,6 +30,8 @@ import {
   setModelIsPayg,
   setModelIsBundle,
   setModelIsTokenPlan,
+  setModelCompactScalingConfig,
+  getModelCompactScalingConfig,
   setModelAccess,
   setProviderEnabled,
   setProviderSupportsVision,
@@ -1717,6 +1719,9 @@ export const appRouter = router({
         }
       }),
     listUniversalModels: adminProcedure.query(async () => listUniversalConfiguredModels()),
+    modelCompactScaling: adminProcedure
+      .input(z.object({ modelId: z.string().trim().min(1) }))
+      .query(async ({ input }) => getModelCompactScalingConfig(input.modelId)),
     universalModelKeyMetrics: adminProcedure
       .input(z.object({ modelId: z.string().trim().min(1) }))
       .query(async ({ input }) => getUniversalModelKeyMetricGroup(input.modelId)),
@@ -1942,6 +1947,26 @@ export const appRouter = router({
           metadata: { isTokenPlan: input.isTokenPlan },
         });
         return { success: true, modelId: input.modelId, isTokenPlan: input.isTokenPlan } as const;
+      }),
+    setModelCompactScaling: adminProcedure
+      .input(z.object({
+        modelId: z.string().trim().min(1),
+        enabled: z.boolean(),
+        triggerTokens: z.union([z.number(), z.string()]).optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const result = await setModelCompactScalingConfig(input.modelId, {
+          enabled: input.enabled,
+          triggerTokens: input.triggerTokens,
+        }, ctx.user.id);
+        await writeAuditEvent({
+          actorUserId: ctx.user.id,
+          action: input.enabled ? "model.compact_scaling.enabled" : "model.compact_scaling.disabled",
+          entityType: "model",
+          entityId: input.modelId,
+          metadata: { enabled: input.enabled, triggerTokens: result.triggerTokens },
+        });
+        return { success: true, modelId: input.modelId, ...result } as const;
       }),
     setModelAccess: adminProcedure
       .input(z.object({

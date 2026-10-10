@@ -54,6 +54,12 @@ describe("Claude Opus 5 public identity policy", () => {
     expect(isClaudeOpus5ZeroOutputFailure({ choices: [{ message: { content: "" } }], usage: { completion_tokens: 0 } })).toBe(true);
     expect(isClaudeOpus5ZeroOutputFailure({ choices: [{ message: { content: "usable output" } }], usage: { completion_tokens: 4 } })).toBe(false);
     expect(isClaudeOpus5ZeroOutputFailure({ choices: [{ message: { content: null, tool_calls: [{ id: "call_1" }] } }], usage: { output_tokens: 2 } })).toBe(false);
+
+    // When content is empty but reasoning is present (even with completion_tokens: 0), promote reasoning and do NOT treat as failure
+    const reasoningPayload = { choices: [{ message: { content: "", reasoning_content: "Step by step analysis..." } }], usage: { completion_tokens: 0 } };
+    expect(isClaudeOpus5ZeroOutputFailure(reasoningPayload)).toBe(false);
+    expect((reasoningPayload.choices[0].message as any).content).toBe("Step by step analysis...");
+    expect((reasoningPayload.choices[0].message as any).isReasoningPromoted).toBe(true);
   });
 
   it("enforces the same identity, language, and zero-leakage policy for GPT-6 Astra", () => {

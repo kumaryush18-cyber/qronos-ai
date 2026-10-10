@@ -2,11 +2,19 @@ import { describe, expect, it } from "vitest";
 import {
   AnthropicBridgeError,
   anthropicApiKey,
+  estimateFullAnthropicInputTokens,
+  estimateSingleImageTokens,
+  tryExtractImageDimensions,
   isNativeTokenRouterMessagesRequest,
   providerResponseStartTimeoutMs,
   translateAnthropicRequest,
   translateOpenAiMessageResponse,
+  scaleUsageProportionally,
+  isClaudeCodeRequest,
+  CLAUDE_CODE_REPORTED_COMPACT_TOTAL,
+  estimateAnthropicCacheBreakdown,
 } from "./anthropicGateway";
+import { parseContextTokens } from "./db";
 import {
   PUBLIC_PROVIDER_ERROR_MESSAGE,
   publicProviderErrorMessage,
@@ -84,8 +92,10 @@ describe("TokenForge Anthropic Messages bridge", () => {
     });
 
     expect(translated.messages).toEqual([
-      { role: "user", content: "[System context]\nUse repository-safe commands.\n\nReturn a concise summary.\n\nInspect the repository." },
-      { role: "user", content: "[Tool result]\nREADME.md exists." },
+      {
+        role: "user",
+        content: "[System context]\nUse repository-safe commands.\n\nInspect the repository.\n\n[Tool result]\nREADME.md exists.\n\n<system-reminder>\nReturn a concise summary.\n</system-reminder>",
+      },
     ]);
     expect(translated.messages?.every(message => message.role === "user" || message.role === "assistant")).toBe(true);
   });
@@ -162,8 +172,7 @@ describe("TokenForge Anthropic Messages bridge", () => {
     const systemMessages = translated.messages?.filter(message => message.role === "system") ?? [];
     expect(systemMessages).toHaveLength(1);
     expect(systemMessages[0]?.content).toContain("Project instruction.");
-    expect(systemMessages[0]?.content).toContain("Additional Claude Code context.");
-    expect(translated.messages?.at(-1)).toEqual({ role: "user", content: "Inspect the repository." });
+    expect(translated.messages?.at(-1)?.content).toContain("Additional Claude Code context.");
     expect(translated).toMatchObject({ model: "claude-opus-5", stream: true, max_tokens: 64_000 });
   });
 
@@ -308,5 +317,200 @@ describe("TokenForge Anthropic Messages bridge", () => {
       { role: "system", content: "You are an expert engineer." },
       { role: "user", content: "Write a high-performance function." },
     ]);
+  });
+
+  it("safely estimates input tokens including system, tools, text and capped images without base64 inflation", () => {
+    const fake400KbBase64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==".repeat(4000);
+    const estimated = estimateFullAnthropicInputTokens({
+      system: "You are Claude, an AI software engineer. ".repeat(100),
+      tools: [
+        {
+          name: "bash",
+          description: "Execute bash commands",
+          input_schema: { type: "object", properties: { command: { type: "string" } }, required: ["command"] },
+        },
+      ],
+      messages: [
+        {
+          role: "user",
+          content: [
+            { type: "text", text: "Please inspect this code and screenshot. ".repeat(400) },
+            { type: "image", source: { type: "base64", media_type: "image/png", data: fake400KbBase64 } },
+          ],
+        },
+      ],
+    });
+
+    // Should be in realistic 5k-8k range, definitely not inflated to 300k+ by base64 chars
+    expect(estimated).toBeGreaterThan(4000);
+    expect(estimated).toBeLessThan(10000);
+  });
+
+  it("translates OpenAI upstream usage with prompt cache mapping to Anthropic format", () => {
+    const mockPayload = {
+      id: "chatcmpl_abc123",
+      choices: [{ finish_reason: "stop", message: { role: "assistant", content: "Done!" } }],
+      usage: {
+        prompt_tokens: 15000,
+        completion_tokens: 120,
+        total_tokens: 15120,
+        prompt_tokens_details: {
+          cached_tokens: 12000,
+        },
+      },
+    };
+
+    const translated = translateOpenAiMessageResponse("claude-opus-5", mockPayload, 5000);
+    expect(translated.usage).toEqual({
+      input_tokens: 3000, // 15000 - 12000 cached
+      output_tokens: 120,
+      cache_read_input_tokens: 12000,
+    });
+  });
+
+  it("extracts image dimensions and calculates (width * height) / 750 capped at 1600 tokens", () => {
+    // 1x1 1-pixel PNG
+    const png1x1 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+    const dims1x1 = tryExtractImageDimensions(png1x1);
+    expect(dims1x1).toEqual({ width: 1, height: 1 });
+    // (1 * 1) / 750 = 1 token
+    expect(estimateSingleImageTokens(png1x1)).toBe(1);
+
+    // Synthesize 1200x800 PNG header (8 bytes magic, 4 bytes len, 'IHDR', 4 bytes width, 4 bytes height)
+    const pngBuf1200x800 = Buffer.alloc(24);
+    pngBuf1200x800.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a], 0);
+    pngBuf1200x800.writeUInt32BE(13, 8);
+    pngBuf1200x800.write("IHDR", 12, "ascii");
+    pngBuf1200x800.writeUInt32BE(1200, 16);
+    pngBuf1200x800.writeUInt32BE(800, 20);
+    const b64_1200x800 = pngBuf1200x800.toString("base64");
+
+    const dims1200x800 = tryExtractImageDimensions(b64_1200x800);
+    expect(dims1200x800).toEqual({ width: 1200, height: 800 });
+    // (1200 * 800) / 750 = 960000 / 750 = 1280 tokens
+    expect(estimateSingleImageTokens(b64_1200x800)).toBe(1280);
+
+    // Synthesize 4000x3000 PNG header -> (4000 * 3000) / 750 = 16000 -> must cap at 1600
+    const pngBuf4000x3000 = Buffer.alloc(24);
+    pngBuf4000x3000.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a], 0);
+    pngBuf4000x3000.writeUInt32BE(13, 8);
+    pngBuf4000x3000.write("IHDR", 12, "ascii");
+    pngBuf4000x3000.writeUInt32BE(4000, 16);
+    pngBuf4000x3000.writeUInt32BE(3000, 20);
+    const b64_4000x3000 = pngBuf4000x3000.toString("base64");
+
+    expect(tryExtractImageDimensions(b64_4000x3000)).toEqual({ width: 4000, height: 3000 });
+    expect(estimateSingleImageTokens(b64_4000x3000)).toBe(1600);
+
+    // Fallback when dimensions cannot be obtained (e.g. unparseable string or remote URL)
+    expect(estimateSingleImageTokens("https://example.com/screenshot.png")).toBe(1600);
+  });
+
+  it("handles DeepSeek and SiliconFlow style prompt_cache_hit_tokens correctly", () => {
+    const deepSeekPayload = {
+      id: "chatcmpl_ds123",
+      choices: [{ finish_reason: "stop", message: { role: "assistant", content: "DeepSeek response" } }],
+      usage: {
+        prompt_tokens: 8000,
+        completion_tokens: 250,
+        prompt_cache_hit_tokens: 6500,
+        prompt_cache_miss_tokens: 1500,
+      },
+    };
+
+    const translated = translateOpenAiMessageResponse("claude-opus-5", deepSeekPayload, 2000);
+    expect(translated.usage).toEqual({
+      input_tokens: 1500, // 8000 - 6500 cached
+      output_tokens: 250,
+      cache_read_input_tokens: 6500,
+      cache_creation_input_tokens: 1500,
+    });
+  });
+
+  it("promotes reasoning to content when OpenAI content is empty and reasoning_content is present", () => {
+    const reasoningPayload = {
+      id: "chatcmpl_reasoning_1",
+      choices: [{
+        finish_reason: "stop",
+        message: {
+          role: "assistant",
+          content: "",
+          reasoning_content: "Thought process: The user is asking about quantum computing.",
+        },
+      }],
+      usage: {
+        prompt_tokens: 100,
+        completion_tokens: 50,
+      },
+    };
+
+    const translated = translateOpenAiMessageResponse("claude-opus-5", reasoningPayload, 100);
+    expect(translated.content).toEqual([
+      { type: "text", text: "Thought process: The user is asking about quantum computing." },
+    ]);
+  });
+
+  describe("Claude Code Auto Compact Scaling (500k -> 980k trigger)", () => {
+    it("scales usage proportionally to exactly 980,000 total tokens", () => {
+      // 100k input, 350k cache read, 50k cache creation = 500k total
+      const scaled = scaleUsageProportionally(100_000, 350_000, 50_000, 980_000);
+      expect(scaled.inputTokens + scaled.cacheRead + scaled.cacheCreation).toBe(980_000);
+      expect(scaled.inputTokens).toBe(196_000); // 100/500 * 980k = 196k
+      expect(scaled.cacheRead).toBe(686_000);   // 350/500 * 980k = 686k
+      expect(scaled.cacheCreation).toBe(98_000); // 50/500 * 980k = 98k
+    });
+
+    it("handles zero cache tokens by attributing all 980,000 to inputTokens", () => {
+      const scaled = scaleUsageProportionally(500_000, 0, 0, 980_000);
+      expect(scaled.inputTokens).toBe(980_000);
+      expect(scaled.cacheRead).toBe(0);
+      expect(scaled.cacheCreation).toBe(0);
+      expect(scaled.inputTokens + scaled.cacheRead + scaled.cacheCreation).toBe(980_000);
+    });
+
+    it("handles zero total tokens safely", () => {
+      const scaled = scaleUsageProportionally(0, 0, 0, 980_000);
+      expect(scaled.inputTokens).toBe(980_000);
+      expect(scaled.cacheRead).toBe(0);
+      expect(scaled.cacheCreation).toBe(0);
+    });
+
+    it("identifies Claude Code requests via User-Agent and headers", () => {
+      expect(isClaudeCodeRequest({ headers: { "user-agent": "claude-cli/1.0.5 (darwin-arm64)" } } as any)).toBe(true);
+      expect(isClaudeCodeRequest({ headers: { "user-agent": "@anthropic-ai/claude-code/0.2.29" } } as any)).toBe(true);
+      expect(isClaudeCodeRequest({ headers: { "user-agent": "Anthropic/TypeScript 0.39.0 claude-code/0.2.29" } } as any)).toBe(true);
+      expect(isClaudeCodeRequest({ headers: { "user-agent": "Mozilla/5.0", "anthropic-beta": "claude-code-20240229" } } as any)).toBe(true);
+
+      // Rejects non-Claude Code clients
+      expect(isClaudeCodeRequest({ headers: { "user-agent": "curl/7.68.0" } } as any)).toBe(false);
+      expect(isClaudeCodeRequest({ headers: { "user-agent": "python-requests/2.28.1" } } as any)).toBe(false);
+      expect(isClaudeCodeRequest({ headers: { "user-agent": "OpenWebUI/1.0" } } as any)).toBe(false);
+      expect(isClaudeCodeRequest({ headers: {} } as any)).toBe(false);
+    });
+
+    it("parses context tokens strings like 450k, 500k, 150k, and numbers", () => {
+      expect(parseContextTokens("500k")).toBe(500_000);
+      expect(parseContextTokens("450k")).toBe(450_000);
+      expect(parseContextTokens("150k")).toBe(150_000);
+      expect(parseContextTokens("1M")).toBe(1_000_000);
+      expect(parseContextTokens("0.5m")).toBe(500_000);
+      expect(parseContextTokens("500000")).toBe(500_000);
+      expect(parseContextTokens(450000)).toBe(450_000);
+      expect(parseContextTokens("invalid")).toBe(500_000); // default
+    });
+
+    it("estimates cache breakdown accurately from Claude Code prompts", () => {
+      const promptWithCache = {
+        system: [{ type: "text", text: "System instructions", cache_control: { type: "ephemeral" } }],
+        tools: [{ name: "search", description: "Search", cache_control: { type: "ephemeral" } }],
+        messages: [
+          { role: "user", content: "Hello" },
+        ],
+      };
+      const breakdown = estimateAnthropicCacheBreakdown(promptWithCache);
+      expect(breakdown.cacheReadTokens).toBeGreaterThan(0);
+      expect(breakdown.inputTokens).toBeGreaterThan(0);
+      expect(breakdown.totalTokens).toBe(breakdown.cacheReadTokens + breakdown.inputTokens);
+    });
   });
 });

@@ -28,6 +28,7 @@ type LiveRequest = {
   rawErrorMessage?: string;
   userName?: string | null;
   createdAt: string;
+  reasoningReturned?: boolean;
 };
 
 const STATUS_LABEL: Record<LiveRequest["status"], { text: string; cls: string; dot: string }> = {
@@ -174,6 +175,8 @@ export default function LiveRequestLog() {
   const isSnapshotDoneRef = useRef(false);
   const desktopAlertsRef = useRef(desktopAlerts);
   const soundAlertsRef = useRef(soundAlerts);
+
+  const reasoningFallbackCount = rows.filter(r => r.reasoningReturned || (r.rawErrorMessage && r.rawErrorMessage.includes("[ReasoningFallback"))).length;
 
   // Register Service Worker for Mobile & Desktop OS notifications
   useEffect(() => {
@@ -353,6 +356,11 @@ export default function LiveRequestLog() {
                 <AlertTriangle size={11} /> {sessionFailures} {sessionFailures === 1 ? "failure" : "failures"} in session
               </span>
             )}
+            {reasoningFallbackCount > 0 && (
+              <span className="flex items-center gap-1 rounded-full border border-amber-400/30 bg-amber-500/15 px-2 py-0.5 text-[10px] font-semibold text-amber-300">
+                ⚡ {reasoningFallbackCount} reasoning {reasoningFallbackCount === 1 ? "fallback" : "fallbacks"}
+              </span>
+            )}
           </div>
           <h2 className="mt-1 text-lg font-bold text-white">Real-time requests & failure alerts</h2>
           <p className="mt-1 text-[10px] text-[#9091a3]">
@@ -507,7 +515,25 @@ export default function LiveRequestLog() {
                       {row.userName ?? `user:${row.userId}`}
                     </td>
                     <td className="max-w-[11rem] truncate px-3 py-2 font-mono text-[#e6e6ee]" title={row.modelId}>
-                      {row.modelId}
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span>{row.modelId}</span>
+                        {row.rawErrorMessage && row.rawErrorMessage.includes("[CompactTrigger") && (
+                          <span
+                            className="inline-flex items-center rounded border border-purple-400/40 bg-purple-500/20 px-1.5 py-0.2 text-[9px] font-bold tracking-wide text-purple-200 shadow-sm"
+                            title={row.rawErrorMessage}
+                          >
+                            COMPACTED (980k)
+                          </span>
+                        )}
+                        {(row.reasoningReturned || (row.rawErrorMessage && row.rawErrorMessage.includes("[ReasoningFallback"))) && (
+                          <span
+                            className="inline-flex items-center gap-1 rounded border border-amber-400/40 bg-amber-500/20 px-1.5 py-0.2 text-[9px] font-bold tracking-wide text-amber-300 shadow-sm"
+                            title="Reasoning fallback: model returned empty content, output reasoning was returned to user"
+                          >
+                            ⚡ REASONING RETURNED
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="max-w-[15rem] truncate px-3 py-2 font-medium text-[#c9ff73]" title={row.provider ?? "Default"}>
                       {row.provider ? (
@@ -540,9 +566,19 @@ export default function LiveRequestLog() {
                     </td>
                     <td className="px-3 py-2 text-[#a9aab8]">{row.source}</td>
                     <td className="px-3 py-2">
-                      <span className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[9px] font-bold ${status.cls}`}>
-                        {status.text}
-                      </span>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[9px] font-bold ${status.cls}`}>
+                          {status.text}
+                        </span>
+                        {(row.reasoningReturned || (row.rawErrorMessage && row.rawErrorMessage.includes("[ReasoningFallback"))) && (
+                          <span
+                            className="inline-flex items-center rounded border border-amber-400/40 bg-amber-500/15 px-1.5 py-0.5 text-[9px] font-semibold text-amber-300"
+                            title="Fallback reasoning returned to caller"
+                          >
+                            Reasoning
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="whitespace-nowrap px-3 py-2 text-right font-mono text-[10px] tabular-nums text-[#e6e6ee]">
                       {row.inputTokens.toLocaleString()} / {row.outputTokens.toLocaleString()}
@@ -558,26 +594,46 @@ export default function LiveRequestLog() {
                     >
                       {row.rawErrorMessage ? (
                         <div className="flex flex-col gap-0.5">
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            <span
-                              className={`inline-flex items-center rounded border px-1.5 py-0.5 text-[9px] font-semibold tracking-wide ${
-                                row.rawErrorMessage.includes("[PRE-FLIGHT]")
-                                  ? "border-amber-400/40 bg-amber-500/15 text-amber-300"
+                          {row.rawErrorMessage.includes("[CompactTrigger") ? (
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="inline-flex items-center rounded border border-purple-400/40 bg-purple-500/15 px-1.5 py-0.5 text-[9px] font-semibold tracking-wide text-purple-200">
+                                AUTO COMPACT
+                              </span>
+                              <span className="font-mono text-[10px] text-purple-300">
+                                {row.rawErrorMessage}
+                              </span>
+                            </div>
+                          ) : row.rawErrorMessage.includes("[ReasoningFallback") ? (
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="inline-flex items-center rounded border border-amber-400/40 bg-amber-500/15 px-1.5 py-0.5 text-[9px] font-semibold tracking-wide text-amber-300">
+                                REASONING FALLBACK
+                              </span>
+                              <span className="font-mono text-[10px] text-amber-200">
+                                Content was empty · Served model reasoning
+                              </span>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span
+                                className={`inline-flex items-center rounded border px-1.5 py-0.5 text-[9px] font-semibold tracking-wide ${
+                                  row.rawErrorMessage.includes("[PRE-FLIGHT]")
+                                    ? "border-amber-400/40 bg-amber-500/15 text-amber-300"
+                                    : row.rawErrorMessage.includes("Timeout")
+                                    ? "border-orange-400/40 bg-orange-500/15 text-orange-300"
+                                    : "border-red-400/40 bg-red-500/15 text-red-200"
+                                }`}
+                              >
+                                {row.rawErrorMessage.includes("[PRE-FLIGHT]")
+                                  ? "PRE-FLIGHT"
                                   : row.rawErrorMessage.includes("Timeout")
-                                  ? "border-orange-400/40 bg-orange-500/15 text-orange-300"
-                                  : "border-red-400/40 bg-red-500/15 text-red-200"
-                              }`}
-                            >
-                              {row.rawErrorMessage.includes("[PRE-FLIGHT]")
-                                ? "PRE-FLIGHT"
-                                : row.rawErrorMessage.includes("Timeout")
-                                ? "TIMEOUT"
-                                : "UPSTREAM"}
-                            </span>
-                            <span className="font-mono font-medium text-red-200 break-all">
-                              {row.rawErrorMessage.replace(/^\[(?:PRE-FLIGHT|TIMEOUT|UPSTREAM)\]\s*/, "")}
-                            </span>
-                          </div>
+                                  ? "TIMEOUT"
+                                  : "UPSTREAM"}
+                              </span>
+                              <span className="font-mono font-medium text-red-200 break-all">
+                                {row.rawErrorMessage.replace(/^\[(?:PRE-FLIGHT|TIMEOUT|UPSTREAM)\]\s*/, "")}
+                              </span>
+                            </div>
+                          )}
                           {row.errorMessage && row.errorMessage !== row.rawErrorMessage && (
                             <span className="text-[9px] text-[#858697] truncate block">
                               Client: {row.errorMessage}

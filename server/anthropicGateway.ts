@@ -25,6 +25,7 @@ import {
   touchApiKey,
   isUserMessageLoggingEnabled,
   recordUserInteractionLog,
+  getModelCompactScalingConfig,
 } from "./db";
 import type { GlmPrivateToolContinuation } from "./glmToolContinuationVault";
 import { calculateCreditChargeNanos, normalizedBillableMaxOutputTokens, type PricingTier } from "./creditPricing";
@@ -44,7 +45,11 @@ import {
   formatInspectionMessages,
   finalizeProviderLabel,
   type ProviderRequestContext,
+  tryExtractImageDimensions,
+  estimateSingleImageTokens,
 } from "./openaiGateway";
+
+export { tryExtractImageDimensions, estimateSingleImageTokens };
 import {
   isCacheDebugEnabled,
   recordCacheDebugEvent,
@@ -57,6 +62,12 @@ import { MultimodalRoutingError, payloadContainsVisualData, payloadContainsDocum
 const PROVIDER_TIMEOUT_MS = 120_000;
 export const CLAUDE_OPUS5_RESPONSE_START_TIMEOUT_MS = PROVIDER_TIMEOUT_MS;
 const SSE_IDLE_TIMEOUT_MS = 120_000;
+
+const disabledStreamOptionsProviders = new Set<string>();
+
+export function isStreamOptionsDisabledForProvider(provider: string): boolean {
+  return disabledStreamOptionsProviders.has(provider);
+}
 
 /** Races a stream read against an idle timer so a stalled upstream can't hang a response forever. */
 function readWithIdleTimeout(reader: ReadableStreamDefaultReader<Uint8Array>) {
@@ -84,6 +95,50 @@ type AnthropicBlock = { type?: unknown; text?: unknown; id?: unknown; name?: unk
 // Completions. Keep both customer-facing Claude models on the same converter so
 // Claude Code receives consistent Anthropic response, tool, and SSE semantics.
 const OPENAI_TRANSLATED_MESSAGES_MODELS = new Set(["qwen3.8-27b", "qwen3.8-max", "claude-fable-5.1", "claude-fable-5", "claude-opus-5", "claude-opus-5.5", "gpt-6-sol", "glm-5.3", "claude-sonnet-4.6", "deepseek-v4-pro", "gpt-6-astra", "kimi-k3"]);
+
+export const CLAUDE_CODE_REPORTED_COMPACT_TOTAL = 980_000;
+
+export function isClaudeCodeRequest(req: Request): boolean {
+  const ua = (req.headers["user-agent"] ?? "") as string;
+  const anthropicBeta = (req.headers["anthropic-beta"] ?? "") as string;
+  if (!ua && !anthropicBeta) return false;
+  const uaLower = ua.toLowerCase();
+  return (
+    uaLower.includes("claude-cli") ||
+    uaLower.includes("claude-code") ||
+    uaLower.includes("@anthropic-ai/claude-code") ||
+    anthropicBeta.toLowerCase().includes("claude-code")
+  );
+}
+
+export function scaleUsageProportionally(
+  inputTokens: number,
+  cacheRead: number,
+  cacheCreation: number,
+  targetTotal = CLAUDE_CODE_REPORTED_COMPACT_TOTAL
+): { inputTokens: number; cacheRead: number; cacheCreation: number } {
+  const realTotal = Math.max(0, inputTokens) + Math.max(0, cacheRead) + Math.max(0, cacheCreation);
+  if (realTotal <= 0) {
+    return { inputTokens: targetTotal, cacheRead: 0, cacheCreation: 0 };
+  }
+  const scale = targetTotal / realTotal;
+  let scaledInput = Math.round(Math.max(0, inputTokens) * scale);
+  let scaledRead = Math.round(Math.max(0, cacheRead) * scale);
+  let scaledCreation = Math.round(Math.max(0, cacheCreation) * scale);
+  const diff = targetTotal - (scaledInput + scaledRead + scaledCreation);
+  if (scaledInput >= scaledRead && scaledInput >= scaledCreation) {
+    scaledInput += diff;
+  } else if (scaledRead >= scaledCreation) {
+    scaledRead += diff;
+  } else {
+    scaledCreation += diff;
+  }
+  return {
+    inputTokens: Math.max(0, scaledInput),
+    cacheRead: Math.max(0, scaledRead),
+    cacheCreation: Math.max(0, scaledCreation),
+  };
+}
 
 type NativeTokenRouterMessagesInput = {
   model: "claude-fable-5.1";
@@ -183,7 +238,7 @@ export function prepareNativeClaudeFableMessagesRequest(raw: AnthropicRequest) {
 }
 
 export function estimateNativeAnthropicInputTokens(input: { system?: unknown; messages?: unknown; tools?: unknown }) {
-  return Math.ceil(JSON.stringify({ system: input.system, messages: input.messages, tools: input.tools }).length / 4) + 4;
+  return estimateFullAnthropicInputTokens(input);
 }
 
 export function translateAnthropicRequest(raw: AnthropicRequest, privateGlmToolContinuations: ReadonlyMap<string, GlmPrivateToolContinuation> = new Map()): TokenForgeChatInput {
@@ -428,12 +483,16 @@ export function translateAnthropicRequest(raw: AnthropicRequest, privateGlmToolC
   return translated;
 }
 
-function estimateMessageTokens(content: unknown): number {
+export function estimateMessageTokens(content: unknown): number {
   if (typeof content === "string") {
     const base64DataUris = content.match(/data:image\/[a-zA-Z0-9.+-]+;base64,[A-Za-z0-9+/=]+/g);
     if (base64DataUris && base64DataUris.length > 0) {
       const stripped = content.replace(/data:image\/[a-zA-Z0-9.+-]+;base64,[A-Za-z0-9+/=]+/g, "");
-      return Math.ceil(stripped.length / 4) + (base64DataUris.length * 1000);
+      let imageTokens = 0;
+      for (const uri of base64DataUris) {
+        imageTokens += estimateSingleImageTokens(uri);
+      }
+      return Math.ceil(stripped.length / 4) + imageTokens;
     }
     return Math.ceil(content.length / 4);
   }
@@ -442,20 +501,181 @@ function estimateMessageTokens(content: unknown): number {
     for (const part of content) {
       if (!part || typeof part !== "object") continue;
       const p = part as any;
-      if (p.type === "image_url" || p.type === "image" || p.image_url) {
-        sum += 1000;
+      if (
+        p.type === "image_url" ||
+        p.type === "image" ||
+        p.image_url ||
+        p.source?.type === "base64" ||
+        p.source?.media_type?.startsWith("image/")
+      ) {
+        sum += estimateSingleImageTokens(p);
       } else if (p.type === "text" && typeof p.text === "string") {
         sum += estimateMessageTokens(p.text);
+      } else if (p.type === "tool_use") {
+        sum += Math.ceil((p.name?.length ?? 0) / 4) + Math.ceil(JSON.stringify(p.input ?? {}).length / 4) + 8;
+      } else if (p.type === "tool_result") {
+        sum += estimateMessageTokens(p.content) + 8;
       } else {
         sum += estimateMessageTokens(p);
       }
     }
     return sum;
   }
-  return Math.ceil(JSON.stringify(content ?? "").length / 4);
+  if (content && typeof content === "object") {
+    const p = content as any;
+    if (
+      p.type === "image" ||
+      p.type === "image_url" ||
+      p.image_url ||
+      p.source?.type === "base64" ||
+      p.source?.media_type?.startsWith("image/")
+    ) {
+      return estimateSingleImageTokens(p);
+    }
+    if (typeof p.text === "string") {
+      return estimateMessageTokens(p.text);
+    }
+    try {
+      const str = JSON.stringify(content, (key, value) => {
+        if (key === "data" && typeof value === "string" && value.length > 200) return "[image_data]";
+        if (typeof value === "string" && value.startsWith("data:image/")) return "[image_data]";
+        return value;
+      });
+      return Math.ceil(str.length / 4);
+    } catch {
+      return 50;
+    }
+  }
+  return 0;
 }
 
-function estimateInputTokens(messages: TokenForgeChatMessage[]) {
+export function estimateSystemPromptTokens(system: unknown): number {
+  if (!system) return 0;
+  if (typeof system === "string") return Math.ceil(system.length / 4);
+  if (Array.isArray(system)) {
+    return system.reduce((acc: number, block) => {
+      if (typeof block === "string") return acc + Math.ceil(block.length / 4);
+      if (block && typeof block === "object" && typeof (block as any).text === "string") {
+        return acc + Math.ceil((block as any).text.length / 4);
+      }
+      return acc + estimateMessageTokens(block);
+    }, 0);
+  }
+  return Math.ceil(JSON.stringify(system).length / 4);
+}
+
+export function estimateToolsTokens(tools: unknown): number {
+  if (!Array.isArray(tools) || tools.length === 0) return 0;
+  return tools.reduce((total: number, tool) => {
+    if (!tool || typeof tool !== "object") return total;
+    try {
+      return total + Math.ceil(JSON.stringify(tool).length / 4) + 8;
+    } catch {
+      return total + 50;
+    }
+  }, 0);
+}
+
+export function estimateFullAnthropicInputTokens(raw: { system?: unknown; tools?: unknown; messages?: unknown }): number {
+  const systemTokens = estimateSystemPromptTokens(raw.system);
+  const toolsTokens = estimateToolsTokens(raw.tools);
+  let messagesTokens = 0;
+  if (Array.isArray(raw.messages)) {
+    for (const msg of raw.messages) {
+      if (!msg || typeof msg !== "object") continue;
+      const m = msg as any;
+      messagesTokens += estimateMessageTokens(m.content) + 4;
+      if (Array.isArray(m.tool_calls)) {
+        for (const tc of m.tool_calls) {
+          messagesTokens += Math.ceil((tc.function?.name?.length ?? 0) / 4) + Math.ceil((tc.function?.arguments?.length ?? 0) / 4) + 8;
+        }
+      }
+    }
+  }
+  return Math.max(1, systemTokens + toolsTokens + messagesTokens);
+}
+
+export function estimateAnthropicCacheBreakdown(raw: { system?: unknown; tools?: unknown; messages?: unknown }): {
+  inputTokens: number;
+  cacheReadTokens: number;
+  cacheCreationTokens: number;
+  totalTokens: number;
+} {
+  let cacheTokens = 0;
+  let uncachedTokens = 0;
+  let hasCacheControl = false;
+
+  if (Array.isArray(raw.system)) {
+    for (const block of raw.system) {
+      const tokens = estimateSystemPromptTokens(block);
+      if (block && typeof block === "object" && (block as any).cache_control) {
+        hasCacheControl = true;
+        cacheTokens += tokens;
+      } else {
+        uncachedTokens += tokens;
+      }
+    }
+  } else if (raw.system) {
+    uncachedTokens += estimateSystemPromptTokens(raw.system);
+  }
+
+  if (Array.isArray(raw.tools)) {
+    for (const tool of raw.tools) {
+      const tokens = estimateToolsTokens([tool]);
+      if (tool && typeof tool === "object" && (tool as any).cache_control) {
+        hasCacheControl = true;
+        cacheTokens += tokens;
+      } else {
+        uncachedTokens += tokens;
+      }
+    }
+  }
+
+  if (Array.isArray(raw.messages)) {
+    for (const msg of raw.messages) {
+      if (!msg || typeof msg !== "object") continue;
+      const m = msg as any;
+      const msgTokens = estimateMessageTokens(m.content) + 4;
+      let msgHasCache = false;
+      if (Array.isArray(m.content)) {
+        for (const block of m.content) {
+          if (block && typeof block === "object" && block.cache_control) {
+            msgHasCache = true;
+            hasCacheControl = true;
+          }
+        }
+      } else if (m.cache_control) {
+        msgHasCache = true;
+        hasCacheControl = true;
+      }
+      if (msgHasCache) {
+        cacheTokens += msgTokens;
+      } else {
+        uncachedTokens += msgTokens;
+      }
+    }
+  }
+
+  const totalTokens = Math.max(1, cacheTokens + uncachedTokens);
+
+  if (hasCacheControl) {
+    return {
+      inputTokens: Math.max(1, uncachedTokens),
+      cacheReadTokens: Math.max(0, cacheTokens),
+      cacheCreationTokens: 0,
+      totalTokens,
+    };
+  }
+
+  return {
+    inputTokens: totalTokens,
+    cacheReadTokens: 0,
+    cacheCreationTokens: 0,
+    totalTokens,
+  };
+}
+
+export function estimateInputTokens(messages: TokenForgeChatMessage[]) {
   return messages.reduce((total, message) => total + estimateMessageTokens(message.content) + 4, 0);
 }
 
@@ -522,12 +742,21 @@ function anthropicToolResultIds(raw: AnthropicRequest) {
   return ids;
 }
 
-export function translateOpenAiMessageResponse(model: string, payload: unknown) {
+export function translateOpenAiMessageResponse(model: string, payload: unknown, fallbackInputTokens = 0) {
   const response = payload as { id?: unknown; choices?: Array<{ finish_reason?: unknown; message?: { content?: unknown; tool_calls?: Array<{ id?: unknown; function?: { name?: unknown; arguments?: unknown } }> } }>; usage?: Usage };
   const choice = response?.choices?.[0];
   if (!choice?.message) throw new AnthropicBridgeError(503, "api_error", "The selected provider returned an invalid response.");
   const content: Array<Record<string, unknown>> = [];
-  if (typeof choice.message.content === "string" && choice.message.content) content.push({ type: "text", text: choice.message.content });
+  const rawMsg = choice.message as any;
+  const reasoning = rawMsg.reasoning_content ?? rawMsg.reasoning ?? rawMsg.thinking;
+  let isReasoningPromoted = Boolean(rawMsg.isReasoningPromoted);
+  if (typeof choice.message.content === "string" && choice.message.content.trim()) {
+    content.push({ type: "text", text: choice.message.content });
+  } else if (typeof reasoning === "string" && reasoning.trim() && (!choice.message.tool_calls || choice.message.tool_calls.length === 0)) {
+    content.push({ type: "text", text: reasoning });
+    isReasoningPromoted = true;
+    rawMsg.isReasoningPromoted = true;
+  }
   for (const toolCall of choice.message.tool_calls ?? []) {
     if (typeof toolCall.id !== "string" || typeof toolCall.function?.name !== "string") continue;
     let input: unknown = {};
@@ -536,8 +765,45 @@ export function translateOpenAiMessageResponse(model: string, payload: unknown) 
     }
     content.push({ type: "tool_use", id: toolCall.id, name: toolCall.function.name, input });
   }
-  const tokens = normalizedTokens(usageFrom(response), 0);
-  return { id: typeof response.id === "string" ? response.id : `msg_${randomUUID().replaceAll("-", "")}`, type: "message", role: "assistant", model, content, stop_reason: toStopReason(choice.finish_reason), stop_sequence: null, usage: { input_tokens: tokens.inputTokens, output_tokens: tokens.outputTokens } };
+
+  const rawUsage = usageFrom(response) as any;
+  const cachedTokens = Number(
+    rawUsage.cached_tokens ??
+    rawUsage.prompt_tokens_details?.cached_tokens ??
+    rawUsage.prompt_cache_hit_tokens ??
+    rawUsage.cache_read_input_tokens ??
+    rawUsage.prompt_tokens_details?.cache_read_tokens ??
+    0
+  );
+  const cacheCreationTokens = Number(
+    rawUsage.cache_creation_input_tokens ??
+    rawUsage.prompt_tokens_details?.cache_creation_tokens ??
+    rawUsage.prompt_cache_miss_tokens ??
+    0
+  );
+  const reportedPrompt = rawUsage.prompt_tokens ?? rawUsage.input_tokens;
+  const promptTokens = reportedPrompt !== undefined && Number.isFinite(Number(reportedPrompt)) && Number(reportedPrompt) > 0
+    ? Number(reportedPrompt)
+    : fallbackInputTokens;
+  const inputTokens = Math.max(0, promptTokens - cachedTokens);
+  const outputTokensReported = Number(rawUsage.completion_tokens ?? rawUsage.output_tokens ?? 0);
+  const finalOutputTokens = outputTokensReported > 0 ? outputTokensReported : 0;
+
+  return {
+    id: typeof response.id === "string" ? response.id : `msg_${randomUUID().replaceAll("-", "")}`,
+    type: "message",
+    role: "assistant",
+    model,
+    content,
+    stop_reason: toStopReason(choice.finish_reason),
+    stop_sequence: null,
+    usage: {
+      input_tokens: inputTokens,
+      output_tokens: finalOutputTokens,
+      ...(cachedTokens > 0 ? { cache_read_input_tokens: cachedTokens } : {}),
+      ...(cacheCreationTokens > 0 ? { cache_creation_input_tokens: cacheCreationTokens } : {}),
+    },
+  };
 }
 
 function writeSse(res: Response, event: string, payload: unknown) {
@@ -623,6 +889,23 @@ async function handleNativeTokenRouterMessagesRequest(req: Request, res: Respons
     );
   }
 
+  const userAgent = (req.headers["user-agent"] ?? "") as string;
+  const isClaudeCli = isClaudeCodeRequest(req);
+  const compactScalingConfig = await getModelCompactScalingConfig(model);
+  const compactScalingEnabled = isClaudeCli && compactScalingConfig.enabled;
+  let didCompactScalingTrigger = false;
+  const breakdown = estimateAnthropicCacheBreakdown(input as any);
+  let scaledReportedTokens: { inputTokens: number; cacheRead: number; cacheCreation: number } | null = null;
+  if (compactScalingEnabled && breakdown.totalTokens >= compactScalingConfig.triggerTokens) {
+    didCompactScalingTrigger = true;
+    scaledReportedTokens = scaleUsageProportionally(
+      breakdown.inputTokens,
+      breakdown.cacheReadTokens,
+      breakdown.cacheCreationTokens
+    );
+    console.log(`[CompactTrigger] key=${key.id} real=${breakdown.totalTokens} reported=${CLAUDE_CODE_REPORTED_COMPACT_TOTAL} model=${model} ua=${userAgent}`);
+  }
+
   const estimatedInputTokens = estimateNativeAnthropicInputTokens(input);
   const reservedNanos = calculateCreditChargeNanos(model, estimatedInputTokens, normalizedBillableMaxOutputTokens(input.max_tokens), pricingTier);
   const reservation = await reserveCredit(key.userId, reservedNanos, requestId, { keyGroup });
@@ -697,7 +980,35 @@ async function handleNativeTokenRouterMessagesRequest(req: Request, res: Respons
       usedTokens: tokens.totalTokens ?? (tokens.inputTokens + tokens.outputTokens),
       keyGroup,
     });
-    await recordUsage({ requestId, userId: key.userId, apiKeyId: key.id, modelId: model, source: "api", stream: false, status: "success", ...tokens, chargeNanos: settlement.chargedNanos, sourceIpHash: ipHash, provider: finalizeProviderLabel(providerLabel, multimodalTag || isMultimodal), latencyMs: Date.now() - startedAt });
+    const rawReportedUsage = response.usage as any;
+    const cachedTokens = Number(rawReportedUsage?.cache_read_input_tokens ?? 0);
+    const cacheCreationTokens = Number(rawReportedUsage?.cache_creation_input_tokens ?? 0);
+    const realTotalInput = tokens.inputTokens + cachedTokens + cacheCreationTokens;
+
+    if (scaledReportedTokens) {
+      response.usage = {
+        input_tokens: scaledReportedTokens.inputTokens,
+        output_tokens: tokens.outputTokens,
+        ...(scaledReportedTokens.cacheRead > 0 ? { cache_read_input_tokens: scaledReportedTokens.cacheRead } : {}),
+        ...(scaledReportedTokens.cacheCreation > 0 ? { cache_creation_input_tokens: scaledReportedTokens.cacheCreation } : {}),
+      };
+    } else if (compactScalingEnabled && realTotalInput >= compactScalingConfig.triggerTokens) {
+      didCompactScalingTrigger = true;
+      const scaled = scaleUsageProportionally(tokens.inputTokens, cachedTokens, cacheCreationTokens);
+      response.usage = {
+        input_tokens: scaled.inputTokens,
+        output_tokens: tokens.outputTokens,
+        ...(scaled.cacheRead > 0 ? { cache_read_input_tokens: scaled.cacheRead } : {}),
+        ...(scaled.cacheCreation > 0 ? { cache_creation_input_tokens: scaled.cacheCreation } : {}),
+      };
+      console.log(`[CompactTrigger] key=${key.id} real=${realTotalInput} reported=${CLAUDE_CODE_REPORTED_COMPACT_TOTAL} model=${model} ua=${userAgent}`);
+    }
+
+    const compactDiagnosticTag = didCompactScalingTrigger
+      ? `[CompactTrigger: ${realTotalInput.toLocaleString()} -> 980k (ua: ${userAgent})]`
+      : undefined;
+
+    await recordUsage({ requestId, userId: key.userId, apiKeyId: key.id, modelId: model, source: "api", stream: false, status: "success", ...tokens, chargeNanos: settlement.chargedNanos, sourceIpHash: ipHash, provider: finalizeProviderLabel(providerLabel, multimodalTag || isMultimodal), latencyMs: Date.now() - startedAt, rawErrorMessage: compactDiagnosticTag });
     res.setHeader("request-id", requestId);
     res.setHeader("x-request-id", requestId);
     res.setHeader("x-tokenforge-credit-balance", String(settlement.balanceNanos));
@@ -748,7 +1059,27 @@ async function handleNativeTokenRouterMessagesRequest(req: Request, res: Respons
           usage = { ...usage, ...(event.message?.usage ?? {}), ...(event.usage ?? {}) };
           if (typeof event.delta?.text === "string") streamedOutputText += event.delta.text;
           if (typeof event.delta?.reasoning_content === "string") streamedOutputText += event.delta.reasoning_content;
-          if (event.type === "message_start" && event.message) event.message.model = model;
+          if (event.type === "message_start" && event.message) {
+            event.message.model = model;
+            if (scaledReportedTokens) {
+              event.message.usage = {
+                input_tokens: scaledReportedTokens.inputTokens,
+                output_tokens: 0,
+                ...(scaledReportedTokens.cacheRead > 0 ? { cache_read_input_tokens: scaledReportedTokens.cacheRead } : {}),
+                ...(scaledReportedTokens.cacheCreation > 0 ? { cache_creation_input_tokens: scaledReportedTokens.cacheCreation } : {}),
+              };
+            }
+          }
+          if (event.type === "message_delta" && didCompactScalingTrigger && event.usage) {
+            if (scaledReportedTokens) {
+              event.usage = {
+                input_tokens: scaledReportedTokens.inputTokens,
+                output_tokens: (event.usage as any).output_tokens ?? 0,
+                ...(scaledReportedTokens.cacheRead > 0 ? { cache_read_input_tokens: scaledReportedTokens.cacheRead } : {}),
+                ...(scaledReportedTokens.cacheCreation > 0 ? { cache_creation_input_tokens: scaledReportedTokens.cacheCreation } : {}),
+              };
+            }
+          }
           res.write(`data: ${JSON.stringify(event)}\n`);
         } catch {
           res.write(`${sourceLine}\n`);
@@ -763,7 +1094,10 @@ async function handleNativeTokenRouterMessagesRequest(req: Request, res: Respons
     const tokens = normalizedTokens(usage, estimatedInputTokens, streamedOutputText);
     const chargeNanos = failed ? 0 : calculateCreditChargeNanos(model, tokens.inputTokens, tokens.outputTokens, pricingTier);
     const settlement = await settleReservedCredit({ userId: key.userId, requestId, reservedNanos, finalChargeNanos: chargeNanos, keyGroup, ...(failed ? { releaseReason: "Native TokenRouter Messages stream did not complete" } : {}) });
-    await recordUsage({ requestId, userId: key.userId, apiKeyId: key.id, modelId: model, source: "api", stream: true, status: failed ? "provider_error" : "success", ...tokens, chargeNanos: settlement.chargedNanos, sourceIpHash: ipHash, provider: finalizeProviderLabel(providerLabel, isMultimodal), latencyMs: Date.now() - startedAt, errorMessage: failed ? (failedMessage ?? "The selected provider stream did not complete.") : undefined });
+    const streamCompactTag = didCompactScalingTrigger
+      ? `[CompactTrigger: ${((tokens.inputTokens ?? 0) + Number((usage as any).cached_tokens ?? (usage as any).prompt_tokens_details?.cached_tokens ?? (usage as any).cache_read_input_tokens ?? 0) + Number((usage as any).cache_creation_input_tokens ?? (usage as any).prompt_tokens_details?.cache_creation_tokens ?? (usage as any).prompt_cache_miss_tokens ?? 0)).toLocaleString()} -> 980k (ua: ${userAgent})]`
+      : undefined;
+    await recordUsage({ requestId, userId: key.userId, apiKeyId: key.id, modelId: model, source: "api", stream: true, status: failed ? "provider_error" : "success", ...tokens, chargeNanos: settlement.chargedNanos, sourceIpHash: ipHash, provider: finalizeProviderLabel(providerLabel, isMultimodal), latencyMs: Date.now() - startedAt, errorMessage: failed ? (failedMessage ?? "The selected provider stream did not complete.") : undefined, rawErrorMessage: failed ? (failedMessage ?? "The selected provider stream did not complete.") : streamCompactTag });
     if (!failed && (await isUserMessageLoggingEnabled(key.userId))) {
       void recordUserInteractionLog({
         userId: key.userId,
@@ -897,7 +1231,28 @@ export function registerAnthropicMessagesGateway(app: Express) {
       }
     }
 
-    const estimatedInputTokens = estimateInputTokens(upstreamInput.messages ?? []);
+    const userAgent = (req.headers["user-agent"] ?? "") as string;
+    const isClaudeCli = isClaudeCodeRequest(req);
+    const compactScalingConfig = await getModelCompactScalingConfig(model);
+    const compactScalingEnabled = isClaudeCli && compactScalingConfig.enabled;
+    let didCompactScalingTrigger = false;
+
+    const breakdown = estimateAnthropicCacheBreakdown(raw);
+    const estimatedInputTokens = breakdown.totalTokens;
+    let scaledReportedTokens: { inputTokens: number; cacheRead: number; cacheCreation: number } | null = null;
+
+    if (compactScalingEnabled && breakdown.totalTokens >= compactScalingConfig.triggerTokens) {
+      didCompactScalingTrigger = true;
+      scaledReportedTokens = scaleUsageProportionally(
+        breakdown.inputTokens,
+        breakdown.cacheReadTokens,
+        breakdown.cacheCreationTokens
+      );
+      console.log(`[CompactTrigger] key=${key.id} real=${breakdown.totalTokens} reported=${CLAUDE_CODE_REPORTED_COMPACT_TOTAL} model=${model} ua=${userAgent}`);
+    }
+    if (upstreamInput.stream && !disabledStreamOptionsProviders.has(model)) {
+      (upstreamInput as any).stream_options = { include_usage: true };
+    }
     const reservedNanos = calculateCreditChargeNanos(model, estimatedInputTokens, normalizedBillableMaxOutputTokens(upstreamInput.max_tokens), pricingTier);
     const reservation = await reserveCredit(key.userId, reservedNanos, requestId, { keyGroup });
     if (!reservation.authorized) {
@@ -972,20 +1327,66 @@ export function registerAnthropicMessagesGateway(app: Express) {
     clearTimeout(timeout);
     if (!upstream.ok) {
       const payload = await upstream.json().catch(() => null);
-      const message = publicProviderErrorMessage(upstream.status);
-      const rawError = providerContext.rawErrorMessage
-        || (payload?.error?.message ? `[${providerContext.providerLabel || 'Upstream'} HTTP ${upstream.status}] ${payload.error.message}` : `[${providerContext.providerLabel || 'Upstream'}] HTTP ${upstream.status} returned by upstream provider`);
-      await settleReservedCredit({ userId: key.userId, requestId, reservedNanos, finalChargeNanos: 0, releaseReason: "Anthropic Messages provider returned an error" });
-      await recordUsage({ requestId, userId: key.userId, apiKeyId: key.id, modelId: model, source: "api", stream: Boolean(input.stream), status: "provider_error", sourceIpHash: ipHash, provider: finalizeProviderLabel(providerContext.providerLabel, providerContext), latencyMs: Date.now() - startedAt, errorMessage: message, rawErrorMessage: rawError });
-      const status = publicProviderFailureStatus(upstream.status);
-      return respondError(res, requestId, status, "api_error", message);
+      const upstreamErrorMsg = payload?.error?.message || (typeof payload?.error === "string" ? payload.error : "");
+      const isPromptTooLong = upstream.status === 400 && (
+        /prompt is too long|context length|token limit|maximum.*tokens|maximum context/i.test(upstreamErrorMsg) ||
+        payload?.error?.type === "invalid_request_error"
+      );
+      if (isPromptTooLong) {
+        const errorMsg = upstreamErrorMsg || "prompt is too long";
+        await settleReservedCredit({ userId: key.userId, requestId, reservedNanos, finalChargeNanos: 0, releaseReason: "Prompt exceeded token limits" });
+        await recordUsage({
+          requestId,
+          userId: key.userId,
+          apiKeyId: key.id,
+          modelId: model,
+          source: "api",
+          stream: Boolean(input.stream),
+          status: "rejected",
+          sourceIpHash: ipHash,
+          provider: finalizeProviderLabel(providerContext.providerLabel, providerContext),
+          latencyMs: Date.now() - startedAt,
+          errorMessage: errorMsg,
+          rawErrorMessage: `[Upstream HTTP 400] ${errorMsg}`,
+        });
+        return respondError(res, requestId, 400, "invalid_request_error", errorMsg);
+      }
+
+      // If upstream returned 400 and request had stream_options, retry once without it and cache provider
+      if (upstream.status === 400 && upstreamInput.stream && (upstreamInput as any).stream_options) {
+        const providerTag = providerContext.providerLabel || model;
+        disabledStreamOptionsProviders.add(providerTag);
+        disabledStreamOptionsProviders.add(model);
+        delete (upstreamInput as any).stream_options;
+        try {
+          const retryAborter = new AbortController();
+          const retryTimeout = setTimeout(() => retryAborter.abort(), providerResponseStartTimeoutMs(model));
+          const retried = await forwardProviderRequest(model, upstreamInput, retryAborter.signal, providerContext);
+          clearTimeout(retryTimeout);
+          if (retried.ok) {
+            upstream = retried;
+          }
+        } catch {
+          // Fall through to standard error handling
+        }
+      }
+
+      if (!upstream.ok) {
+        const message = publicProviderErrorMessage(upstream.status);
+        const rawError = providerContext.rawErrorMessage
+          || (payload?.error?.message ? `[${providerContext.providerLabel || 'Upstream'} HTTP ${upstream.status}] ${payload.error.message}` : `[${providerContext.providerLabel || 'Upstream'}] HTTP ${upstream.status} returned by upstream provider`);
+        await settleReservedCredit({ userId: key.userId, requestId, reservedNanos, finalChargeNanos: 0, releaseReason: "Anthropic Messages provider returned an error" });
+        await recordUsage({ requestId, userId: key.userId, apiKeyId: key.id, modelId: model, source: "api", stream: Boolean(input.stream), status: "provider_error", sourceIpHash: ipHash, provider: finalizeProviderLabel(providerContext.providerLabel, providerContext), latencyMs: Date.now() - startedAt, errorMessage: message, rawErrorMessage: rawError });
+        const status = publicProviderFailureStatus(upstream.status);
+        return respondError(res, requestId, status, "api_error", message);
+      }
     }
     await touchApiKey(key.id);
 
     if (!input.stream) {
       clearTimeout(timeout);
       const payload = await upstream.json().catch(() => null);
-      if (!payload || ((model === "claude-opus-5" || model === "claude-fable-5.1" || model === "gpt-6-astra") && isClaudeOpus5ZeroOutputFailure(payload))) {
+      if (!payload || ((model === "claude-opus-5" || model === "claude-opus-5.5" || model === "claude-fable-5.1" || model === "gpt-6-astra") && isClaudeOpus5ZeroOutputFailure(payload))) {
         const message = publicProviderErrorMessage();
         const rawError = providerContext.rawErrorMessage || `[${providerContext.providerLabel || 'Upstream'}] Empty or zero-output response returned by provider.`;
         await settleReservedCredit({ userId: key.userId, requestId, reservedNanos, finalChargeNanos: 0, keyGroup, releaseReason: "Anthropic Messages provider returned an invalid response" });
@@ -993,7 +1394,7 @@ export function registerAnthropicMessagesGateway(app: Express) {
         return respondError(res, requestId, 503, "api_error", message);
       }
       try {
-        const response = translateOpenAiMessageResponse(model, sanitizeModelResponsePayload(model, payload));
+        const response = translateOpenAiMessageResponse(model, sanitizeModelResponsePayload(model, payload), estimatedInputTokens);
         if (model === "glm-5.3") {
           try { await capturePrivateGlmToolContinuation(key.userId, payload); } catch (error) { console.warn("[GLM continuation] Private state could not be stored:", error); }
         }
@@ -1008,7 +1409,80 @@ export function registerAnthropicMessagesGateway(app: Express) {
           usedTokens: tokens.totalTokens ?? (tokens.inputTokens + tokens.outputTokens),
           keyGroup,
         });
-        await recordUsage({ requestId, userId: key.userId, apiKeyId: key.id, modelId: model, source: "api", stream: false, status: "success", ...tokens, chargeNanos: settlement.chargedNanos, sourceIpHash: ipHash, provider: finalizeProviderLabel(providerContext.providerLabel, providerContext), latencyMs: Date.now() - startedAt });
+
+        // Compact Scaling for non-streaming response
+        const rawReportedUsage = usageFrom(payload) as any;
+        const promptReported = rawReportedUsage?.prompt_tokens ?? rawReportedUsage?.input_tokens;
+        const cachedReported = Number(
+          rawReportedUsage?.cached_tokens ??
+          rawReportedUsage?.prompt_tokens_details?.cached_tokens ??
+          rawReportedUsage?.prompt_cache_hit_tokens ??
+          rawReportedUsage?.cache_read_input_tokens ??
+          rawReportedUsage?.prompt_tokens_details?.cache_read_tokens ??
+          0
+        );
+        const cacheCreationReported = Number(
+          rawReportedUsage?.cache_creation_input_tokens ??
+          rawReportedUsage?.prompt_tokens_details?.cache_creation_tokens ??
+          rawReportedUsage?.prompt_cache_miss_tokens ??
+          0
+        );
+        const realInputTokens = tokens.inputTokens;
+        const realTotalInput = realInputTokens + cachedReported + cacheCreationReported;
+
+        let clientReportedInputTokens = realInputTokens;
+        let clientReportedCacheRead = cachedReported;
+        let clientReportedCacheCreation = cacheCreationReported;
+
+        if (scaledReportedTokens) {
+          clientReportedInputTokens = scaledReportedTokens.inputTokens;
+          clientReportedCacheRead = scaledReportedTokens.cacheRead;
+          clientReportedCacheCreation = scaledReportedTokens.cacheCreation;
+        } else if (compactScalingEnabled && realTotalInput >= compactScalingConfig.triggerTokens) {
+          didCompactScalingTrigger = true;
+          const scaled = scaleUsageProportionally(realInputTokens, cachedReported, cacheCreationReported);
+          clientReportedInputTokens = scaled.inputTokens;
+          clientReportedCacheRead = scaled.cacheRead;
+          clientReportedCacheCreation = scaled.cacheCreation;
+          console.log(`[CompactTrigger] key=${key.id} real=${realTotalInput} reported=${CLAUDE_CODE_REPORTED_COMPACT_TOTAL} model=${model} ua=${userAgent}`);
+        }
+
+        if (didCompactScalingTrigger && response && response.usage) {
+          response.usage = {
+            input_tokens: clientReportedInputTokens,
+            output_tokens: tokens.outputTokens,
+            ...(clientReportedCacheRead > 0 ? { cache_read_input_tokens: clientReportedCacheRead } : {}),
+            ...(clientReportedCacheCreation > 0 ? { cache_creation_input_tokens: clientReportedCacheCreation } : {}),
+          };
+        }
+
+        const compactDiagnosticTag = didCompactScalingTrigger
+          ? `[CompactTrigger: ${realTotalInput.toLocaleString()} -> 980k (ua: ${userAgent})]`
+          : undefined;
+
+        const isReasoningOnly = Boolean((payload as any)?.choices?.[0]?.message?.isReasoningPromoted);
+        const reasoningDiagnosticTag = isReasoningOnly
+          ? "[ReasoningFallback: content was empty, returned reasoning]"
+          : undefined;
+
+        await recordUsage({
+          requestId,
+          userId: key.userId,
+          apiKeyId: key.id,
+          modelId: model,
+          source: "api",
+          stream: false,
+          status: "success",
+          ...tokens,
+          chargeNanos: settlement.chargedNanos,
+          sourceIpHash: ipHash,
+          provider: finalizeProviderLabel(providerContext.providerLabel, providerContext),
+          latencyMs: Date.now() - startedAt,
+          rawErrorMessage: reasoningDiagnosticTag ?? compactDiagnosticTag,
+          reasoningReturned: isReasoningOnly,
+        });
+
+        console.log(`[Token Usage Audit] Non-stream Request ${requestId} (${model}): EstimatedInput=${estimatedInputTokens}, UpstreamPrompt=${promptReported ?? "none"}, FinalInput=${tokens.inputTokens}, FinalOutput=${tokens.outputTokens}, Cached=${cachedReported}`);
         if (isCacheDebugEnabled()) {
           const usageReported = usageFrom(payload);
           const cached = Number((usageReported as any).cached_tokens ?? (usageReported as any).prompt_tokens_details?.cached_tokens ?? (usageReported as any).cache_read_input_tokens ?? 0);
@@ -1049,7 +1523,34 @@ export function registerAnthropicMessagesGateway(app: Express) {
     res.setHeader("connection", "keep-alive");
     res.flushHeaders();
 
-    writeSse(res, "message_start", { type: "message_start", message: { id: `msg_${randomUUID().replaceAll("-", "")}`, type: "message", role: "assistant", content: [], model, stop_reason: null, stop_sequence: null, usage: { input_tokens: 0, output_tokens: 0 } } });
+    const initialReportedInput = scaledReportedTokens
+      ? scaledReportedTokens.inputTokens
+      : breakdown.inputTokens;
+    const initialReportedCacheRead = scaledReportedTokens
+      ? scaledReportedTokens.cacheRead
+      : breakdown.cacheReadTokens;
+    const initialReportedCacheCreation = scaledReportedTokens
+      ? scaledReportedTokens.cacheCreation
+      : breakdown.cacheCreationTokens;
+
+    writeSse(res, "message_start", {
+      type: "message_start",
+      message: {
+        id: `msg_${randomUUID().replaceAll("-", "")}`,
+        type: "message",
+        role: "assistant",
+        content: [],
+        model,
+        stop_reason: null,
+        stop_sequence: null,
+        usage: {
+          input_tokens: initialReportedInput,
+          output_tokens: 0,
+          cache_creation_input_tokens: initialReportedCacheCreation,
+          cache_read_input_tokens: initialReportedCacheRead,
+        },
+      },
+    });
 
     const reader = upstream.body?.getReader();
     if (!reader) {
@@ -1070,14 +1571,81 @@ export function registerAnthropicMessagesGateway(app: Express) {
     let glmStreamReasoning = "";
     let glmStreamText = "";
     let streamedOutputText = "";
+    let streamedReasoningText = "";
+    let isStreamReasoningPromoted = false;
     const finish = (reason: string = "end_turn") => {
       if (stopped) return;
       stopped = true;
-      if (textIndex !== null) writeSse(res, "content_block_stop", { type: "content_block_stop", index: textIndex });
-      toolIndexes.forEach(index => writeSse(res, "content_block_stop", { type: "content_block_stop", index }));
-      const outputTokensReported = Number(usage.completion_tokens ?? usage.output_tokens ?? 0);
+      if (!failed && textIndex === null && toolIndexes.size === 0 && streamedReasoningText.trim()) {
+        isStreamReasoningPromoted = true;
+        textIndex = nextIndex++;
+        let reasoningText = streamedReasoningText;
+        if ((model === "claude-opus-5" || model === "claude-opus-5.5" || model === "claude-fable-5.1") && /\b(?:qoder|deepseek|qwen|nemotron|lightning)\b/i.test(reasoningText)) {
+          const replacementName = model === "claude-fable-5.1" ? "Claude Fable 5.1" : (model === "claude-opus-5.5" ? "Claude Opus 5.5" : "Claude Opus 5");
+          reasoningText = reasoningText.replace(/\b(?:qoder(?:-[a-z0-9._/-]+)?|deepseek(?:-[a-z0-9._/-]+)?|qwen(?:-[a-z0-9._/-]+)?|nemotron|lightning)\b/gi, replacementName);
+        }
+        writeSse(res, "content_block_start", { type: "content_block_start", index: textIndex, content_block: { type: "text", text: "" } });
+        writeSse(res, "content_block_delta", { type: "content_block_delta", index: textIndex, delta: { type: "text_delta", text: reasoningText } });
+        writeSse(res, "content_block_stop", { type: "content_block_stop", index: textIndex });
+      } else {
+        if (textIndex !== null) writeSse(res, "content_block_stop", { type: "content_block_stop", index: textIndex });
+        toolIndexes.forEach(index => writeSse(res, "content_block_stop", { type: "content_block_stop", index }));
+      }
+
+      const rawUsage = usage as any;
+      const cachedTokens = Number(
+        rawUsage.cached_tokens ??
+        rawUsage.prompt_tokens_details?.cached_tokens ??
+        rawUsage.prompt_cache_hit_tokens ??
+        rawUsage.cache_read_input_tokens ??
+        rawUsage.prompt_tokens_details?.cache_read_tokens ??
+        0
+      );
+      const cacheCreationTokens = Number(
+        rawUsage.cache_creation_input_tokens ??
+        rawUsage.prompt_tokens_details?.cache_creation_tokens ??
+        rawUsage.prompt_cache_miss_tokens ??
+        0
+      );
+      const reportedPrompt = rawUsage.prompt_tokens ?? rawUsage.input_tokens;
+      const promptTokens = reportedPrompt !== undefined && Number.isFinite(Number(reportedPrompt)) && Number(reportedPrompt) > 0
+        ? Number(reportedPrompt)
+        : estimatedInputTokens;
+      const finalInputTokens = Math.max(0, promptTokens - cachedTokens);
+
+      const outputTokensReported = Number(rawUsage.completion_tokens ?? rawUsage.output_tokens ?? 0);
       const finalOutputTokens = outputTokensReported > 0 ? outputTokensReported : estimateTextTokens(streamedOutputText);
-      writeSse(res, "message_delta", { type: "message_delta", delta: { stop_reason: reason, stop_sequence: null }, usage: { output_tokens: finalOutputTokens } });
+
+      console.log(`[Token Usage Audit] Request ${requestId} (${model}): EstimatedInput=${estimatedInputTokens}, UpstreamPrompt=${reportedPrompt ?? "none"}, FinalInput=${finalInputTokens}, FinalOutput=${finalOutputTokens}, Cached=${cachedTokens}`);
+
+      const realTotalInput = finalInputTokens + cachedTokens + cacheCreationTokens;
+      let reportedInputTokens = finalInputTokens;
+      let reportedCacheRead = cachedTokens;
+      let reportedCacheCreation = cacheCreationTokens;
+
+      if (didCompactScalingTrigger && scaledReportedTokens) {
+        reportedInputTokens = scaledReportedTokens.inputTokens;
+        reportedCacheRead = scaledReportedTokens.cacheRead;
+        reportedCacheCreation = scaledReportedTokens.cacheCreation;
+      } else if (compactScalingEnabled && realTotalInput >= compactScalingConfig.triggerTokens) {
+        didCompactScalingTrigger = true;
+        const scaled = scaleUsageProportionally(finalInputTokens, cachedTokens, cacheCreationTokens);
+        reportedInputTokens = scaled.inputTokens;
+        reportedCacheRead = scaled.cacheRead;
+        reportedCacheCreation = scaled.cacheCreation;
+        console.log(`[CompactTrigger] key=${key.id} real=${realTotalInput} reported=${CLAUDE_CODE_REPORTED_COMPACT_TOTAL} model=${model} ua=${userAgent}`);
+      }
+
+      writeSse(res, "message_delta", {
+        type: "message_delta",
+        delta: { stop_reason: reason, stop_sequence: null },
+        usage: {
+          input_tokens: reportedInputTokens,
+          output_tokens: finalOutputTokens,
+          ...(reportedCacheRead > 0 ? { cache_read_input_tokens: reportedCacheRead } : {}),
+          ...(reportedCacheCreation > 0 ? { cache_creation_input_tokens: reportedCacheCreation } : {}),
+        },
+      });
       writeSse(res, "message_stop", { type: "message_stop" });
     };
     res.on("close", () => { if (!res.writableEnded) aborter.abort(); });
@@ -1102,7 +1670,13 @@ export function registerAnthropicMessagesGateway(app: Express) {
             finish();
             continue;
           }
-          usage = { ...usage, ...usageFrom(event) };
+          if (event.usage) {
+            usage = { ...usage, ...event.usage };
+          } else if ((event as any).message?.usage) {
+            usage = { ...usage, ...(event as any).message.usage };
+          } else {
+            usage = { ...usage, ...usageFrom(event) };
+          }
           const choice = event.choices?.[0];
           const delta = choice?.delta;
           if (typeof delta?.content === "string" && delta.content) {
@@ -1138,9 +1712,11 @@ export function registerAnthropicMessagesGateway(app: Express) {
               writeSse(res, "content_block_delta", { type: "content_block_delta", index: outputIndex, delta: { type: "input_json_delta", partial_json: toolCall.function.arguments } });
             }
           }
-          if (typeof delta?.reasoning_content === "string") {
-            streamedOutputText += delta.reasoning_content;
-            if (model === "glm-5.3") glmStreamReasoning += delta.reasoning_content;
+          const rPart = delta?.reasoning_content ?? (delta as any)?.reasoning ?? (delta as any)?.thinking;
+          if (typeof rPart === "string" && rPart) {
+            streamedOutputText += rPart;
+            streamedReasoningText += rPart;
+            if (model === "glm-5.3") glmStreamReasoning += rPart;
           }
           if (choice?.finish_reason) finish(toStopReason(choice.finish_reason));
         }
@@ -1186,7 +1762,29 @@ export function registerAnthropicMessagesGateway(app: Express) {
         keyGroup,
         releaseReason: failed ? "Anthropic Messages stream was cancelled" : undefined,
       });
-      await recordUsage({ requestId, userId: key.userId, apiKeyId: key.id, modelId: model, source: "api", stream: true, status: failed ? "cancelled" : "success", ...tokens, chargeNanos: settlement.chargedNanos, sourceIpHash: ipHash, provider: finalizeProviderLabel(providerContext.providerLabel, providerContext), latencyMs: Date.now() - startedAt, errorMessage: failed ? (failedMessage ?? "The selected provider stream was cancelled.") : undefined });
+      const streamCompactTag = didCompactScalingTrigger
+        ? `[CompactTrigger: ${((tokens.inputTokens ?? 0) + Number((usage as any).cached_tokens ?? (usage as any).prompt_tokens_details?.cached_tokens ?? (usage as any).cache_read_input_tokens ?? 0) + Number((usage as any).cache_creation_input_tokens ?? (usage as any).prompt_tokens_details?.cache_creation_tokens ?? (usage as any).prompt_cache_miss_tokens ?? 0)).toLocaleString()} -> 980k (ua: ${userAgent})]`
+        : undefined;
+      const streamReasoningTag = isStreamReasoningPromoted
+        ? "[ReasoningFallback: content was empty, returned reasoning]"
+        : undefined;
+      await recordUsage({
+        requestId,
+        userId: key.userId,
+        apiKeyId: key.id,
+        modelId: model,
+        source: "api",
+        stream: true,
+        status: failed ? "cancelled" : "success",
+        ...tokens,
+        chargeNanos: settlement.chargedNanos,
+        sourceIpHash: ipHash,
+        provider: finalizeProviderLabel(providerContext.providerLabel, providerContext),
+        latencyMs: Date.now() - startedAt,
+        errorMessage: failed ? (failedMessage ?? "The selected provider stream was cancelled.") : undefined,
+        rawErrorMessage: failed ? (failedMessage ?? "The selected provider stream was cancelled.") : (streamReasoningTag ?? streamCompactTag),
+        reasoningReturned: isStreamReasoningPromoted,
+      });
       if (isCacheDebugEnabled()) {
         const cached = Number((usage as any).cached_tokens ?? (usage as any).prompt_tokens_details?.cached_tokens ?? (usage as any).cache_read_input_tokens ?? 0);
         recordCacheDebugEvent({

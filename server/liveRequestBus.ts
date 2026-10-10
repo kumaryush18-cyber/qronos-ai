@@ -19,6 +19,7 @@ export type LiveRequestEvent = {
   credentialSlot?: number;
   createdAt: Date;
   userName?: string | null;
+  reasoningReturned?: boolean;
 };
 
 type Listener = (event: LiveRequestEvent) => void;

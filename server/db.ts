@@ -109,6 +109,7 @@ const GPT6_ASTRA_RUNTIME_SETTING_KEY = "gpt6_astra_runtime_v1";
 const KIMI_K3_RUNTIME_SETTING_KEY = "kimi_k3_runtime_v1";
 const RENDER_NIM_PROXY_SWARM_SETTING_KEY = "render_nim_proxy_swarm_v1";
 const BAILU_WEBSHARE_PROXY_POOL_SETTING_KEY = "bailu_webshare_proxy_pool_v1";
+export const COMPACT_SCALING_SETTING_KEY = "model_compact_scaling_configs_v1";
 const BAI_REASONING_CONTINUATION_TTL_MS = 10 * 60 * 1_000;
 const BAI_PROVIDER_CIRCUIT_COOLDOWN_MS = 60_000;
 export const BAI_CREDENTIAL_MAX_ACTIVE_REQUESTS = 10;
@@ -6212,6 +6213,7 @@ export async function recordUsage(input: {
   rawErrorMessage?: string;
   provider?: string;
   isMultimodal?: boolean;
+  reasoningReturned?: boolean;
 }) {
   const inputTokens = input.inputTokens ?? 0;
   const outputTokens = input.outputTokens ?? 0;
@@ -6260,13 +6262,18 @@ export async function recordUsage(input: {
   scheduleFlushUsageBuffer();
 
   const userName = input.userId ? await lookupUserName(input.userId) : null;
+  const isReasoningFallback = Boolean(
+    input.reasoningReturned ||
+    (rawErrorMessage && rawErrorMessage.includes("[ReasoningFallback")) ||
+    (input.source && input.source.includes("reasoning_returned"))
+  );
   publishLiveRequest({
     requestId: input.requestId,
     userId: input.userId,
     apiKeyId: input.apiKeyId,
     modelId: input.modelId,
     status: input.status,
-    source: input.source ?? "api",
+    source: (input.source ?? "api") as "api" | "playground",
     stream: input.stream ?? false,
     inputTokens,
     outputTokens,
@@ -6279,6 +6286,7 @@ export async function recordUsage(input: {
     provider: input.provider,
     createdAt: new Date(),
     userName,
+    reasoningReturned: isReasoningFallback,
   });
 }
 
@@ -6331,6 +6339,9 @@ export async function getRecentLiveRequests(limit = 25): Promise<LiveRequestEven
     provider: row.provider ?? undefined,
     createdAt: row.createdAt,
     userName: row.userName,
+    reasoningReturned: Boolean(
+      row.rawErrorMessage && row.rawErrorMessage.includes("[ReasoningFallback")
+    ),
   }));
 }
 
@@ -6915,7 +6926,7 @@ export async function getAdminOverview() {
       });
   }
 
-  const [models, providers, accounts, usage, accountUsage, totals, emailProviderRows, allAccountModelUsageRows, totalAccountsRows] = await Promise.all([
+  const [models, providers, accounts, usage, accountUsage, totals, emailProviderRows, allAccountModelUsageRows, totalAccountsRows, compactScalingMapRows] = await Promise.all([
     db.select().from(modelConfigs).orderBy(modelConfigs.displayName),
     db.select().from(providerConfigs).orderBy(providerConfigs.displayName),
     db.select({ id: users.id, name: users.name, email: users.email, createdAt: users.createdAt, lastSignedIn: users.lastSignedIn, suspended: accountControls.isSuspended, suspicious: accountControls.isSuspicious, requestLimit: accountControls.dailyRequestLimit, tokenLimit: accountControls.dailyTokenLimit, balanceNanos: creditAccounts.balanceNanos, paygBalanceNanos: creditAccounts.paygBalanceNanos, codingPlanTokens: creditAccounts.codingPlanTokens, discordVerifiedAt: accountControls.discordVerifiedAt }).from(users).leftJoin(accountControls, eq(users.id, accountControls.userId)).leftJoin(creditAccounts, eq(users.id, creditAccounts.userId)).orderBy(desc(users.lastSignedIn)),
@@ -6925,7 +6936,14 @@ export async function getAdminOverview() {
     db.select({ provider: emailProvider, accountCount: sql<number>`count(id)` }).from(users).where(sql`${users.email} is not null and ${users.email} like '%@%'`).groupBy(emailProvider).orderBy(desc(sql`count(id)`), emailProvider),
     allAccountModelUsagePromise,
     db.select({ count: sql<number>`count(*)` }).from(users).where(ne(users.openId, ADMIN_SESSION_PRINCIPAL_OPEN_ID)),
+    getAllModelCompactScalingConfigs(),
   ]);
+  const compactScalingMap = (compactScalingMapRows ?? {}) as Record<string, ModelCompactScalingConfig>;
+  const modelsWithCompactScaling = models.map(m => ({
+    ...m,
+    enableCompactScaling: Boolean(compactScalingMap[m.modelId]?.enabled),
+    compactTriggerTokens: compactScalingMap[m.modelId]?.triggerTokens ?? 500_000,
+  }));
   const providerTelemetry = getProviderCredentialTelemetry({
     [FXQIDIAN_PROVIDER_SLUG]: getFxqidianCredentialPool().length,
     [CLUSTER_PROTOCOL_PROVIDER_SLUG]: getClusterProtocolCredentialPool().length,
@@ -6935,7 +6953,7 @@ export async function getAdminOverview() {
   });
   const managedProviderKeyMetrics = await getManagedProviderKeyMetrics();
   const realTotalAccounts = Number(totalAccountsRows[0]?.count ?? accounts.length);
-  const value = { models, providers, accounts: composeAdminAccountOverview(accounts, accountUsage), usage: usage.map(row => ({ day: new Date(row.day).toISOString().slice(0, 10), requests: Number(row.requests), tokens: Number(row.tokens) })), emailProviders: normalizeAdminEmailProviderCounts(emailProviderRows), allAccountModelUsage: normalizeAdminGlobalModelUsage(allAccountModelUsageRows), totals: { totalAccounts: realTotalAccounts, totalTokens: TOKENFORGE_TOKEN_BASELINE + Number(totals[0]?.totalTokens ?? 0), totalRequests: Number(totals[0]?.totalRequests ?? 0) }, providerTelemetry, managedProviderKeyMetrics };
+  const value = { models: modelsWithCompactScaling, providers, accounts: composeAdminAccountOverview(accounts, accountUsage), usage: usage.map(row => ({ day: new Date(row.day).toISOString().slice(0, 10), requests: Number(row.requests), tokens: Number(row.tokens) })), emailProviders: normalizeAdminEmailProviderCounts(emailProviderRows), allAccountModelUsage: normalizeAdminGlobalModelUsage(allAccountModelUsageRows), totals: { totalAccounts: realTotalAccounts, totalTokens: TOKENFORGE_TOKEN_BASELINE + Number(totals[0]?.totalTokens ?? 0), totalRequests: Number(totals[0]?.totalRequests ?? 0) }, providerTelemetry, managedProviderKeyMetrics };
   adminOverviewCache = { at: Date.now(), value };
   return value;
 }
@@ -7174,6 +7192,106 @@ export async function setModelIsBundle(modelId: string, isBundle: boolean): Prom
 
 export async function setModelIsTokenPlan(modelId: string, isTokenPlan: boolean): Promise<boolean> {
   return setModelAccess(modelId, { isTokenPlan });
+}
+
+export type ModelCompactScalingConfig = {
+  enabled: boolean;
+  triggerTokens: number;
+};
+
+const compactScalingCache = new Map<string, { config: ModelCompactScalingConfig; expiresAt: number }>();
+const COMPACT_SCALING_CACHE_TTL_MS = 10_000;
+
+export function parseContextTokens(val: unknown): number {
+  if (typeof val === "number") return Math.max(1, Math.round(val));
+  if (typeof val !== "string") return 500_000;
+  const cleaned = val.trim().toLowerCase();
+  const kMatch = cleaned.match(/^([0-9]+(?:\.[0-9]+)?)\s*k$/);
+  if (kMatch) return Math.round(parseFloat(kMatch[1]) * 1_000);
+  const mMatch = cleaned.match(/^([0-9]+(?:\.[0-9]+)?)\s*m$/);
+  if (mMatch) return Math.round(parseFloat(mMatch[1]) * 1_000_000);
+  const num = parseInt(cleaned.replace(/[^0-9]/g, ""), 10);
+  return Number.isFinite(num) && num > 0 ? num : 500_000;
+}
+
+export async function getAllModelCompactScalingConfigs(): Promise<Record<string, ModelCompactScalingConfig>> {
+  try {
+    const db = await getDb();
+    let rawValue: string | undefined;
+    if (db) {
+      const record = (await db.select({ value: platformSettings.value }).from(platformSettings).where(eq(platformSettings.settingKey, COMPACT_SCALING_SETTING_KEY)).limit(1))[0];
+      rawValue = record?.value;
+    } else {
+      rawValue = fallbackPlatformSettings.get(COMPACT_SCALING_SETTING_KEY)?.value;
+    }
+    if (!rawValue) return {};
+    const parsed = JSON.parse(rawValue) as Record<string, { enabled?: boolean; triggerTokens?: unknown }>;
+    const result: Record<string, ModelCompactScalingConfig> = {};
+    for (const [mid, cfg] of Object.entries(parsed)) {
+      if (cfg && typeof cfg === "object") {
+        result[mid] = {
+          enabled: Boolean(cfg.enabled),
+          triggerTokens: parseContextTokens(cfg.triggerTokens ?? 500_000),
+        };
+      }
+    }
+    return result;
+  } catch {
+    return {};
+  }
+}
+
+export async function getModelCompactScalingConfig(modelId: string): Promise<ModelCompactScalingConfig> {
+  const cached = compactScalingCache.get(modelId);
+  if (cached && Date.now() < cached.expiresAt) {
+    return cached.config;
+  }
+  const all = await getAllModelCompactScalingConfigs();
+  const config = all[modelId] ?? { enabled: false, triggerTokens: 500_000 };
+  compactScalingCache.set(modelId, { config, expiresAt: Date.now() + COMPACT_SCALING_CACHE_TTL_MS });
+  return config;
+}
+
+export async function setModelCompactScalingConfig(
+  modelId: string,
+  config: { enabled: boolean; triggerTokens?: unknown },
+  updatedByUserId?: number | null
+): Promise<ModelCompactScalingConfig> {
+  adminOverviewCache = null;
+  compactScalingCache.clear();
+  const triggerTokens = parseContextTokens(config.triggerTokens ?? 500_000);
+  const nextConfig: ModelCompactScalingConfig = {
+    enabled: Boolean(config.enabled),
+    triggerTokens,
+  };
+
+  const all = await getAllModelCompactScalingConfigs();
+  all[modelId] = nextConfig;
+  const serialized = JSON.stringify(all);
+
+  fallbackPlatformSettings.set(COMPACT_SCALING_SETTING_KEY, {
+    value: serialized,
+    updatedAt: new Date(),
+    updatedByUserId: updatedByUserId ?? null,
+  });
+
+  const db = await getDb();
+  if (db) {
+    await db.insert(platformSettings).values({
+      settingKey: COMPACT_SCALING_SETTING_KEY,
+      value: serialized,
+      updatedByUserId: updatedByUserId ?? null,
+    }).onDuplicateKeyUpdate({
+      set: {
+        value: serialized,
+        updatedByUserId: updatedByUserId ?? null,
+        updatedAt: new Date(),
+      },
+    });
+  }
+
+  compactScalingCache.set(modelId, { config: nextConfig, expiresAt: Date.now() + COMPACT_SCALING_CACHE_TTL_MS });
+  return nextConfig;
 }
 
 

@@ -20,6 +20,7 @@ import {
   RenderNimProxySwarmSettingsData,
 } from "../types";
 import { formatTokens, SectionHeader, Toggle } from "../common/AdminCommon";
+import { ModelCompactScalingBar } from "../overview/OperationsSections";
 import { DynamicProviderKeyPool, ManagedProviderKeyMetrics } from "./DynamicProviderKeyPool";
 import {
   ClaudeOpus5FailureHistory,
@@ -242,6 +243,7 @@ export function PinnedUsersInput({
 
 export function ClaudeOpus5ProviderBalancerPanel({
   providerName = "Claude Opus 5",
+  modelId,
   drafts,
   settings,
   metrics,
@@ -254,6 +256,7 @@ export function ClaudeOpus5ProviderBalancerPanel({
   onInstantSave,
 }: {
   providerName?: string;
+  modelId?: string;
   drafts: ClaudeOpus5ProviderDraft[];
   settings?: ClaudeOpus5SettingsData;
   metrics?: ManagedProviderKeyMetricGroup;
@@ -269,6 +272,40 @@ export function ClaudeOpus5ProviderBalancerPanel({
   const configured = new Map((settings?.providers ?? []).map((provider) => [provider.id, provider]));
   const disabled = loading || saving;
   const [activeProviderId, setActiveProviderId] = useState("");
+
+  const effectiveModelId = modelId || (
+    providerName.toLowerCase().includes("opus 5.5") ? "claude-opus-5.5" :
+    providerName.toLowerCase().includes("opus 5") || providerName.toLowerCase() === "claude opus" ? "claude-opus-5" :
+    providerName.toLowerCase().includes("astra") ? "gpt-6-astra" :
+    providerName.toLowerCase().includes("fable") ? "claude-fable-5.1" :
+    providerName.toLowerCase().includes("sonnet") ? "claude-sonnet-4.6" :
+    providerName.toLowerCase().includes("deepseek") ? "deepseek-v4-pro" :
+    providerName.toLowerCase().includes("glm") ? "glm-5.3" :
+    providerName.toLowerCase().includes("qwen") ? "qwen3.8-max" :
+    providerName.toLowerCase().includes("kimi") ? "kimi-k3" :
+    undefined
+  );
+
+  const compactScalingQuery = trpc.admin.modelCompactScaling.useQuery(
+    { modelId: effectiveModelId! },
+    {
+      enabled: Boolean(effectiveModelId),
+      refetchInterval: 10_000,
+    }
+  );
+
+  const toggleCompactScaling = trpc.admin.setModelCompactScaling.useMutation({
+    onSuccess: (res) => {
+      if (effectiveModelId) {
+        utils.admin.modelCompactScaling.invalidate({ modelId: effectiveModelId });
+      }
+      utils.admin.overview.invalidate();
+      toast.success(
+        `Compact scaling for ${effectiveModelId || providerName} is now ${res.enabled ? "ENABLED" : "DISABLED"}`
+      );
+    },
+    onError: (error) => toast.error(error.message),
+  });
 
   const isClaudeOpus = providerName.toLowerCase().includes("opus") || providerName.toLowerCase().includes("claude opus 5");
   const isBaiPriority = settings?.baiPriority === true;
@@ -315,6 +352,25 @@ export function ClaudeOpus5ProviderBalancerPanel({
         title={`${providerName} multi-provider load balancer`}
         detail="Every new request rotates evenly across enabled provider groups, then across eligible keys within the selected group. A failed provider is skipped before a response starts."
       />
+
+      {effectiveModelId && (
+        <div className="mt-3">
+          <ModelCompactScalingBar
+            model={{
+              modelId: effectiveModelId,
+              displayName: providerName,
+              providerSlug: "managed",
+              enabled: true,
+              enableCompactScaling: compactScalingQuery.data?.enabled,
+              compactTriggerTokens: compactScalingQuery.data?.triggerTokens,
+            }}
+            pending={toggleCompactScaling.isPending}
+            onToggle={(mid, enabled, triggerTokens) => {
+              toggleCompactScaling.mutate({ modelId: mid, enabled, triggerTokens });
+            }}
+          />
+        </div>
+      )}
       
       {isClaudeOpus && (
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#c9ff73]/25 bg-[#c9ff73]/[0.05] p-3.5">
@@ -448,7 +504,7 @@ export function ClaudeOpus5ProviderBalancerPanel({
                         )}
                         {draft.maxOutputTokens && Number(draft.maxOutputTokens) > 0 && (
                           <span className="rounded bg-amber-400/20 px-1.5 py-0.2 text-[8px] font-bold uppercase tracking-wider text-amber-300">
-                            ≤{Number(draft.maxOutputTokens) >= 1000 ? `${Math.round(Number(draft.maxOutputTokens) / 1000)}k` : draft.maxOutputTokens} out
+                            ={Number(draft.maxOutputTokens) >= 1000 ? `${Math.round(Number(draft.maxOutputTokens) / 1000)}k` : draft.maxOutputTokens} out override
                           </span>
                         )}
                         {draft.disableIdentityPrompt && (
@@ -714,11 +770,11 @@ export function ClaudeOpus5ProviderBalancerPanel({
                 <div>
                   <div className="flex items-center justify-between">
                     <label className="text-xs font-semibold text-[#dedfe7]" htmlFor={`${draft.id}-max-output-tokens`}>
-                      Max Output Tokens Limit
+                      Max Output Tokens (Override)
                     </label>
                     <span className="text-[10px] text-[#858697]">
                       {draft.maxOutputTokens && Number(draft.maxOutputTokens) > 0
-                        ? `≤ ${Number(draft.maxOutputTokens).toLocaleString()}`
+                        ? `= ${Number(draft.maxOutputTokens).toLocaleString()}`
                         : "Blank = normal"}
                     </span>
                   </div>
@@ -727,7 +783,7 @@ export function ClaudeOpus5ProviderBalancerPanel({
                     type="number"
                     min={1}
                     max={10000000}
-                    placeholder="e.g. 4096 (blank = normal)"
+                    placeholder="e.g. 64000 (blank = normal)"
                     value={draft.maxOutputTokens ?? ""}
                     onChange={(event) =>
                       onChange(draft.id, (current) => ({
@@ -739,7 +795,7 @@ export function ClaudeOpus5ProviderBalancerPanel({
                     disabled={disabled}
                   />
                   <p className="mt-1 text-[10px] text-[#858697]">
-                    Caps output tokens when routed to this provider. If left blank, standard model/client tokens apply.
+                    Overrides output tokens sent upstream (e.g. replaces client limits like 64). If left blank, standard model/client tokens apply.
                   </p>
                 </div>
               </div>
@@ -1630,6 +1686,7 @@ export function ClaudeFable5ProviderBalancerPanel({ metrics }: { metrics?: Manag
     <>
       <ClaudeOpus5ProviderBalancerPanel
         providerName="Claude Fable 5.1"
+        modelId="claude-fable-5.1"
         drafts={drafts}
         settings={settings.data as ClaudeOpus5SettingsData | undefined}
         metrics={metrics}
@@ -1725,6 +1782,7 @@ export function Sonnet46ProviderBalancerPanel({ metrics }: { metrics?: ManagedPr
     <>
       <ClaudeOpus5ProviderBalancerPanel
         providerName="Claude Sonnet 4.6"
+        modelId="claude-sonnet-4.6"
         drafts={drafts}
         settings={settings.data as ClaudeOpus5SettingsData | undefined}
         metrics={metrics}
@@ -1819,6 +1877,7 @@ export function Qwen38MaxProviderBalancerPanel({ metrics }: { metrics?: ManagedP
     <>
       <ClaudeOpus5ProviderBalancerPanel
         providerName="Qwen 3.8 Max"
+        modelId="qwen3.8-max"
         drafts={drafts}
         settings={settings.data as ClaudeOpus5SettingsData | undefined}
         metrics={metrics}
@@ -1915,6 +1974,7 @@ export function Gpt6AstraProviderBalancerPanel({ metrics }: { metrics?: ManagedP
     <>
       <ClaudeOpus5ProviderBalancerPanel
         providerName="GPT-6 Astra"
+        modelId="gpt-6-astra"
         drafts={drafts}
         settings={settings.data as ClaudeOpus5SettingsData | undefined}
         metrics={metrics}
@@ -2011,6 +2071,7 @@ export function KimiK3ProviderBalancerPanel({ metrics }: { metrics?: ManagedProv
     <>
       <ClaudeOpus5ProviderBalancerPanel
         providerName="Kimi K3"
+        modelId="kimi-k3"
         drafts={drafts}
         settings={settings.data as ClaudeOpus5SettingsData | undefined}
         metrics={metrics}
@@ -2099,6 +2160,7 @@ export function DeepseekV4ProProviderBalancerPanel({ metrics }: { metrics?: Mana
     <>
       <ClaudeOpus5ProviderBalancerPanel
         providerName="DeepSeek V4 Pro"
+        modelId="deepseek-v4-pro"
         drafts={drafts}
         settings={settings.data as ClaudeOpus5SettingsData | undefined}
         metrics={metrics}
@@ -2929,6 +2991,7 @@ export function ClaudeOpus5ProviderBalancerPanelWrapper({
     <>
       <ClaudeOpus5ProviderBalancerPanel
         providerName="Claude Opus 5"
+        modelId="claude-opus-5"
         drafts={drafts}
         settings={settings.data as ClaudeOpus5SettingsData | undefined}
         metrics={metrics}
@@ -3049,6 +3112,7 @@ export function Glm53ProviderSettingsPanel({
     <>
       <ClaudeOpus5ProviderBalancerPanel
         providerName="GLM 5.3"
+        modelId="glm-5.3"
         drafts={drafts}
         settings={settings.data as ClaudeOpus5SettingsData | undefined}
         metrics={metrics}

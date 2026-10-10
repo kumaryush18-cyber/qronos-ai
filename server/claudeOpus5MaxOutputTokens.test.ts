@@ -14,7 +14,7 @@ describe("Claude Opus 5 Provider Max Output Tokens", () => {
     expect(normalizeMaxOutputTokens(20_000_000)).toBe(10_000_000);
   });
 
-  it("applies provider maxOutputTokens when set and caps requested max_tokens", () => {
+  it("applies provider maxOutputTokens when set and overrides higher requested max_tokens", () => {
     const providerWithCap = { maxOutputTokens: 4096 };
     const inputWithHighTokens = {
       model: "claude-opus-5",
@@ -26,16 +26,29 @@ describe("Claude Opus 5 Provider Max Output Tokens", () => {
     expect(capped.max_tokens).toBe(4096);
   });
 
-  it("preserves lower requested max_tokens when provider has a higher cap", () => {
-    const providerWithCap = { maxOutputTokens: 4096 };
+  it("overrides lower requested max_tokens (including client default 64) with provider maxOutputTokens", () => {
+    const providerWithCap = { maxOutputTokens: 64000 };
     const inputWithLowTokens = {
       model: "claude-opus-5",
       messages: [{ role: "user" as const, content: "hello" }],
-      max_tokens: 1024,
+      max_tokens: 64,
     };
 
     const capped = applyProviderMaxOutputTokens(inputWithLowTokens, providerWithCap);
-    expect(capped.max_tokens).toBe(1024);
+    expect(capped.max_tokens).toBe(64000);
+  });
+
+  it("overrides max_completion_tokens from client and removes it", () => {
+    const providerWithCap = { maxOutputTokens: 64000 };
+    const inputWithCompletionTokens = {
+      model: "claude-opus-5",
+      messages: [{ role: "user" as const, content: "hello" }],
+      max_completion_tokens: 64,
+    } as any;
+
+    const capped = applyProviderMaxOutputTokens(inputWithCompletionTokens, providerWithCap);
+    expect(capped.max_tokens).toBe(64000);
+    expect((capped as any).max_completion_tokens).toBeUndefined();
   });
 
   it("sets max_tokens when requested max_tokens is undefined and provider has cap", () => {
