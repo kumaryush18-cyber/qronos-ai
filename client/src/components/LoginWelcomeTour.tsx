@@ -35,29 +35,47 @@ function DiscordIcon({ className = "h-5 w-5" }: { className?: string }) {
   );
 }
 
+export function showWelcomeModal() {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("qronos:show-welcome"));
+  }
+}
+
 export function LoginWelcomeTour({ user }: { user: LoginWelcomeUser | null | undefined }) {
   const [open, setOpen] = useState(false);
   const marker = useMemo(() => (user ? loginWelcomeSessionMarker(user) : ""), [user]);
 
   useEffect(() => {
-    if (!marker || typeof window === "undefined") {
-      setOpen(false);
-      return;
+    // 1. Force open via URL param (?welcome=1, ?tour=1, ?onboarding=1, ?guild=1)
+    if (typeof window !== "undefined") {
+      const search = window.location.search;
+      if (search.includes("welcome") || search.includes("tour") || search.includes("onboarding") || search.includes("guild")) {
+        setOpen(true);
+      }
     }
 
-    let completedMarker: string | null = null;
-    try {
-      completedMarker = sessionStorage.getItem(LOGIN_WELCOME_TOUR_COMPLETED_KEY);
-    } catch {}
+    // 2. Force open via custom event
+    const handleForceOpen = () => setOpen(true);
+    window.addEventListener("qronos:show-welcome", handleForceOpen);
 
-    setOpen(shouldShowLoginWelcomeTour(marker, completedMarker));
+    // 3. Normal session evaluation
+    if (marker && typeof window !== "undefined") {
+      let completedMarker: string | null = null;
+      try {
+        completedMarker = sessionStorage.getItem(LOGIN_WELCOME_TOUR_COMPLETED_KEY);
+      } catch {}
+
+      if (shouldShowLoginWelcomeTour(marker, completedMarker)) {
+        setOpen(true);
+      }
+    }
+
+    return () => window.removeEventListener("qronos:show-welcome", handleForceOpen);
   }, [marker]);
-
-  if (!user) return null;
 
   const completeTour = () => {
     try {
-      sessionStorage.setItem(LOGIN_WELCOME_TOUR_COMPLETED_KEY, marker);
+      if (marker) sessionStorage.setItem(LOGIN_WELCOME_TOUR_COMPLETED_KEY, marker);
     } catch {}
     setOpen(false);
   };

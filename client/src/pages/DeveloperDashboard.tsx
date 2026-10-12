@@ -57,6 +57,7 @@ import { CreditOverview, Profile, UsageLogs, formatCreditWhole, useIsCreditsEnab
 import { DashboardModels } from "./DashboardModels";
 import { DashboardPricingSection } from "@/components/dashboard/DashboardPricingSection";
 import { StarButton } from "@/components/StarButton";
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { StarBorderCard } from "@/components/StarBorderCard";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { PearlButton } from "@/components/ui/pearl-button";
@@ -161,6 +162,85 @@ function KeySecret({ value, onDismiss }: { value: string; onDismiss: () => void 
 type NewApiKeyResult = {
   key: string;
   record: { id: number; label: string; prefix: string; keyGroup?: "payg" | "bundle" | "token_plan" | "tokens" | "coding_plan"; status: "active" | "revoked"; createdAt: Date };
+};
+
+function ApiKeyCreatedModal({
+  data,
+  onClose,
+}: {
+  data: { key: string; label: string; keyGroup: string } | null;
+  onClose: () => void;
+}) {
+  const [copied, setCopied] = useState(false);
+
+  const copy = async () => {
+    if (!data?.key) return;
+    await navigator.clipboard.writeText(data.key);
+    setCopied(true);
+    toast.success("API key copied to clipboard!");
+    window.setTimeout(() => setCopied(false), 2500);
+  };
+
+  useEffect(() => {
+    if (data?.key) {
+      navigator.clipboard.writeText(data.key).catch(() => {});
+    }
+  }, [data]);
+
+  if (!data) return null;
+
+  return (
+    <Dialog open={Boolean(data)} onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogContent className="border border-white/15 bg-[#090a10]/98 p-0 text-white sm:max-w-md rounded-3xl overflow-hidden shadow-2xl backdrop-blur-2xl">
+        <div className="p-6 sm:p-7 text-center">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-500/15 border border-emerald-500/25 text-emerald-400 mb-4 shadow-lg shadow-emerald-500/10">
+            <ShieldCheck size={24} />
+          </div>
+
+          <DialogTitle className="text-xl font-extrabold text-white tracking-tight">
+            API Key Created Successfully
+          </DialogTitle>
+          <DialogDescription className="text-xs text-zinc-400 mt-1 font-mono">
+            {data.label || "Default Key"} • {data.keyGroup === "token_plan" ? "Token Plan Quota" : "PAYG Quota"}
+          </DialogDescription>
+
+          <div className="my-5 rounded-2xl border border-amber-500/25 bg-amber-500/10 p-3.5 text-xs text-amber-200/90 leading-relaxed font-mono text-left">
+            <span>
+              <strong>Save your secret key now.</strong> For security reasons, Qronos AI does not store plaintext keys. It will not be shown again once you close this window.
+            </span>
+          </div>
+
+          <div className="space-y-3">
+            <div className="flex items-center gap-2 rounded-xl border border-white/15 bg-black/90 p-3 shadow-inner">
+              <code className="min-w-0 flex-1 truncate font-mono text-xs text-white selection:bg-white/20 select-all text-left">
+                {data.key}
+              </code>
+            </div>
+
+            <Button
+              onClick={copy}
+              className="w-full h-11 rounded-xl bg-white text-black hover:bg-zinc-200 font-mono font-bold text-xs transition-all flex items-center justify-center gap-2 shadow-lg cursor-pointer"
+            >
+              {copied ? <Check size={16} className="text-emerald-600" /> : <Copy size={16} />}
+              <span>{copied ? "Copied to Clipboard!" : "Copy Full API Key"}</span>
+            </Button>
+          </div>
+
+          <div className="mt-5 pt-3 border-t border-white/[0.08] flex items-center justify-between">
+            <span className="text-[10px] font-mono text-zinc-500">Auto-copied to clipboard</span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onClose}
+              className="h-8 rounded-lg border-white/10 text-xs font-mono text-zinc-300 hover:text-white cursor-pointer"
+            >
+              Done
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
 }
 
 function CurlExample({ apiKey }: { apiKey?: string }) {
@@ -418,6 +498,7 @@ function ApiKeyList() {
   const keys = trpc.developer.apiKeys.useQuery();
   const utils = trpc.useUtils();
   const [plainTextKey, setPlainTextKey] = useState<string | null>(null);
+  const [createdModalData, setCreatedModalData] = useState<{ key: string; label: string; keyGroup: string } | null>(null);
   const [activeSnippetKey, setActiveSnippetKey] = useState<number | null>(null);
 
   const showNewKey = (value: NewApiKeyResult) => {
@@ -425,6 +506,11 @@ function ApiKeyList() {
     utils.developer.apiKeys.setData(undefined, (current) => prependCreatedApiKey(current, record as never));
     setPlainTextKey(value.key);
     rememberOneTimeApiKey(value.key);
+    setCreatedModalData({
+      key: value.key,
+      label: value.record.label,
+      keyGroup: (value.record as any).keyGroup || "token_plan",
+    });
   };
 
   const revoke = trpc.developer.revokeApiKey.useMutation({
@@ -467,6 +553,12 @@ function ApiKeyList() {
 
   return (
     <div className="space-y-4">
+      {createdModalData && (
+        <ApiKeyCreatedModal
+          data={createdModalData}
+          onClose={() => setCreatedModalData(null)}
+        />
+      )}
       {plainTextKey && <KeySecret value={plainTextKey} onDismiss={dismissPlainTextKey} />}
       <KeyCreateForm onSuccess={showNewKey} activeCount={activeCount} />
 
@@ -541,10 +633,28 @@ function ApiKeyList() {
                           </Badge>
                         </div>
 
-                        <div className="mt-2 flex items-center gap-3 text-xs font-mono text-zinc-400 flex-wrap">
+                        <div className="mt-2 flex items-center gap-2.5 text-xs font-mono text-zinc-400 flex-wrap">
                           <span className="rounded bg-black/60 px-2 py-0.5 border border-white/10 text-zinc-300">
                             {key.prefix}••••••••••••
                           </span>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-6 px-2 text-[10px] font-mono text-zinc-400 hover:text-white hover:bg-white/10 gap-1 cursor-pointer"
+                            onClick={async () => {
+                              const secret = plainTextKey || getOneTimeApiKey();
+                              if (secret && secret.startsWith(key.prefix.replace("…", ""))) {
+                                await navigator.clipboard.writeText(secret);
+                                toast.success("Full secret API key copied to clipboard!");
+                              } else {
+                                await navigator.clipboard.writeText(key.prefix);
+                                toast.info("Key prefix copied. For security, full keys are shown once upon creation.");
+                              }
+                            }}
+                          >
+                            <Copy size={11} />
+                            <span>Copy</span>
+                          </Button>
                           <span>Created {new Date(key.createdAt).toLocaleDateString()}</span>
                         </div>
                       </div>

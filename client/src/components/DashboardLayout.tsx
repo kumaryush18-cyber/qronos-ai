@@ -253,6 +253,17 @@ function DashboardLayoutContent({
             <Link href="/dashboard/pricing" className="hidden md:inline-block hover:text-white transition-colors">Pricing</Link>
             <Link href="/docs" className="hidden lg:inline-block hover:text-white transition-colors">Documentation</Link>
 
+            {/* Preview Guild Onboarding Card */}
+            <button
+              type="button"
+              onClick={() => window.dispatchEvent(new CustomEvent("qronos:show-welcome"))}
+              className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 hover:border-white/20 text-[10px] font-mono font-bold text-zinc-300 hover:text-white transition-all cursor-pointer"
+              title="View Developer Guild Card"
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse" />
+              <span>Guild Card</span>
+            </button>
+
             {/* Notification Bell */}
             <NotificationBell />
 
