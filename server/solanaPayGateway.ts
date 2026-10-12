@@ -42,6 +42,38 @@ export async function getSolPriceUsd(): Promise<number> {
   return cachedSolPrice.price > 0 ? cachedSolPrice.price : 150.0;
 }
 
+let _solanaOrdersTableEnsured = false;
+async function ensureSolanaOrdersTable(db: any) {
+  if (_solanaOrdersTableEnsured || !db) return;
+  try {
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS solana_orders (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        order_id VARCHAR(64) UNIQUE NOT NULL,
+        user_id INT NULL,
+        user_email VARCHAR(255) NULL,
+        user_name VARCHAR(255) NULL,
+        usd_amount DECIMAL(10, 2) NOT NULL,
+        sol_amount DECIMAL(18, 9) NOT NULL,
+        credits_nanos BIGINT NOT NULL,
+        reference_pubkey VARCHAR(64) NOT NULL,
+        merchant_pubkey VARCHAR(64) NOT NULL,
+        signature VARCHAR(128) NULL,
+        status VARCHAR(32) NOT NULL DEFAULT 'PENDING',
+        created_at DATETIME NOT NULL,
+        expires_at DATETIME NOT NULL,
+        completed_at DATETIME NULL,
+        INDEX idx_sol_order_user (user_id),
+        INDEX idx_sol_order_ref (reference_pubkey),
+        INDEX idx_sol_order_status (status)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    `);
+    _solanaOrdersTableEnsured = true;
+  } catch {
+    _solanaOrdersTableEnsured = true;
+  }
+}
+
 export function registerSolanaPayGateway(app: Express) {
   // 1. Config endpoint
   app.get("/api/solana-pay/config", (_req: Request, res: Response) => {
@@ -130,6 +162,7 @@ export function registerSolanaPayGateway(app: Express) {
       // Persist to MySQL solana_orders
       const db = await getDb();
       if (db) {
+        await ensureSolanaOrdersTable(db);
         let userEmail: string | null = null;
         let userName: string | null = null;
         if (user_id) {
@@ -428,6 +461,7 @@ export function registerSolanaPayGateway(app: Express) {
       const db = await getDb();
       let orderMap = new Map<string, any>();
       if (db) {
+        await ensureSolanaOrdersTable(db);
         const dbOrders: any = await db.execute(
           sql`SELECT * FROM solana_orders WHERE signature IS NOT NULL ORDER BY completed_at DESC LIMIT 100`
         );

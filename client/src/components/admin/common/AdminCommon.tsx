@@ -61,6 +61,7 @@ export function Metric({
   detail,
   lime,
   warning,
+  loading,
 }: {
   icon: React.ReactNode;
   label: string;
@@ -68,6 +69,7 @@ export function Metric({
   detail: string;
   lime?: boolean;
   warning?: boolean;
+  loading?: boolean;
 }) {
   return (
     <div
@@ -94,9 +96,13 @@ export function Metric({
       </div>
 
       <div className="mt-4">
-        <p className="truncate text-xl sm:text-2xl font-bold font-mono text-white tracking-tight">
-          {value}
-        </p>
+        {loading ? (
+          <div className="h-7 w-20 rounded-lg bg-white/[0.08] animate-pulse my-0.5" />
+        ) : (
+          <p className="truncate text-xl sm:text-2xl font-bold font-mono text-white tracking-tight">
+            {value}
+          </p>
+        )}
         <p className="mt-1 truncate text-xs font-semibold text-zinc-300 font-sans">{label}</p>
         <p className="mt-0.5 hidden text-[10px] text-zinc-500 font-mono sm:block">{detail}</p>
       </div>

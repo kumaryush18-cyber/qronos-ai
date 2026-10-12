@@ -372,17 +372,22 @@ export default function AdminDashboard({ initialSection }: { initialSection?: Ad
     );
   }
 
+  const isOverviewLoading = overview.isLoading && !overview.data;
+  const isFlagsLoading = flags.isLoading && !flags.data;
+
   const metrics = (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 md:grid-cols-4 xl:grid-cols-4">
       <Metric
         icon={<UsersRound size={17} />}
         label="Accounts"
+        loading={isOverviewLoading}
         value={(overview.data?.totals?.totalAccounts ?? accounts.length).toLocaleString()}
         detail="Total registered accounts"
       />
       <Metric
         icon={<ChartNoAxesCombined size={17} />}
         label="Total tokens processed"
+        loading={isOverviewLoading}
         value={formatTokens(overview.data?.totals?.totalTokens ?? 0)}
         detail="Across all active accounts"
         lime
@@ -390,12 +395,14 @@ export default function AdminDashboard({ initialSection }: { initialSection?: Ad
       <Metric
         icon={<Activity size={17} />}
         label="Lifetime requests"
+        loading={isOverviewLoading}
         value={(overview.data?.totals?.totalRequests ?? 0).toLocaleString()}
         detail="Across all accounts"
       />
       <Metric
         icon={<AlertTriangle size={17} />}
         label="Safety signals"
+        loading={isFlagsLoading}
         value={(flags.data?.length ?? 0).toLocaleString()}
         detail="Open account flags"
         warning

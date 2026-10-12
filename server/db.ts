@@ -2176,9 +2176,14 @@ export async function getDb(): Promise<ReturnType<typeof drizzle> | null> {
   if (!activeDbUrl) return null;
   const now = Date.now();
 
-  // If currently marked unhealthy, respect cooldown before retrying ping
+  // If currently marked unhealthy, attempt a quick ping test to recover fast
   if (_pool && !_dbHealthy && now - _lastDbHealthCheckTime < DB_HEALTH_CHECK_COOLDOWN_MS) {
-    return null;
+    try {
+      await _pool.query("SELECT 1");
+      _dbHealthy = true;
+    } catch {
+      return null;
+    }
   }
 
   if (!_pool) {
@@ -2193,13 +2198,13 @@ export async function getDb(): Promise<ReturnType<typeof drizzle> | null> {
         user: decodeURIComponent(parsed.username),
         password: decodeURIComponent(parsed.password),
         database: parsed.pathname.replace(/^\//, "").split("?")[0],
-        connectTimeout: 5000,
+        connectTimeout: 7000,
         waitForConnections: true,
         connectionLimit: 10,
-        maxIdle: 8,
-        idleTimeout: 300000, // 5 minutes (reduced connection churn & avoids cold reconnects)
+        maxIdle: 2,
+        idleTimeout: 45000, // 45 seconds: safely culls idle sockets before TiDB Cloud Serverless drops them
         enableKeepAlive: true,
-        keepAliveInitialDelay: 10000,
+        keepAliveInitialDelay: 0,
       };
       if (/tidbcloud\.com|aivencloud\.com/i.test(parsed.hostname)) config.ssl = { rejectUnauthorized: true };
       _pool = mysql.createPool(config as Parameters<typeof mysql.createPool>[0]);
@@ -7064,7 +7069,20 @@ export async function getAdminOverview() {
     return adminOverviewCache.value;
   }
   const db = await getDb();
-  if (!db) return { models: [], providers: [], accounts: [], usage: [], emailProviders: [], allAccountModelUsage: [], totals: { totalTokens: 0, totalRequests: 0 }, providerTelemetry: getProviderCredentialTelemetry({}), managedProviderKeyMetrics: [] };
+  if (!db) {
+    if (adminOverviewCache) return adminOverviewCache.value;
+    return {
+      models: [],
+      providers: [],
+      accounts: [],
+      usage: [],
+      emailProviders: [],
+      allAccountModelUsage: [],
+      totals: { totalAccounts: 0, totalTokens: 0, totalRequests: 0 },
+      providerTelemetry: getProviderCredentialTelemetry({}),
+      managedProviderKeyMetrics: [],
+    };
+  }
   // This aggregate queries only `users`; keep this expression unqualified so the SELECT,
   // GROUP BY, and ORDER BY clauses remain byte-for-byte compatible on the deployed MySQL dialect.
   const emailProvider = sql<string>`${sql.raw(ADMIN_EMAIL_PROVIDER_EXPRESSION)}`;
