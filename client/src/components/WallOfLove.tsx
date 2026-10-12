@@ -16,7 +16,7 @@ const TESTIMONIALS: Testimonial[] = [
     company: "ScribeAgent AI",
     initials: "AM",
     quote:
-      "TokenForge eliminated our routing headaches. We cut out random mid-stream drops and now push hundreds of thousands of tokens per minute across Claude and GLM flawlessly.",
+      "Qronos AI eliminated our routing headaches. We cut out random mid-stream drops and now push hundreds of thousands of tokens per minute across Claude and GLM flawlessly.",
     highlight: "140M+ tokens routed",
   },
   {
@@ -25,7 +25,7 @@ const TESTIMONIALS: Testimonial[] = [
     company: "Nexus Labs",
     initials: "ER",
     quote:
-      "Having first-party keys and transparent rate limits transformed our production reliability. When one upstream provider degrades, TokenForge automatically absorbs the shock.",
+      "Having first-party keys and transparent rate limits transformed our production reliability. When one upstream provider degrades, Qronos AI automatically absorbs the shock.",
     highlight: "99.9% measured uptime",
   },
   {
@@ -43,7 +43,7 @@ const TESTIMONIALS: Testimonial[] = [
     company: "VividStack",
     initials: "CD",
     quote:
-      "Routing through TokenForge gives our enterprise customers the reassurance of strict API accountability. Truly production-ready infrastructure for serious teams.",
+      "Routing through Qronos AI gives our enterprise customers the reassurance of strict API accountability. Truly production-ready infrastructure for serious teams.",
     highlight: "Production certified",
   },
   {
@@ -52,7 +52,7 @@ const TESTIMONIALS: Testimonial[] = [
     company: "HyperLogic",
     initials: "MV",
     quote:
-      "We tested over five LLM gateways. TokenForge is the only one that actually delivered real-time latency inspection and verified token counts without hidden markups.",
+      "We tested over five LLM gateways. Qronos AI is the only one that actually delivered real-time latency inspection and verified token counts without hidden markups.",
     highlight: "Verified token delivery",
   },
   {
@@ -78,7 +78,7 @@ export function WallOfLove() {
           <em>Trusted at enterprise scale.</em>
         </h2>
         <p>
-          See how engineering teams and autonomous agent systems rely on TokenForge for high-volume, mission-critical model routing.
+          See how engineering teams and autonomous agent systems rely on Qronos AI for high-volume, mission-critical model routing.
         </p>
       </div>
 

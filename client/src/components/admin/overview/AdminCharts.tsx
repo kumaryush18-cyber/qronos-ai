@@ -87,7 +87,7 @@ export function AllAccountModelUsageChart({
   if (!usage.length) {
     return (
       <div className="grid h-52 place-items-center px-5 text-center text-xs leading-5 text-[#9091a3]">
-        Model bars appear after the first successful request from any TokenForge account.
+        Model bars appear after the first successful request from any Qronos AI account.
       </div>
     );
   }
@@ -171,7 +171,7 @@ export function AdminUsageChart({
               All-account model activity
             </p>
             <p className="mt-1 text-[10px] text-[#7f8190]">
-              Every model used by at least one TokenForge account. Bars compare successful request totals.
+              Every model used by at least one Qronos AI account. Bars compare successful request totals.
             </p>
           </div>
           <p className="shrink-0 font-mono text-[9px] text-[#77798b]">Accounts · requests · tokens</p>

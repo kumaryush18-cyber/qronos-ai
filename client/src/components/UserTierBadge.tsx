@@ -1,7 +1,7 @@
 import React from "react";
 import { Sparkles, CheckCircle2, Zap, Brain, Flame, Crown } from "lucide-react";
 
-export type UserTier = "free" | "starter" | "pro" | "max" | "power" | "ultra";
+export type UserTier = "free" | "starter" | "pro" | "power" | "ultra";
 
 export interface UserTierConfig {
   tier: UserTier;
@@ -18,68 +18,57 @@ export interface UserTierConfig {
 export const USER_TIER_CONFIGS: Record<UserTier, UserTierConfig> = {
   free: {
     tier: "free",
-    label: "Free Tier",
-    tag: "Explorer",
-    description: "Standard rate quotas & community access",
-    badgeClass: "bg-zinc-500/10 border-zinc-500/25 text-zinc-300",
-    borderClass: "border-zinc-500/30",
+    label: "Free",
+    tag: "10M Tokens",
+    description: "10M starter tokens & daily check-in rewards",
+    badgeClass: "bg-white/[0.06] border-white/15 text-zinc-300",
+    borderClass: "border-white/20",
     textClass: "text-zinc-300",
-    glowClass: "shadow-zinc-500/5",
+    glowClass: "shadow-white/5",
     icon: Sparkles,
   },
   starter: {
     tier: "starter",
-    label: "Starter Tier",
-    tag: "Builder",
-    description: "Full Claude Opus 5 access & standard quotas",
-    badgeClass: "bg-emerald-500/10 border-emerald-500/30 text-emerald-300",
-    borderClass: "border-emerald-500/40",
-    textClass: "text-emerald-300",
-    glowClass: "shadow-emerald-500/10",
+    label: "Plus",
+    tag: "150M Tokens",
+    description: "150M tokens dedicated quota · 10M / $1",
+    badgeClass: "bg-white/[0.08] border-white/20 text-white font-semibold",
+    borderClass: "border-white/25",
+    textClass: "text-white",
+    glowClass: "shadow-white/10",
     icon: CheckCircle2,
   },
   pro: {
     tier: "pro",
-    label: "Pro Tier",
-    tag: "Pro Developer",
-    description: "Priority routing & high token throughput",
-    badgeClass: "bg-sky-500/10 border-sky-400/35 text-sky-300",
-    borderClass: "border-sky-400/45",
-    textClass: "text-sky-300",
-    glowClass: "shadow-sky-500/10",
+    label: "Pro",
+    tag: "250M Tokens",
+    description: "250M tokens dedicated quota · Production grade & VIP routing",
+    badgeClass: "bg-white text-black border-white shadow-md font-bold",
+    borderClass: "border-white/40",
+    textClass: "text-white",
+    glowClass: "shadow-white/15",
     icon: Zap,
-  },
-  max: {
-    tier: "max",
-    label: "Max Tier",
-    tag: "Frontier Reasoning",
-    description: "Unlimited GPT-6 Astra & priority compute cluster",
-    badgeClass: "bg-purple-500/15 border-purple-500/40 text-purple-200",
-    borderClass: "border-purple-500/50",
-    textClass: "text-purple-200",
-    glowClass: "shadow-purple-500/20",
-    icon: Brain,
   },
   power: {
     tier: "power",
-    label: "Power User",
-    tag: "Enterprise Scale",
-    description: "Unlimited GPT-6 Astra & multi-agent concurrency",
-    badgeClass: "bg-amber-500/15 border-amber-500/40 text-amber-200",
-    borderClass: "border-amber-500/50",
-    textClass: "text-amber-200",
-    glowClass: "shadow-amber-500/20",
+    label: "Ultra",
+    tag: "1.0B Tokens",
+    description: "1.0B tokens · High-throughput pipelines & autonomous agents",
+    badgeClass: "bg-emerald-500/15 border-emerald-500/35 text-emerald-300",
+    borderClass: "border-emerald-500/40",
+    textClass: "text-emerald-300",
+    glowClass: "shadow-emerald-500/15",
     icon: Flame,
   },
   ultra: {
     tier: "ultra",
-    label: "Ultra Tier",
-    tag: "Dedicated Compute",
-    description: "Maximum queue priority & uncapped enterprise inference",
-    badgeClass: "bg-gradient-to-r from-rose-500/15 via-purple-500/15 to-indigo-500/15 border-rose-500/40 text-rose-200",
-    borderClass: "border-rose-500/50",
-    textClass: "text-rose-200",
-    glowClass: "shadow-rose-500/25",
+    label: "Enterprise",
+    tag: "2.2B Tokens",
+    description: "2.2B tokens dedicated capacity, custom SLA & private endpoints",
+    badgeClass: "bg-white/[0.15] border-white/30 text-white font-bold",
+    borderClass: "border-white/40",
+    textClass: "text-white",
+    glowClass: "shadow-white/20",
     icon: Crown,
   },
 };
@@ -87,6 +76,7 @@ export const USER_TIER_CONFIGS: Record<UserTier, UserTierConfig> = {
 export function normalizeUserTier(tier?: string | null): UserTier {
   if (!tier) return "free";
   const normalized = tier.trim().toLowerCase();
+  if (normalized === "max") return "pro";
   if (normalized in USER_TIER_CONFIGS) {
     return normalized as UserTier;
   }

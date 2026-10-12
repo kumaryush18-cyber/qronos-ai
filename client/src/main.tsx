@@ -50,6 +50,8 @@ if (analyticsEndpoint && analyticsWebsiteId && typeof document !== "undefined") 
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
+      staleTime: 30_000,
+      refetchIntervalInBackground: false,
       retry(failureCount, error: any) {
         if (error instanceof TRPCClientError && error.message === UNAUTHED_ERR_MSG) {
           return false;

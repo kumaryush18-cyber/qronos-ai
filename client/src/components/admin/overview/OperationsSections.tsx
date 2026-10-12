@@ -14,6 +14,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
+import { StarBorderCard } from "@/components/StarBorderCard";
 
 
 
@@ -27,7 +28,13 @@ export function AuditTimeline({
   exporting: boolean;
 }) {
   return (
-    <section className="dashboard-card">
+    <section
+      style={{
+        backgroundColor: "oklch(0.14 0 0)",
+        borderColor: "oklch(0.26 0 0)",
+      }}
+      className="rounded-3xl border p-6 shadow-xl"
+    >
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <SectionHeader
           icon={<Activity size={17} />}
@@ -37,11 +44,11 @@ export function AuditTimeline({
         <Button
           size="sm"
           variant="outline"
-          className="border-white/12 text-xs text-[#d9d8e1] hover:bg-white/10"
+          className="border-white/12 text-xs font-mono text-zinc-200 hover:bg-white/10"
           onClick={onExport}
           disabled={exporting}
         >
-          <Download size={14} />
+          <Download size={14} className="mr-1" />
           {exporting ? "Preparing…" : "Download CSV"}
         </Button>
       </div>
@@ -104,7 +111,14 @@ export function AnnouncementSection({
   loading: boolean;
 }) {
   return (
-    <section className="dashboard-card">
+    <section
+      style={{
+        backgroundColor: "oklch(0.14 0 0)",
+        borderColor: "oklch(0.26 0 0)",
+        boxShadow: "0 25px 60px rgba(0,0,0,0.85), inset 0 1px 0 rgba(255,255,255,0.06)",
+      }}
+      className="rounded-3xl border p-6 sm:p-7 shadow-2xl"
+    >
       <SectionHeader
         icon={<Megaphone size={17} />}
         title="Rolling announcement"
@@ -112,8 +126,8 @@ export function AnnouncementSection({
       />
       <div className="mt-5 grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(18rem,.8fr)]">
         <div>
-          <label htmlFor="announcement-text" className="text-xs font-semibold text-[#dedfe7]">
-            Announcement text
+          <label htmlFor="announcement-text" className="text-xs font-mono font-semibold text-zinc-300">
+            Announcement message
           </label>
           <Textarea
             id="announcement-text"
@@ -121,40 +135,43 @@ export function AnnouncementSection({
             onChange={(event) => onChange(event.target.value)}
             maxLength={500}
             rows={5}
-            placeholder="For example: New model capacity is now available…"
-            className="mt-2 resize-y border-white/10 bg-black/15 text-sm leading-6 text-white placeholder:text-[#6f7181]"
+            placeholder="For example: Qronos AI model routing capacity upgraded…"
+            className="mt-2 resize-y border-white/10 bg-black/60 text-sm leading-6 text-white placeholder:text-zinc-500 font-mono focus:border-white/30"
             disabled={loading || saving}
           />
           <div className="mt-2 flex items-center justify-between gap-3">
-            <p className="text-[10px] text-[#858697]">{text.length}/500 characters</p>
+            <p className="text-[10px] font-mono text-zinc-500">{text.length}/500 characters</p>
             <Button
               size="sm"
               onClick={onSave}
               disabled={saving || loading}
-              className="bg-[#c9ff73] text-[#17210d] hover:bg-[#d8ff91]"
+              className="bg-white text-black hover:bg-zinc-200 font-mono font-bold text-xs h-9 px-5 cursor-pointer shadow-md disabled:opacity-40"
             >
-              {saving ? "Saving…" : "Save announcement"}
+              {saving ? <Loader2 size={13} className="animate-spin mr-1.5" /> : null}
+              {saving ? "Publishing…" : "Save announcement"}
             </Button>
           </div>
         </div>
-        <div className="rounded-xl border border-white/8 bg-black/15 p-4">
-          <p className="text-[10px] font-bold uppercase tracking-[.13em] text-[#858697]">Live preview</p>
+        <div className="rounded-2xl border border-white/10 bg-black/40 p-4">
+          <p className="text-[10px] font-bold uppercase tracking-[.18em] font-mono text-zinc-400">Live preview</p>
           {text.trim() ? (
-            <div className="mt-3 overflow-hidden rounded-lg border border-[#c9ff73]/15 bg-[#1b2415]">
-              <div className="flex w-max min-w-[180%] items-center gap-5 px-4 py-3 font-mono text-[10px] font-bold tracking-wide text-[#dfe9d4]">
-                <Megaphone size={13} className="text-[#c9ff73]" />
-                <span>{text.trim()}</span>
-                <span aria-hidden="true">·</span>
-                <span>{text.trim()}</span>
+            <StarBorderCard lightWidth={160} duration={8} className="mt-3 rounded-xl overflow-hidden">
+              <div className="p-3 bg-[#0c0d12]/95 rounded-[11px] overflow-hidden">
+                <div className="flex w-max min-w-[180%] items-center gap-4 font-mono text-[11px] font-bold tracking-wide text-white">
+                  <Megaphone size={13} className="text-emerald-400 shrink-0" />
+                  <span>{text.trim()}</span>
+                  <span aria-hidden="true" className="text-zinc-600">·</span>
+                  <span>{text.trim()}</span>
+                </div>
               </div>
-            </div>
+            </StarBorderCard>
           ) : (
-            <div className="mt-3 grid min-h-24 place-items-center rounded-lg border border-dashed border-white/10 px-4 text-center text-xs leading-5 text-[#858697]">
+            <div className="mt-3 grid min-h-24 place-items-center rounded-xl border border-dashed border-white/10 px-4 text-center text-xs leading-5 text-zinc-500 font-mono">
               No announcement is currently published.
             </div>
           )}
-          <p className="mt-3 text-[10px] leading-5 text-[#858697]">
-            The live banner scrolls from left to right and respects each visitor’s reduced-motion preference.
+          <p className="mt-3 text-[10px] leading-5 text-zinc-500 font-mono">
+            The banner scrolls continuously and respects user reduced-motion preferences.
           </p>
         </div>
       </div>
@@ -173,7 +190,13 @@ export function CapacitySection({
     telemetry.find((provider) => provider.providerSlug === providerSlug);
 
   return (
-    <section className="dashboard-card">
+    <section
+      style={{
+        backgroundColor: "oklch(0.14 0 0)",
+        borderColor: "oklch(0.26 0 0)",
+      }}
+      className="rounded-3xl border p-6 shadow-xl"
+    >
       <SectionHeader
         icon={<Gauge size={17} />}
         title="Provider capacity & failover"
@@ -185,7 +208,7 @@ export function CapacitySection({
           const healthy = t?.healthySlots ?? 0;
           const poolSize = t?.poolSize ?? 0;
           const cooling = t?.coolingDownSlots ?? 0;
-          const tone = !provider.enabled || !poolSize ? "text-[#858697]" : cooling ? "text-[#f0c180]" : "text-[#c9ff73]";
+          const tone = !provider.enabled || !poolSize ? "text-zinc-500" : cooling ? "text-amber-300" : "text-emerald-400";
           return (
             <div key={provider.slug} className="rounded-xl border border-white/8 bg-black/15 p-4">
               <div className="flex items-start justify-between gap-3">
@@ -402,8 +425,8 @@ export function InferenceControlsSection({
     <section className="dashboard-card">
       <SectionHeader
         icon={<ServerCog size={17} />}
-        title="Inference controls & Tier permissions"
-        detail="Each labelled switch and minimum tier level takes effect immediately across the gateway. Set models to 'Free (All Users)' to allow free accounts access, restrict premium models to paid tiers, and toggle PAYG tags for Tier 1 key routing."
+        title="Inference controls & Model routing"
+        detail="Each labelled switch and minimum tier level takes effect immediately across the gateway. Set models to 'Free (All Users)' to allow free accounts access, restrict premium models to paid tiers, and toggle PAYG tags for PAYG key routing."
       />
       <div className="mt-5 grid gap-5 xl:grid-cols-[.85fr_1.15fr]">
         <div className="space-y-2">
@@ -595,7 +618,7 @@ export function InferenceControlsSection({
                         type="button"
                         onClick={() => onModelTokenPlanToggle?.(model.modelId, !isTokenPlan)}
                         disabled={modelTokenPlanPending}
-                        title={isTokenPlan ? "Click to disable Token Plan access" : "Click to enable Token Plan access (Tier 2 API keys)"}
+                        title={isTokenPlan ? "Click to disable Token Plan access" : "Click to enable Token Plan access"}
                         className={`inline-flex items-center gap-1.5 px-2 py-1 rounded text-[10px] font-semibold transition-colors cursor-pointer border ${
                           isTokenPlan
                             ? "bg-cyan-500/20 text-cyan-300 border-cyan-500/40 hover:bg-cyan-500/30"
@@ -611,7 +634,7 @@ export function InferenceControlsSection({
                         type="button"
                         onClick={() => onModelPaygToggle?.(model.modelId, !isPayg)}
                         disabled={modelPaygPending}
-                        title={isPayg ? "Click to disable PAYG access" : "Click to enable PAYG access (Tier 1 API keys)"}
+                        title={isPayg ? "Click to disable PAYG access" : "Click to enable PAYG access"}
                         className={`inline-flex items-center gap-1.5 px-2 py-1 rounded text-[10px] font-semibold transition-colors cursor-pointer border ${
                           isPayg
                             ? "bg-rose-500/20 text-rose-300 border-rose-500/40 hover:bg-rose-500/30"
@@ -627,7 +650,7 @@ export function InferenceControlsSection({
                         type="button"
                         onClick={() => onModelBundleToggle?.(model.modelId, !isBundle)}
                         disabled={modelBundlePending}
-                        title={isBundle ? "Click to disable Credit Bundle access" : "Click to enable Credit Bundle access (Tier 2 API keys)"}
+                        title={isBundle ? "Click to disable Credit Bundle access" : "Click to enable Credit Bundle access"}
                         className={`inline-flex items-center gap-1.5 px-2 py-1 rounded text-[10px] font-semibold transition-colors cursor-pointer border ${
                           isBundle
                             ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/30"

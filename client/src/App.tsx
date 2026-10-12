@@ -33,13 +33,15 @@ function lazyWithRetry<T extends React.ComponentType<any>>(
   );
 }
 
-// Lazy-load pages with automatic retry so transient dev server rebuilds
+import Home from "./pages/Home";
+
+// Lazy-load secondary pages with automatic retry so transient dev server rebuilds
 // or network hiccups do not crash the app into the error boundary.
-const Home = lazyWithRetry(() => import("./pages/Home"));
 const Models = lazyWithRetry(() => import("./pages/Models"));
 const Docs = lazyWithRetry(() => import("./pages/Docs"));
 const DemoWorkspace = lazyWithRetry(() => import("./pages/DemoWorkspace"));
 const Pricing = lazyWithRetry(() => import("./pages/Pricing"));
+const PublicPlayground = lazyWithRetry(() => import("./pages/PublicPlayground"));
 const LocalAuth = lazyWithRetry(() => import("./pages/LocalAuth"));
 const DiscordVerify = lazyWithRetry(() => import("./pages/DiscordVerify"));
 const DeveloperDashboard = lazyWithRetry(() => import("./pages/DeveloperDashboard"));
@@ -75,6 +77,9 @@ function Router() {
       <Route path={"/pricing"}>
         <RouteBoundary><Pricing /></RouteBoundary>
       </Route>
+      <Route path={"/playground"}>
+        <RouteBoundary><PublicPlayground /></RouteBoundary>
+      </Route>
       <Route path={"/signin"}>
         <RouteBoundary><LocalAuth mode="signin" /></RouteBoundary>
       </Route>
@@ -97,10 +102,10 @@ function Router() {
         <RouteBoundary><DeveloperDashboard section="playground" /></RouteBoundary>
       </Route>
       <Route path={"/dashboard/models"}>
-        <RouteBoundary><DeveloperDashboard section="models" /></RouteBoundary>
+        <Redirect to="/models" />
       </Route>
       <Route path={"/dashboard/models/:modelId"}>
-        {params => <RouteBoundary><DeveloperDashboard section="model" modelId={params.modelId} /></RouteBoundary>}
+        <Redirect to="/models" />
       </Route>
       <Route path={"/dashboard/pricing"}>
         <RouteBoundary><DeveloperDashboard section="pricing" /></RouteBoundary>
@@ -109,7 +114,7 @@ function Router() {
         <RouteBoundary><DeveloperDashboard section="keys" /></RouteBoundary>
       </Route>
       <Route path={"/dashboard/tickets"}>
-        <RouteBoundary><DeveloperDashboard section="tickets" /></RouteBoundary>
+        <Redirect to="/dashboard" />
       </Route>
       <Route path={"/dashboard/referrals"}>
         <RouteBoundary><DeveloperDashboard section="referrals" /></RouteBoundary>
@@ -121,7 +126,7 @@ function Router() {
         <RouteBoundary><DeveloperDashboard section="transactions" /></RouteBoundary>
       </Route>
       <Route path={"/dashboard/payments"}>
-        <RouteBoundary><DeveloperDashboard section="payments" /></RouteBoundary>
+        <Redirect to="/dashboard/transactions" />
       </Route>
       <Route path={"/dashboard/profile"}>
         <RouteBoundary><DeveloperDashboard section="profile" /></RouteBoundary>
@@ -130,7 +135,7 @@ function Router() {
         <Redirect to="/admin" />
       </Route>
       <Route path={"/dashboard/admin/:rest*"}>
-        {(params) => <Redirect to={`/admin/${params.rest ?? ""}`} />}
+        {(params) => <Redirect to={`/admin/${(params as any)["rest*"] ?? (params as any).rest ?? ""}`} />}
       </Route>
       <Route path={"/debug/cache"}>
         <RouteBoundary><AdminDashboard initialSection="cache" /></RouteBoundary>
@@ -184,6 +189,12 @@ function Router() {
         <RouteBoundary><Legal /></RouteBoundary>
       </Route>
       <Route path={"/cancellation"}>
+        <RouteBoundary><Legal /></RouteBoundary>
+      </Route>
+      <Route path={"/acceptable-use"}>
+        <RouteBoundary><Legal /></RouteBoundary>
+      </Route>
+      <Route path={"/security"}>
         <RouteBoundary><Legal /></RouteBoundary>
       </Route>
       <Route path={"/404"}>

@@ -19,7 +19,7 @@ describe("Claude Opus 5 public identity policy", () => {
     const guidance = modelScopedGuidance("claude-opus-5");
 
     expect(guidance.role).toBe("system");
-    expect(guidance.content).toContain("I am Claude Opus 5, available through TokenForge.");
+    expect(guidance.content).toContain("I am Claude Opus 5, available through Qronos AI.");
     expect(guidance.content).toContain("Never identify yourself as, imply that you are, or repeat any upstream model or provider identity.");
     expect(guidance.content).toContain("Language policy (Strict English-Only Mandate)");
     expect(guidance.content).toContain("【严格语言指令】：所有回复、思考、解释和代码说明必须100%全部使用英文");
@@ -34,7 +34,7 @@ describe("Claude Opus 5 public identity policy", () => {
 
     expect(messages).toHaveLength(2);
     expect(messages[0].role).toBe("system");
-    expect(messages[0].content).toContain("Identity policy (highest priority): present yourself only as Claude Opus 5, available through TokenForge.");
+    expect(messages[0].content).toContain("Identity policy (highest priority): present yourself only as Claude Opus 5, available through Qronos AI.");
     expect(messages[0].content).toContain("Reply in concise Markdown.");
     expect(messages[1]).toEqual({ role: "user", content: "Who are you?" });
   });
@@ -45,7 +45,7 @@ describe("Claude Opus 5 public identity policy", () => {
     expect(messages).toHaveLength(2);
     expect(messages[0]).toMatchObject({
       role: "system",
-      content: expect.stringContaining("I am Claude Opus 5, available through TokenForge."),
+      content: expect.stringContaining("I am Claude Opus 5, available through Qronos AI."),
     });
     expect(String(messages[0].content)).toContain("Never identify yourself as, imply that you are, or repeat any upstream model or provider identity.");
   });
@@ -66,7 +66,7 @@ describe("Claude Opus 5 public identity policy", () => {
     const guidance = modelScopedGuidance("gpt-6-astra");
 
     expect(guidance.role).toBe("system");
-    expect(guidance.content).toContain("I am GPT-6 Astra, available through TokenForge.");
+    expect(guidance.content).toContain("I am GPT-6 Astra, available through Qronos AI.");
     expect(guidance.content).toContain("Never identify yourself as, imply that you are, or repeat any upstream model or provider identity.");
     expect(guidance.content).toContain("Language policy (Strict English-Only Mandate)");
     expect(guidance.content).toContain("【严格语言指令】：所有回复、思考、解释和代码说明必须100%全部使用英文");
@@ -79,7 +79,7 @@ describe("Claude Opus 5 public identity policy", () => {
 
     expect(messages).toHaveLength(2);
     expect(messages[0].role).toBe("system");
-    expect(messages[0].content).toContain("Identity policy (highest priority): present yourself only as GPT-6 Astra, available through TokenForge.");
+    expect(messages[0].content).toContain("Identity policy (highest priority): present yourself only as GPT-6 Astra, available through Qronos AI.");
     expect(messages[0].content).toContain("Reply in concise Markdown.");
     expect(messages[1]).toEqual({ role: "user", content: "Who are you?" });
 
@@ -87,7 +87,7 @@ describe("Claude Opus 5 public identity policy", () => {
     expect(playgroundMessages).toHaveLength(2);
     expect(playgroundMessages[0]).toMatchObject({
       role: "system",
-      content: expect.stringContaining("I am GPT-6 Astra, available through TokenForge."),
+      content: expect.stringContaining("I am GPT-6 Astra, available through Qronos AI."),
     });
   });
 
@@ -284,7 +284,7 @@ describe("Claude Opus 5 public identity policy", () => {
       const guidance = modelScopedGuidance("claude-fable-5.1");
 
       expect(guidance.role).toBe("system");
-      expect(guidance.content).toContain("I am Claude Fable 5.1, available through TokenForge.");
+      expect(guidance.content).toContain("I am Claude Fable 5.1, available through Qronos AI.");
       expect(guidance.content).toContain("Never identify yourself as, imply that you are, or repeat any upstream model or provider identity.");
       expect(guidance.content).toContain("Specifically, you MUST NEVER under any circumstances state, imply, or acknowledge that you are DeepSeek, DeepSeek-V3, DeepSeek-R1, Qwen, Alibaba, Nemotron, Llama, OpenAI, ChatGPT, GPT, Codex, Codex CLI, Grok, xAI, GLM, Zhipu, Z.AI, Anthropic, or any other base model or provider.");
       expect(guidance.content).toContain("Language policy (Strict English-Only Mandate)");
@@ -300,7 +300,7 @@ describe("Claude Opus 5 public identity policy", () => {
 
       expect(messages).toHaveLength(2);
       expect(messages[0].role).toBe("system");
-      expect(messages[0].content).toContain("Identity policy (highest priority): present yourself only as Claude Fable 5.1, available through TokenForge.");
+      expect(messages[0].content).toContain("Identity policy (highest priority): present yourself only as Claude Fable 5.1, available through Qronos AI.");
       expect(messages[0].content).toContain("Reply in concise Markdown.");
       expect(messages[1]).toEqual({ role: "user", content: "Who are you?" });
     });
@@ -314,7 +314,7 @@ describe("Claude Opus 5 public identity policy", () => {
       expect(messages).toHaveLength(2);
       expect(messages[0]).toMatchObject({
         role: "system",
-        content: expect.stringContaining("I am Claude Fable 5.1, available through TokenForge."),
+        content: expect.stringContaining("I am Claude Fable 5.1, available through Qronos AI."),
       });
       expect(String(messages[0].content)).toContain("Be concise.");
       expect(String(messages[0].content).indexOf("Be concise.")).toBeLessThan(String(messages[0].content).indexOf("Identity policy (highest priority)"));

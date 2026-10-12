@@ -16,6 +16,7 @@ import {
   ArrowUpRight,
   BarChart3,
   BookOpen,
+  Boxes,
   Check,
   CheckCircle2,
   Clipboard,
@@ -32,7 +33,9 @@ import {
   LockKeyhole,
   Play,
   Plus,
+  Radio,
   RefreshCw,
+  Share2,
   ShieldCheck,
   Smartphone,
   Sparkles,
@@ -53,10 +56,11 @@ import Playground from "./Playground";
 import { CreditOverview, Profile, UsageLogs, formatCreditWhole, useIsCreditsEnabled } from "./CreditWorkspace";
 import { DashboardModels } from "./DashboardModels";
 import { DashboardPricingSection } from "@/components/dashboard/DashboardPricingSection";
+import { StarButton } from "@/components/StarButton";
+import { StarBorderCard } from "@/components/StarBorderCard";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { PearlButton } from "@/components/ui/pearl-button";
 import { CheckoutModal } from "@/components/CheckoutModal";
-import { TicketsWorkspace } from "@/components/tickets/TicketsWorkspace";
 import { TransactionsWorkspace } from "@/components/TransactionsWorkspace";
 import { PaymentsWorkspace } from "@/components/payments/PaymentsWorkspace";
 import { UserTierBadge } from "@/components/UserTierBadge";
@@ -65,7 +69,7 @@ import { buildTokenForgeCurl, buildTokenForgeJavaScript, buildTokenForgePython, 
 import { clearOneTimeApiKey, getOneTimeApiKey, rememberOneTimeApiKey } from "../../../shared/oneTimeApiKey";
 import { buildReferralInviteUrl, TOKENFORGE_REFERRAL_REWARD_USD } from "../../../shared/referrals";
 
-type Section = "overview" | "keys" | "usage" | "playground" | "profile" | "referrals" | "models" | "model" | "tickets" | "transactions" | "payments" | "pricing";
+type Section = "overview" | "keys" | "usage" | "playground" | "profile" | "referrals" | "models" | "model" | "transactions" | "payments" | "pricing";
 type UsageData = {
   quota?: { suspended: boolean } | null;
   totalRequests: number;
@@ -81,8 +85,77 @@ function UsageRing({ label, used, limit, tone = "violet" }: { label: string; use
 
 function KeySecret({ value, onDismiss }: { value: string; onDismiss: () => void }) {
   const [copied, setCopied] = useState(false);
-  const copy = async () => { await navigator.clipboard.writeText(value); setCopied(true); toast.success("API key copied to clipboard"); };
-  return <div className="rounded-2xl border border-white/15 bg-[#121215] p-5 shadow-2xl shadow-black/50"><div className="flex items-start gap-3"><div className="rounded-xl bg-white/10 p-2.5 text-white"><ShieldCheck size={18} /></div><div><p className="text-sm font-bold text-white">Copy this key now</p><p className="mt-1 max-w-xl text-xs leading-5 text-[#b4b3c0]">For your security, TokenForge will not show this plaintext key again after you dismiss this message.</p></div></div><div className="mt-4 flex items-center gap-2 rounded-lg border border-white/10 bg-[#09090b] p-3"><code className="min-w-0 flex-1 truncate font-mono text-xs text-white">{value}</code><Button size="sm" className="bg-[#f0efff] text-[#18151f] hover:bg-white" onClick={copy}>{copied ? <Check size={14} /> : <Copy size={14} />}{copied ? "Copied" : "Copy"}</Button></div><Button variant="outline" size="sm" className="mt-4 border-white/15 text-[#d7d6df] hover:bg-white/10" onClick={onDismiss}>I’ve saved this key</Button></div>;
+  const copy = async () => {
+    await navigator.clipboard.writeText(value);
+    setCopied(true);
+    toast.success("API key copied to clipboard");
+    window.setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <StarBorderCard
+      lightWidth={220}
+      duration={6}
+      lightColor="rgba(255, 255, 255, 0.95)"
+      className="rounded-3xl mb-6 shadow-2xl"
+    >
+      <div className="p-6 sm:p-7 bg-[#0c0d12]/95 rounded-[23px]">
+        <div className="flex items-start justify-between gap-4 flex-wrap pb-4 border-b border-white/[0.08]">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/10 border border-emerald-500/25 text-emerald-400">
+              <ShieldCheck size={20} />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-emerald-400">
+                  One-Time Secret Token
+                </span>
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              </div>
+              <h3 className="text-base font-bold text-white tracking-tight mt-0.5">
+                Save your cryptographic key now
+              </h3>
+            </div>
+          </div>
+          <Badge className="border-0 bg-white/[0.08] text-zinc-300 font-mono text-[10px]">
+            SHA-256 Hashed at Rest
+          </Badge>
+        </div>
+
+        <p className="mt-3 text-xs leading-relaxed text-zinc-400 max-w-2xl">
+          For your security, Qronos AI stores only a salted cryptographic hash of this key. This plaintext secret cannot be recovered after this session or if you dismiss this notice.
+        </p>
+
+        <div className="mt-4 flex flex-col sm:flex-row items-stretch sm:items-center gap-2 rounded-xl border border-white/10 bg-black/80 p-3 shadow-inner">
+          <code className="min-w-0 flex-1 truncate font-mono text-xs text-white selection:bg-white/20 select-all px-1">
+            {value}
+          </code>
+          <Button
+            size="sm"
+            onClick={copy}
+            className="shrink-0 bg-white text-black hover:bg-zinc-200 font-mono font-bold text-xs h-9 px-4 cursor-pointer shadow-md"
+          >
+            {copied ? <Check size={14} className="mr-1.5" /> : <Copy size={14} className="mr-1.5" />}
+            {copied ? "Copied" : "Copy key"}
+          </Button>
+        </div>
+
+        <div className="mt-5 pt-3 border-t border-white/[0.06] flex items-center justify-between flex-wrap gap-3">
+          <span className="text-[11px] font-mono text-zinc-500">
+            Compatible with Cursor, Claude Code, and all Anthropic SDKs
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onDismiss}
+            className="border-white/15 text-zinc-300 hover:bg-white/10 hover:text-white text-xs font-mono h-8 cursor-pointer"
+          >
+            I’ve saved this key securely
+          </Button>
+        </div>
+      </div>
+    </StarBorderCard>
+  );
 }
 
 type NewApiKeyResult = {
@@ -100,11 +173,29 @@ function CurlExample({ apiKey }: { apiKey?: string }) {
     window.setTimeout(() => setCopied(false), 1500);
   };
 
-  return <section className="min-w-0 overflow-hidden rounded-xl border border-white/10 bg-[#09090b] p-4" aria-labelledby="curl-example-title">
-    <div className="flex min-w-0 flex-wrap items-start justify-between gap-3"><div className="min-w-0 flex-1"><p className="text-[10px] font-semibold uppercase tracking-[.16em] text-[#befe6c]">Hosted endpoint</p><h3 id="curl-example-title" className="mt-1 text-sm font-bold text-white">Make your first request</h3><p className="mt-1 text-xs leading-5 text-[#9fa0af]">{apiKey ? "This one-time command contains the new plaintext key shown above. Save it securely before dismissing." : "Create or rotate a key to populate this command automatically. Until then, it uses a safe placeholder."}</p></div><Button variant="outline" size="sm" className="shrink-0 border-white/15 text-[#e4e4ea] hover:bg-white/10" onClick={copy}>{copied ? <Check size={14} /> : <Copy size={14} />}{copied ? "Copied" : "Copy cURL"}</Button></div>
-    <p className="mt-3 break-all rounded-lg border border-white/8 bg-black/40 px-3 py-2 font-mono text-[10px] text-[#bfc0ca]">{TOKENFORGE_API_BASE_URL}</p>
-    <pre className="mt-3 w-full min-w-0 max-w-full overflow-x-auto overscroll-x-contain rounded-lg border border-white/8 bg-[#000000] p-3"><code className="block min-w-max font-mono text-[11px] leading-5 text-[#dfe0e7]">{command}</code></pre>
-  </section>;
+  return (
+    <section
+      style={{
+        backgroundColor: "oklch(0.18 0 0)",
+        borderColor: "oklch(0.26 0 0)",
+      }}
+      className="min-w-0 overflow-hidden rounded-xl border p-4"
+      aria-labelledby="curl-example-title"
+    >
+      <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <p className="text-[10px] font-semibold uppercase tracking-[.16em] font-mono text-zinc-400">Hosted endpoint</p>
+          <h3 id="curl-example-title" className="mt-1 text-sm font-bold text-white">Make your first request</h3>
+          <p className="mt-1 text-xs leading-5 text-zinc-400">{apiKey ? "This one-time command contains the new plaintext key shown above. Save it securely before dismissing." : "Create or rotate a key to populate this command automatically. Until then, it uses a safe placeholder."}</p>
+        </div>
+        <Button variant="outline" size="sm" className="shrink-0 border-white/15 text-zinc-200 hover:bg-white/10" onClick={copy}>
+          {copied ? <Check size={14} /> : <Copy size={14} />}{copied ? "Copied" : "Copy cURL"}
+        </Button>
+      </div>
+      <p className="mt-3 break-all rounded-lg border border-white/10 bg-black/60 px-3 py-2 font-mono text-[10px] text-zinc-300">{TOKENFORGE_API_BASE_URL}</p>
+      <pre className="mt-3 w-full min-w-0 max-w-full overflow-x-auto overscroll-x-contain rounded-lg border border-white/10 bg-black p-3"><code className="block min-w-max font-mono text-[11px] leading-5 text-zinc-200">{command}</code></pre>
+    </section>
+  );
 }
 
 type SdkLanguage = "javascript" | "python";
@@ -122,15 +213,33 @@ function SdkQuickStart({ apiKey }: { apiKey?: string }) {
     window.setTimeout(() => setCopied(false), 1500);
   };
 
-  return <section className="min-w-0 overflow-hidden rounded-xl border border-white/10 bg-[#09090b] p-4" aria-labelledby="sdk-quickstart-title">
-    <div className="flex min-w-0 flex-wrap items-start justify-between gap-3"><div className="min-w-0 flex-1"><p className="text-[10px] font-semibold uppercase tracking-[.16em] text-[#befe6c]">Anthropic Messages SDK</p><h3 id="sdk-quickstart-title" className="mt-1 text-sm font-bold text-white">Start from your language</h3><p className="mt-1 max-w-xl text-xs leading-5 text-[#9fa0af]">Use the standard Anthropic SDK with TokenForge’s hosted base URL. {apiKey ? "The selected snippet includes the new plaintext key shown above." : "Create or rotate a key to populate a selected snippet automatically."}</p></div><Button variant="outline" size="sm" className="shrink-0 border-white/15 text-[#e4e4ea] hover:bg-white/10" onClick={copy}>{copied ? <Check size={14} /> : <Copy size={14} />}{copied ? "Copied" : "Copy code"}</Button></div>
-    <div className="mt-4 flex flex-wrap gap-2" role="tablist" aria-label="SDK language">
-      <button type="button" role="tab" aria-selected={isJavaScript} className={`rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors ${isJavaScript ? "border-[#befe6c]/40 bg-[#befe6c]/10 text-[#d9ff9d]" : "border-white/10 bg-black/15 text-[#a9aab7] hover:bg-white/5 hover:text-white"}`} onClick={() => setLanguage("javascript")}>JavaScript</button>
-      <button type="button" role="tab" aria-selected={!isJavaScript} className={`rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors ${!isJavaScript ? "border-[#befe6c]/40 bg-[#befe6c]/10 text-[#d9ff9d]" : "border-white/10 bg-black/15 text-[#a9aab7] hover:bg-white/5 hover:text-white"}`} onClick={() => setLanguage("python")}>Python</button>
-    </div>
-    <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] text-[#a7a8b5]"><span className="font-semibold text-[#d6d6df]">Install:</span><code className="max-w-full overflow-x-auto rounded border border-white/10 bg-black/40 px-2 py-1 font-mono text-[#dfe0e7]">{installCommand}</code></div>
-    <pre className="mt-3 w-full min-w-0 max-w-full overflow-x-auto overscroll-x-contain rounded-lg border border-white/8 bg-[#000000] p-3"><code className="block min-w-max font-mono text-[11px] leading-5 text-[#dfe0e7]">{code}</code></pre>
-  </section>;
+  return (
+    <section
+      style={{
+        backgroundColor: "oklch(0.18 0 0)",
+        borderColor: "oklch(0.26 0 0)",
+      }}
+      className="min-w-0 overflow-hidden rounded-xl border p-4"
+      aria-labelledby="sdk-quickstart-title"
+    >
+      <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <p className="text-[10px] font-semibold uppercase tracking-[.16em] font-mono text-zinc-400">Anthropic Messages SDK</p>
+          <h3 id="sdk-quickstart-title" className="mt-1 text-sm font-bold text-white">Start from your language</h3>
+          <p className="mt-1 max-w-xl text-xs leading-5 text-zinc-400">Use the standard Anthropic SDK with Qronos AI’s hosted base URL. {apiKey ? "The selected snippet includes the new plaintext key shown above." : "Create or rotate a key to populate a selected snippet automatically."}</p>
+        </div>
+        <Button variant="outline" size="sm" className="shrink-0 border-white/15 text-zinc-200 hover:bg-white/10" onClick={copy}>
+          {copied ? <Check size={14} /> : <Copy size={14} />}{copied ? "Copied" : "Copy code"}
+        </Button>
+      </div>
+      <div className="mt-4 flex flex-wrap gap-2" role="tablist" aria-label="SDK language">
+        <button type="button" role="tab" aria-selected={isJavaScript} className={`rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors ${isJavaScript ? "border-white/30 bg-white/15 text-white" : "border-white/10 bg-black/40 text-zinc-400 hover:bg-white/5 hover:text-white"}`} onClick={() => setLanguage("javascript")}>JavaScript</button>
+        <button type="button" role="tab" aria-selected={!isJavaScript} className={`rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors ${!isJavaScript ? "border-white/30 bg-white/15 text-white" : "border-white/10 bg-black/40 text-zinc-400 hover:bg-white/5 hover:text-white"}`} onClick={() => setLanguage("python")}>Python</button>
+      </div>
+      <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] text-zinc-400"><span className="font-semibold text-zinc-200">Install:</span><code className="max-w-full overflow-x-auto rounded border border-white/10 bg-black/60 px-2 py-1 font-mono text-zinc-200">{installCommand}</code></div>
+      <pre className="mt-3 w-full min-w-0 max-w-full overflow-x-auto overscroll-x-contain rounded-lg border border-white/10 bg-black p-3"><code className="block min-w-max font-mono text-[11px] leading-5 text-zinc-200">{code}</code></pre>
+    </section>
+  );
 }
 
 function KeyCreateForm({ onSuccess, activeCount = 0 }: { onSuccess: (value: NewApiKeyResult) => void; activeCount?: number }) {
@@ -141,22 +250,18 @@ function KeyCreateForm({ onSuccess, activeCount = 0 }: { onSuccess: (value: NewA
   const isLimitReached = activeCount >= 10;
 
   const [label, setLabel] = useState("");
-  const [keyGroup, setKeyGroup] = useState<"token_plan" | "payg" | "bundle">("token_plan");
+  const [keyGroup, setKeyGroup] = useState<"token_plan" | "payg">("token_plan");
 
   const create = trpc.developer.createApiKey.useMutation({
     onSuccess: (value) => {
       onSuccess(value as unknown as NewApiKeyResult);
       setLabel("");
-      const typeLabel =
-        keyGroup === "token_plan"
-          ? "Tier 2 (Token Plan / Coding Tokens)"
-          : keyGroup === "payg"
-          ? "Tier 1 (PAYG)"
-          : "Tier 3 (Credit Bundle)";
+      const typeLabel = keyGroup === "token_plan" ? "Token Plan" : "PAYG";
       toast.success(`New ${typeLabel} API key created`);
     },
     onError: (error) => toast.error(error.message),
   });
+
   const submit = (event: FormEvent) => {
     event.preventDefault();
     if (isLimitReached) {
@@ -167,126 +272,142 @@ function KeyCreateForm({ onSuccess, activeCount = 0 }: { onSuccess: (value: NewA
   };
 
   return (
-    <form onSubmit={submit} className="rounded-2xl border border-white/10 bg-[#09090b] p-4 sm:p-5">
-      <div className="space-y-4">
-        {isLimitReached && (
-          <div className="flex items-center gap-2.5 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3.5 text-xs text-amber-200">
-            <AlertTriangle size={16} className="shrink-0 text-amber-400" />
-            <div className="flex-1">
-              <strong className="font-semibold text-amber-300">Active API Key Limit Reached (10/10):</strong> You have 10 active API keys. Please delete or revoke an existing key before generating a new one.
-            </div>
-          </div>
-        )}
-
+    <form
+      onSubmit={submit}
+      style={{
+        backgroundColor: "oklch(0.14 0 0)",
+        borderColor: "oklch(0.26 0 0)",
+        boxShadow: "0 25px 60px rgba(0,0,0,0.85), inset 0 1px 0 rgba(255,255,255,0.06)",
+      }}
+      className="rounded-3xl border p-5 sm:p-7 shadow-2xl mb-6 relative overflow-hidden"
+    >
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-5 border-b border-white/[0.08]">
         <div>
-          <div className="flex items-center justify-between">
-            <Label className="text-xs font-semibold text-[#d7d6df]">Select Key Group & Compute Routing</Label>
-            <div className="flex items-center gap-2">
-              <Badge className={activeCount >= 10 ? "border-amber-500/40 bg-amber-500/15 text-amber-300 text-[10px]" : "border-white/10 bg-white/5 text-[#a0a1b2] text-[10px]"}>
-                {activeCount} / 10 Active Keys
-              </Badge>
-              <span className="text-[10px] text-[#8e8fa1]">Quota policy</span>
-            </div>
+          <div className="flex items-center gap-2">
+            <KeyRound size={15} className="text-white" />
+            <span className="text-[10px] font-bold uppercase tracking-[.18em] font-mono text-zinc-400">
+              Credential Generator
+            </span>
           </div>
-          <div className={`mt-2.5 grid grid-cols-1 gap-2.5 ${creditsEnabled ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}>
-            {/* Option 1: Token Plan (Coding Tokens) */}
-            <button
-              type="button"
-              onClick={() => setKeyGroup("token_plan")}
-              className={`flex flex-col items-start rounded-xl border p-3.5 text-left transition-all cursor-pointer ${
-                keyGroup === "token_plan"
-                  ? "border-cyan-500/60 bg-cyan-500/10 text-white shadow-[0_0_20px_rgba(6,182,212,0.15)] ring-1 ring-cyan-500/30"
-                  : "border-white/10 bg-[#121215] text-[#9394a7] hover:border-white/20 hover:text-white"
-              }`}
-            >
-              <div className="flex w-full items-center justify-between">
-                <span className="text-xs font-bold text-white flex items-center gap-1.5">
-                  <Code2 size={13} className="text-cyan-400" />
-                  <span>Tier 2: Token Plan</span>
-                </span>
-                <Badge className={keyGroup === "token_plan" ? "border-0 bg-cyan-500/20 text-cyan-300 text-[9px]" : "border-0 bg-white/10 text-[#8e8fa1] text-[9px]"}>
-                  Coding Plan
-                </Badge>
-              </div>
-              <p className="mt-1.5 text-[11px] leading-4 text-[#a0a1b2]">
-                Deducts strictly from Coding Plan token quota (Claude Opus 5.5, GPT 6 Sol, GLM-5.3, etc.).
-              </p>
-            </button>
-
-            {/* Option 2: PAYG API Key */}
-            <button
-              type="button"
-              onClick={() => setKeyGroup("payg")}
-              className={`flex flex-col items-start rounded-xl border p-3.5 text-left transition-all cursor-pointer ${
-                keyGroup === "payg"
-                  ? "border-rose-500/60 bg-rose-500/10 text-white shadow-[0_0_20px_rgba(244,63,94,0.15)] ring-1 ring-rose-500/30"
-                  : "border-white/10 bg-[#121215] text-[#9394a7] hover:border-white/20 hover:text-white"
-              }`}
-            >
-              <div className="flex w-full items-center justify-between">
-                <span className="text-xs font-bold text-white flex items-center gap-1.5">
-                  <Zap size={13} className="text-rose-400" />
-                  <span>Tier 1: PAYG Key</span>
-                </span>
-                <Badge className={keyGroup === "payg" ? "border-0 bg-rose-500/25 text-rose-300 text-[9px]" : "border-0 bg-white/10 text-[#8e8fa1] text-[9px]"}>
-                  100% Bonus
-                </Badge>
-              </div>
-              <p className="mt-1.5 text-[11px] leading-4 text-[#a0a1b2]">
-                Deducts strictly from PAYG balance at official zero-markup provider rates.
-              </p>
-            </button>
-
-            {/* Option 3: Credit Bundles (when enabled) */}
-            {creditsEnabled && (
-              <button
-                type="button"
-                onClick={() => setKeyGroup("bundle")}
-                className={`flex flex-col items-start rounded-xl border p-3.5 text-left transition-all cursor-pointer ${
-                  keyGroup === "bundle"
-                    ? "border-[#befe6c]/60 bg-[#befe6c]/10 text-white shadow-[0_0_20px_rgba(190,254,108,0.12)] ring-1 ring-[#befe6c]/30"
-                    : "border-white/10 bg-[#121215] text-[#9394a7] hover:border-white/20 hover:text-white"
-                }`}
-              >
-                <div className="flex w-full items-center justify-between">
-                  <span className="text-xs font-bold text-white flex items-center gap-1.5">
-                    <WalletCards size={13} className="text-[#c9ff73]" />
-                    <span>Tier 3: Bundles</span>
-                  </span>
-                  <Badge className={keyGroup === "bundle" ? "border-0 bg-[#befe6c]/20 text-[#befe6c] text-[9px]" : "border-0 bg-white/10 text-[#8e8fa1] text-[9px]"}>
-                    Fixed Credit
-                  </Badge>
-                </div>
-                <p className="mt-1.5 text-[11px] leading-4 text-[#a0a1b2]">
-                  Deducts from promotional platform credit bundles.
-                </p>
-              </button>
-            )}
-          </div>
+          <h2 className="mt-1 text-xl sm:text-2xl font-extrabold text-white tracking-tight">
+            Generate New API Key
+          </h2>
         </div>
+        <div className="flex items-center gap-2">
+          <Badge
+            className={
+              isLimitReached
+                ? "border border-amber-500/40 bg-amber-500/15 text-amber-300 font-mono text-[10px]"
+                : "border border-white/10 bg-white/[0.06] text-zinc-300 font-mono text-[10px]"
+            }
+          >
+            {activeCount} / 10 Active Keys
+          </Badge>
+        </div>
+      </div>
 
-        <div>
-          <Label htmlFor="key-label" className="text-xs text-[#d7d6df]">
-            Key label
-          </Label>
-          <div className="mt-2 flex gap-2">
-            <Input
-              id="key-label"
-              value={label}
-              onChange={(event) => setLabel(event.target.value)}
-              placeholder={isLimitReached ? "Revoke or delete an existing key to create a new one" : "e.g. cursor ide token-plan, coding backend, claude code"}
-              maxLength={100}
-              disabled={isLimitReached}
-              className="border-white/12 bg-[#121215] text-white placeholder:text-[#6f7181] disabled:opacity-50"
-            />
-            <Button
-              type="submit"
-              disabled={!label.trim() || create.isPending || isLimitReached}
-              className="shrink-0 bg-[#f0efff] text-[#18151f] hover:bg-white font-semibold cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              {create.isPending ? <Loader2 className="animate-spin" size={15} /> : <Plus size={15} />} Create Key
-            </Button>
-          </div>
+      {isLimitReached && (
+        <div className="mt-4 flex items-center gap-2.5 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3.5 text-xs text-amber-200 font-mono">
+          <AlertTriangle size={16} className="shrink-0 text-amber-400" />
+          <span>Active key limit reached. Revoke or delete an existing key before creating a new one.</span>
+        </div>
+      )}
+
+      {/* Plan Selector: Token Plan vs PAYG */}
+      <div className="mt-5">
+        <label className="text-xs font-semibold text-zinc-300 block mb-2 font-mono">
+          Select Key Quota Routing Plan
+        </label>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {/* Token Plan */}
+          <button
+            type="button"
+            onClick={() => setKeyGroup("token_plan")}
+            style={{
+              backgroundColor: keyGroup === "token_plan" ? "oklch(0.18 0 0)" : "oklch(0.14 0 0)",
+              borderColor: keyGroup === "token_plan" ? "oklch(0.5 0 0)" : "oklch(0.26 0 0)",
+            }}
+            className={`flex flex-col items-start rounded-2xl border p-4 text-left transition-all cursor-pointer relative overflow-hidden group ${
+              keyGroup === "token_plan"
+                ? "ring-1 ring-white/30 shadow-[0_0_25px_rgba(255,255,255,0.06)]"
+                : "hover:border-white/20"
+            }`}
+          >
+            <div className="flex w-full items-center justify-between">
+              <span className="text-xs font-bold text-white flex items-center gap-2 font-mono">
+                <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-white/[0.08] border border-white/10">
+                  <Code2 size={13} className="text-white" />
+                </span>
+                <span>Token Plan Key</span>
+              </span>
+              <Badge className="border-0 bg-white/[0.08] text-white font-mono text-[9px]">
+                10M / $1
+              </Badge>
+            </div>
+            <p className="mt-2 text-[11px] leading-relaxed text-zinc-400">
+              Deducts strictly from Token Plan quota (Claude Opus 5.5, GLM-5.3, DeepSeek).
+            </p>
+          </button>
+
+          {/* PAYG */}
+          <button
+            type="button"
+            onClick={() => setKeyGroup("payg")}
+            style={{
+              backgroundColor: keyGroup === "payg" ? "oklch(0.18 0 0)" : "oklch(0.14 0 0)",
+              borderColor: keyGroup === "payg" ? "oklch(0.5 0 0)" : "oklch(0.26 0 0)",
+            }}
+            className={`flex flex-col items-start rounded-2xl border p-4 text-left transition-all cursor-pointer relative overflow-hidden group ${
+              keyGroup === "payg"
+                ? "ring-1 ring-white/30 shadow-[0_0_25px_rgba(255,255,255,0.06)]"
+                : "hover:border-white/20"
+            }`}
+          >
+            <div className="flex w-full items-center justify-between">
+              <span className="text-xs font-bold text-white flex items-center gap-2 font-mono">
+                <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-white/[0.08] border border-white/10">
+                  <Zap size={13} className="text-white" />
+                </span>
+                <span>PAYG Key</span>
+              </span>
+              <Badge className="border-0 bg-white/[0.08] text-white font-mono text-[9px]">
+                +100% Match
+              </Badge>
+            </div>
+            <p className="mt-2 text-[11px] leading-relaxed text-zinc-400">
+              Deducts strictly from Pay-As-You-Go compute balance at official zero-markup rates.
+            </p>
+          </button>
+        </div>
+      </div>
+
+      {/* Label and Submit Action */}
+      <div className="mt-5">
+        <Label htmlFor="key-label" className="text-xs font-semibold text-zinc-300 font-mono">
+          Descriptive Key Label
+        </Label>
+        <div className="mt-2 flex flex-col sm:flex-row gap-2.5">
+          <Input
+            id="key-label"
+            value={label}
+            onChange={(event) => setLabel(event.target.value)}
+            placeholder={
+              isLimitReached
+                ? "Revoke or delete an existing key first"
+                : "e.g. cursor-ide-production, claude-code-cli, backend-worker"
+            }
+            maxLength={100}
+            disabled={isLimitReached}
+            className="h-11 border-white/10 bg-black/60 text-white placeholder:text-zinc-500 font-mono text-xs disabled:opacity-50 focus:border-white/30"
+          />
+          <Button
+            type="submit"
+            disabled={!label.trim() || create.isPending || isLimitReached}
+            className="h-11 shrink-0 bg-white text-black hover:bg-zinc-200 font-mono font-bold text-xs px-6 cursor-pointer shadow-lg disabled:opacity-40"
+          >
+            {create.isPending ? <Loader2 className="animate-spin mr-1.5" size={15} /> : <Plus className="mr-1.5" size={15} />}
+            Generate Key
+          </Button>
         </div>
       </div>
     </form>
@@ -297,15 +418,17 @@ function ApiKeyList() {
   const keys = trpc.developer.apiKeys.useQuery();
   const utils = trpc.useUtils();
   const [plainTextKey, setPlainTextKey] = useState<string | null>(null);
+  const [activeSnippetKey, setActiveSnippetKey] = useState<number | null>(null);
+
   const showNewKey = (value: NewApiKeyResult) => {
     const record = { ...value.record, lastUsedAt: null, revokedAt: null };
     utils.developer.apiKeys.setData(undefined, (current) => prependCreatedApiKey(current, record as never));
     setPlainTextKey(value.key);
     rememberOneTimeApiKey(value.key);
   };
+
   const revoke = trpc.developer.revokeApiKey.useMutation({
     onSuccess: (_, variables) => {
-      // Permanently remove from client cache
       utils.developer.apiKeys.setData(undefined, (current) =>
         current ? current.filter((k) => k.id !== variables.apiKeyId) : []
       );
@@ -313,6 +436,7 @@ function ApiKeyList() {
     },
     onError: (error) => toast.error(error.message),
   });
+
   const rotate = trpc.developer.rotateApiKey.useMutation({
     onSuccess: (value, variables) => {
       const record = { ...value.record, lastUsedAt: null, revokedAt: null };
@@ -325,12 +449,14 @@ function ApiKeyList() {
     },
     onError: (error) => toast.error(error.message),
   });
+
   if (keys.isLoading)
     return (
-      <div className="grid min-h-48 place-items-center rounded-xl border border-white/10 bg-[#09090b]">
-        <Loader2 className="animate-spin text-white" />
+      <div className="grid min-h-48 place-items-center rounded-3xl border border-white/10 bg-black/40">
+        <Loader2 className="animate-spin text-zinc-400" size={24} />
       </div>
     );
+
   const dismissPlainTextKey = () => {
     clearOneTimeApiKey();
     setPlainTextKey(null);
@@ -340,145 +466,563 @@ function ApiKeyList() {
   const activeCount = activeKeys.length;
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       {plainTextKey && <KeySecret value={plainTextKey} onDismiss={dismissPlainTextKey} />}
       <KeyCreateForm onSuccess={showNewKey} activeCount={activeCount} />
-      {keys.data?.length ? (
-        <div className="overflow-hidden rounded-xl border border-white/10 bg-[#09090b]">
-          {keys.data.map((key) => {
-            const rawGroup = (key as any).keyGroup;
-            const isTokenPlan = rawGroup === "token_plan" || rawGroup === "tokens" || rawGroup === "coding_plan";
-            const isPayg = rawGroup === "payg";
-            return (
-              <div
-                key={key.id}
-                className="flex flex-wrap items-center gap-3 border-b border-white/8 p-4 last:border-0"
-              >
-                <div className="grid h-9 w-9 place-items-center rounded-lg bg-white/5 text-white">
-                  <KeyRound size={16} />
-                </div>
-                <div className="min-w-40 flex-1">
-                  <div className="flex items-center gap-2">
-                    <p className="text-xs font-bold text-white">{key.label}</p>
-                    {isTokenPlan ? (
-                      <Badge className="border border-cyan-500/30 bg-cyan-500/15 text-cyan-300 font-mono text-[9px] px-1.5 py-0.5 flex items-center gap-1">
-                        <Code2 size={10} /> Tier 2: Token Plan
-                      </Badge>
-                    ) : isPayg ? (
-                      <Badge className="border border-rose-500/30 bg-rose-500/15 text-rose-300 font-mono text-[9px] px-1.5 py-0.5 flex items-center gap-1">
-                        <Zap size={10} /> Tier 1: PAYG
-                      </Badge>
-                    ) : (
-                      <Badge className="border border-[#befe6c]/30 bg-[#befe6c]/10 text-[#befe6c] font-mono text-[9px] px-1.5 py-0.5 flex items-center gap-1">
-                        <WalletCards size={10} /> Tier 3: Bundles
-                      </Badge>
-                    )}
-                  </div>
-                  <code className="mt-1 block font-mono text-[10px] text-[#9394a7]">{key.prefix}</code>
-                </div>
-                <div className="text-[10px] text-[#8e8fa1]">
-                  Created {new Date(key.createdAt).toLocaleDateString()}
-                </div>
-                <Badge
-                  className={
-                    key.status === "active"
-                      ? "border-0 bg-[#7debbd]/10 text-[#8aefc0]"
-                      : "border-0 bg-red-400/10 text-red-300"
-                  }
+
+      {/* Keys List Surface */}
+      <section
+        style={{
+          backgroundColor: "oklch(0.14 0 0)",
+          borderColor: "oklch(0.26 0 0)",
+          boxShadow: "0 25px 60px rgba(0,0,0,0.85), inset 0 1px 0 rgba(255,255,255,0.06)",
+        }}
+        className="rounded-3xl border p-5 sm:p-7 shadow-2xl overflow-hidden"
+      >
+        <div className="flex items-center justify-between pb-5 border-b border-white/[0.08] flex-wrap gap-3">
+          <div>
+            <div className="flex items-center gap-2">
+              <ShieldCheck size={14} className="text-white" />
+              <span className="text-[10px] font-bold uppercase tracking-[.18em] font-mono text-zinc-400">
+                Active Key Vault
+              </span>
+            </div>
+            <h3 className="mt-1 text-xl font-extrabold text-white tracking-tight">
+              Configured Credentials
+            </h3>
+          </div>
+          <span className="text-xs font-mono text-zinc-400">
+            {keys.data?.length ?? 0} credential{keys.data?.length === 1 ? "" : "s"} registered
+          </span>
+        </div>
+
+        {keys.data?.length ? (
+          <div className="mt-5 space-y-3">
+            {keys.data.map((key) => {
+              const rawGroup = (key as any).keyGroup;
+              const isTokenPlan = rawGroup === "token_plan" || rawGroup === "tokens" || rawGroup === "coding_plan";
+              const isPayg = rawGroup === "payg";
+              const isSnippetOpen = activeSnippetKey === key.id;
+
+              return (
+                <div
+                  key={key.id}
+                  style={{
+                    backgroundColor: "oklch(0.18 0 0)",
+                    borderColor: "oklch(0.26 0 0)",
+                  }}
+                  className="rounded-2xl border p-4 sm:p-5 transition-all duration-200 hover:border-white/30"
                 >
-                  {key.status}
-                </Badge>
-                {key.status === "active" && (
-                  <div className="flex gap-1">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      title="Rotate key"
-                      className="text-[#c7c5d2] hover:bg-white/8 hover:text-white"
-                      disabled={rotate.isPending}
-                      onClick={() =>
-                        rotate.mutate({
-                          apiKeyId: key.id,
-                          label: `${key.label.slice(0, 85)} · rotated`,
-                          keyGroup: (key as any).keyGroup,
-                        })
-                      }
-                    >
-                      <RefreshCw size={14} />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      title="Delete / Revoke API key permanently"
-                      className="text-[#d69ca6] hover:bg-red-400/10 hover:text-red-200"
-                      disabled={revoke.isPending}
-                      onClick={() => {
-                        if (confirm(`Are you sure you want to permanently delete API key "${key.label}"?`)) {
-                          revoke.mutate({ apiKeyId: key.id });
-                        }
-                      }}
-                    >
-                      <Trash2 size={14} />
-                    </Button>
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="flex items-start gap-3.5">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/[0.06] border border-white/10 text-white mt-0.5">
+                        <KeyRound size={17} />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="text-sm font-bold text-white tracking-tight">{key.label}</p>
+                          {isTokenPlan ? (
+                            <Badge className="border border-white/15 bg-white/[0.08] text-white font-mono text-[9px] px-2 py-0.5 flex items-center gap-1">
+                              <Code2 size={10} /> Token Plan
+                            </Badge>
+                          ) : (
+                            <Badge className="border border-white/15 bg-white/[0.08] text-white font-mono text-[9px] px-2 py-0.5 flex items-center gap-1">
+                              <Zap size={10} /> PAYG
+                            </Badge>
+                          )}
+                          <Badge
+                            className={
+                              key.status === "active"
+                                ? "border-0 bg-emerald-500/10 text-emerald-400 font-mono text-[9px]"
+                                : "border-0 bg-red-400/10 text-red-300 font-mono text-[9px]"
+                            }
+                          >
+                            {key.status === "active" ? "● Active" : "Revoked"}
+                          </Badge>
+                        </div>
+
+                        <div className="mt-2 flex items-center gap-3 text-xs font-mono text-zinc-400 flex-wrap">
+                          <span className="rounded bg-black/60 px-2 py-0.5 border border-white/10 text-zinc-300">
+                            {key.prefix}••••••••••••
+                          </span>
+                          <span>Created {new Date(key.createdAt).toLocaleDateString()}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Actions Row */}
+                    <div className="flex items-center gap-1.5 self-end sm:self-center">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        title="Toggle integration snippet"
+                        className="text-zinc-400 hover:text-white hover:bg-white/[0.08] text-xs font-mono h-8 cursor-pointer"
+                        onClick={() => setActiveSnippetKey(isSnippetOpen ? null : key.id)}
+                      >
+                        <Terminal size={13} className="mr-1" />
+                        <span>Snippet</span>
+                      </Button>
+
+                      {key.status === "active" && (
+                        <>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            title="Rotate key (Generates new secret)"
+                            className="text-zinc-400 hover:text-white hover:bg-white/[0.08] text-xs font-mono h-8 cursor-pointer"
+                            disabled={rotate.isPending}
+                            onClick={() =>
+                              rotate.mutate({
+                                apiKeyId: key.id,
+                                label: `${key.label.slice(0, 80)} · rotated`,
+                                keyGroup: (key as any).keyGroup,
+                              })
+                            }
+                          >
+                            <RefreshCw size={13} className={rotate.isPending ? "animate-spin mr-1" : "mr-1"} />
+                            <span>Rotate</span>
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            title="Delete API key permanently"
+                            className="text-red-400 hover:bg-red-400/10 hover:text-red-300 text-xs font-mono h-8 cursor-pointer"
+                            disabled={revoke.isPending}
+                            onClick={() => {
+                              if (confirm(`Are you sure you want to permanently delete API key "${key.label}"?`)) {
+                                revoke.mutate({ apiKeyId: key.id });
+                              }
+                            }}
+                          >
+                            <Trash2 size={13} className="mr-1" />
+                            <span>Delete</span>
+                          </Button>
+                        </>
+                      )}
+                    </div>
                   </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      ) : (
-        <div className="rounded-xl border border-dashed border-white/12 p-8 text-center">
-          <KeyRound className="mx-auto text-[#77788b]" size={22} />
-          <p className="mt-3 text-sm font-bold text-white">No keys yet</p>
-          <p className="mt-1 text-xs text-[#9394a7]">Create a labeled key above to begin making requests.</p>
-        </div>
-      )}
+
+                  {/* Expandable Snippet Drawer */}
+                  {isSnippetOpen && (
+                    <div className="mt-4 pt-3 border-t border-white/[0.08] rounded-xl bg-black/70 p-3.5 border border-white/10">
+                      <div className="flex items-center justify-between text-[11px] font-mono text-zinc-400 pb-2 border-b border-white/[0.06]">
+                        <span>Cursor & Claude Code Configuration:</span>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-6 text-[10px] text-zinc-300 hover:text-white cursor-pointer"
+                          onClick={() => {
+                            navigator.clipboard.writeText(`export ANTHROPIC_BASE_URL="${TOKENFORGE_API_BASE_URL}"\nexport ANTHROPIC_API_KEY="${key.prefix}..."`);
+                            toast.success("Snippet copied");
+                          }}
+                        >
+                          <Copy size={11} className="mr-1" /> Copy
+                        </Button>
+                      </div>
+                      <pre className="mt-2 text-[11px] font-mono text-zinc-300 overflow-x-auto leading-relaxed">
+                        <code>{`export ANTHROPIC_BASE_URL="${TOKENFORGE_API_BASE_URL}"\nexport ANTHROPIC_API_KEY="${key.prefix}..."`}</code>
+                      </pre>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="mt-5 rounded-2xl border border-dashed border-white/15 p-12 text-center bg-black/30">
+            <KeyRound className="mx-auto text-zinc-500 mb-3" size={28} />
+            <p className="text-sm font-bold text-white">No active credentials</p>
+            <p className="mt-1 text-xs text-zinc-400 max-w-sm mx-auto">
+              Generate a labeled API key above to connect Cursor, Claude Code, Python, or TypeScript.
+            </p>
+          </div>
+        )}
+      </section>
     </div>
   );
 }
 
 function UsageChart({ daily }: { daily: { day: string; requests: number; tokens: number }[] }) {
   const data = useMemo(() => coalesceDailyUsage(daily).slice(-14), [daily]);
-  const max = Math.max(1, ...data.map(row => row.tokens));
-  if (!data.length) return <div className="dashboard-empty-chart"><BarChart3 size={24} /><p>Usage will appear here after your first successful request.</p></div>;
-  return <div className="usage-chart-bars">{data.map(row => <div key={row.day} className="usage-chart-bar"><div className="usage-chart-bar__track"><div className="usage-chart-bar__fill" style={{ height: `${Math.max(4, Math.round((row.tokens / max) * 100))}%` }}><span>{row.tokens.toLocaleString()}</span></div></div><small>{row.day.slice(5)}</small></div>)}</div>;
+  const maxTokens = Math.max(1, ...data.map((row) => row.tokens));
+  const maxRequests = Math.max(1, ...data.map((row) => row.requests));
+  const [metricType, setMetricType] = useState<"tokens" | "requests">("tokens");
+  const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
+
+  if (!data.length) {
+    return (
+      <div className="flex flex-col items-center justify-center py-12 text-center rounded-2xl border border-white/[0.08] bg-black/40">
+        <BarChart3 className="text-zinc-600 mb-2" size={28} />
+        <p className="text-sm font-semibold text-white">No requests recorded yet</p>
+        <p className="text-xs text-zinc-500 mt-1 max-w-xs">
+          Your throughput activity will automatically visualize here once requests flow through the gateway.
+        </p>
+      </div>
+    );
+  }
+
+  const totalTokens = data.reduce((acc, row) => acc + row.tokens, 0);
+  const totalRequests = data.reduce((acc, row) => acc + row.requests, 0);
+  const maxVal = metricType === "tokens" ? maxTokens : maxRequests;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setMetricType("tokens")}
+            className={`rounded-lg px-3 py-1 text-xs font-mono transition-all cursor-pointer ${
+              metricType === "tokens"
+                ? "bg-white text-black font-bold shadow-sm"
+                : "bg-white/[0.06] text-zinc-400 hover:text-white"
+            }`}
+          >
+            Tokens ({totalTokens.toLocaleString()})
+          </button>
+          <button
+            type="button"
+            onClick={() => setMetricType("requests")}
+            className={`rounded-lg px-3 py-1 text-xs font-mono transition-all cursor-pointer ${
+              metricType === "requests"
+                ? "bg-white text-black font-bold shadow-sm"
+                : "bg-white/[0.06] text-zinc-400 hover:text-white"
+            }`}
+          >
+            Requests ({totalRequests.toLocaleString()})
+          </button>
+        </div>
+        <div className="text-[11px] font-mono text-zinc-400">
+          Peak {metricType}: <span className="text-white font-bold">{maxVal.toLocaleString()}</span>
+        </div>
+      </div>
+
+      <div className="relative pt-6 pb-2">
+        <div className="flex h-44 items-end gap-1.5 sm:gap-2.5">
+          {data.map((row, idx) => {
+            const val = metricType === "tokens" ? row.tokens : row.requests;
+            const heightPct = Math.max(6, Math.round((val / maxVal) * 100));
+            const isHovered = hoveredIdx === idx;
+            const isPeak = val === maxVal && val > 0;
+
+            return (
+              <div
+                key={row.day}
+                className="group relative flex flex-1 h-full flex-col items-center justify-end cursor-pointer"
+                onMouseEnter={() => setHoveredIdx(idx)}
+                onMouseLeave={() => setHoveredIdx(null)}
+              >
+                {isHovered && (
+                  <div className="absolute -top-14 z-30 flex flex-col items-center rounded-lg border border-white/20 bg-black/95 px-2.5 py-1.5 text-center shadow-xl pointer-events-none whitespace-nowrap animate-in fade-in-0 zoom-in-95">
+                    <span className="text-[10px] font-mono text-zinc-400">{row.day}</span>
+                    <span className="text-xs font-mono font-bold text-white">
+                      {row.tokens.toLocaleString()} tokens • {row.requests.toLocaleString()} reqs
+                    </span>
+                  </div>
+                )}
+                <div className="w-full rounded-md bg-white/[0.05] p-0.5 h-full flex items-end">
+                  <div
+                    style={{ height: `${heightPct}%` }}
+                    className={`w-full rounded transition-all duration-300 ${
+                      isPeak
+                        ? "bg-gradient-to-t from-zinc-400 to-white shadow-[0_0_12px_rgba(255,255,255,0.35)]"
+                        : isHovered
+                        ? "bg-white"
+                        : "bg-white/40 group-hover:bg-white/70"
+                    }`}
+                  />
+                </div>
+                <span className="mt-2 text-[9px] font-mono text-zinc-500 group-hover:text-zinc-300 transition-colors">
+                  {row.day.slice(5)}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function PageIntro({ eyebrow, title, subtitle, action }: { eyebrow: string; title: React.ReactNode; subtitle: string; action?: React.ReactNode }) {
   return <div className="dashboard-page-intro"><div><p>{eyebrow}</p><h1>{title}</h1><span>{subtitle}</span></div>{action}</div>;
 }
 
-function OverviewQuickStart() {
+type IntegrationTab = "curl" | "python" | "javascript" | "cursor" | "claude_code";
+
+function OverviewIntegrationDesk() {
   const [apiKey, setApiKey] = useState(() => getOneTimeApiKey());
+  const [tab, setTab] = useState<IntegrationTab>("curl");
+  const [copied, setCopied] = useState(false);
+
   const hideOneTimeKey = () => {
     clearOneTimeApiKey();
     setApiKey(null);
-    toast.success("One-time key hidden from quick-start examples");
+    toast.success("One-time key hidden from integration examples");
   };
 
-  return <section className="rounded-2xl border border-white/10 bg-[#09090b] p-4 sm:p-5" aria-labelledby="overview-quickstart-title">
-    <div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-[10px] font-semibold uppercase tracking-[.16em] text-[#befe6c]">Build with TokenForge</p><h2 id="overview-quickstart-title" className="mt-1 text-lg font-bold text-white">Your integration quick-start</h2><p className="mt-1 max-w-2xl text-xs leading-5 text-[#a8a9b6]">Start with cURL or the Anthropic Messages JavaScript and Python SDKs. Create and manage credentials separately in API Keys.</p></div><Link href="/dashboard/keys" className="dashboard-outline-action"><KeyRound size={14} /> Manage keys</Link></div>
-    {apiKey && <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[#befe6c]/25 bg-[#befe6c]/[.06] p-3"><p className="text-xs leading-5 text-[#d9efad]">A new plaintext key is available only in this open browser page. Copy what you need, then hide it.</p><Button variant="outline" size="sm" className="border-[#befe6c]/30 text-[#d9ff9d] hover:bg-[#befe6c]/10" onClick={hideOneTimeKey}>Hide key</Button></div>}
-    <div className="mt-4 grid gap-3 xl:grid-cols-2"><CurlExample apiKey={apiKey ?? undefined} /><SdkQuickStart apiKey={apiKey ?? undefined} /></div>
-  </section>;
+  const effectiveKey = apiKey || "qr_your_key";
+
+  const getCodeSnippet = () => {
+    switch (tab) {
+      case "curl":
+        return buildTokenForgeCurl(apiKey ?? undefined);
+      case "python":
+        return buildTokenForgePython(apiKey ?? undefined);
+      case "javascript":
+        return buildTokenForgeJavaScript(apiKey ?? undefined);
+      case "cursor":
+        return `// Cursor Settings -> Models -> OpenAI/Anthropic Base URL Override
+{
+  "anthropic.baseUrl": "${TOKENFORGE_API_BASE_URL}",
+  "anthropic.apiKey": "${effectiveKey}"
+}`;
+      case "claude_code":
+        return `# Point Claude Code CLI directly to Qronos AI
+export ANTHROPIC_BASE_URL="${TOKENFORGE_API_BASE_URL}"
+export ANTHROPIC_API_KEY="${effectiveKey}"
+claude`;
+    }
+  };
+
+  const code = getCodeSnippet();
+
+  const copyCode = async () => {
+    await navigator.clipboard.writeText(code);
+    setCopied(true);
+    toast.success("Code snippet copied to clipboard");
+    window.setTimeout(() => setCopied(false), 1500);
+  };
+
+  const getInstallNote = () => {
+    if (tab === "python") return "pip install anthropic";
+    if (tab === "javascript") return "npm install @anthropic-ai/sdk";
+    if (tab === "cursor") return "Cursor IDE version >= 0.40";
+    if (tab === "claude_code") return "npm install -g @anthropic-ai/claude-code";
+    return "Standard Unix / Windows Terminal cURL";
+  };
+
+  return (
+    <section
+      style={{
+        backgroundColor: "oklch(0.14 0 0)",
+        borderColor: "oklch(0.26 0 0)",
+        boxShadow: "0 25px 60px rgba(0,0,0,0.85), inset 0 1px 0 rgba(255,255,255,0.06)",
+      }}
+      className="rounded-3xl border p-5 sm:p-7 mb-6 shadow-2xl relative overflow-hidden"
+      aria-labelledby="overview-quickstart-title"
+    >
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-5 border-b border-white/[0.08]">
+        <div>
+          <div className="flex items-center gap-2">
+            <Radio size={14} className="text-white" />
+            <p className="text-[10px] font-bold uppercase tracking-[.18em] font-mono text-zinc-400">
+              Interactive Integration Workbench
+            </p>
+          </div>
+          <h2 id="overview-quickstart-title" className="mt-1 text-xl sm:text-2xl font-extrabold text-white tracking-tight">
+            Connect Any Tool or Agent
+          </h2>
+          <p className="mt-1 text-xs text-zinc-400">
+            Native Anthropic Messages API compatible. Works seamlessly with Cursor, Claude Code, Python, and TypeScript.
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2.5 flex-wrap">
+          <Link href="/dashboard/keys" className="dashboard-outline-action font-mono text-xs">
+            <KeyRound size={13} /> Manage keys
+          </Link>
+          <Button
+            size="sm"
+            onClick={copyCode}
+            className="h-9 px-4 rounded-full bg-white text-black font-bold text-xs hover:bg-zinc-200 transition-all cursor-pointer shadow-md"
+          >
+            {copied ? <Check size={14} className="mr-1.5" /> : <Copy size={14} className="mr-1.5" />}
+            {copied ? "Copied" : "Copy snippet"}
+          </Button>
+        </div>
+      </div>
+
+      {apiKey && (
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/15 bg-white/[0.04] p-3">
+          <div className="flex items-center gap-2 text-xs font-mono text-zinc-200">
+            <ShieldCheck size={15} className="text-emerald-400 shrink-0" />
+            <span>Active one-time key injected into code snippets below. Save it before navigating away.</span>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            className="border-white/20 text-white hover:bg-white/10 text-xs font-mono h-7"
+            onClick={hideOneTimeKey}
+          >
+            Hide key
+          </Button>
+        </div>
+      )}
+
+      {/* Language / Client Selector Tabs */}
+      <div className="mt-5 flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          onClick={() => setTab("curl")}
+          className={`rounded-lg px-3 py-1.5 text-xs font-mono font-semibold transition-all cursor-pointer ${
+            tab === "curl"
+              ? "bg-white text-black shadow-md"
+              : "bg-white/[0.06] text-zinc-400 hover:text-white hover:bg-white/[0.1]"
+          }`}
+        >
+          cURL
+        </button>
+        <button
+          type="button"
+          onClick={() => setTab("python")}
+          className={`rounded-lg px-3 py-1.5 text-xs font-mono font-semibold transition-all cursor-pointer ${
+            tab === "python"
+              ? "bg-white text-black shadow-md"
+              : "bg-white/[0.06] text-zinc-400 hover:text-white hover:bg-white/[0.1]"
+          }`}
+        >
+          Python (Anthropic SDK)
+        </button>
+        <button
+          type="button"
+          onClick={() => setTab("javascript")}
+          className={`rounded-lg px-3 py-1.5 text-xs font-mono font-semibold transition-all cursor-pointer ${
+            tab === "javascript"
+              ? "bg-white text-black shadow-md"
+              : "bg-white/[0.06] text-zinc-400 hover:text-white hover:bg-white/[0.1]"
+          }`}
+        >
+          TypeScript / Node
+        </button>
+        <button
+          type="button"
+          onClick={() => setTab("cursor")}
+          className={`rounded-lg px-3 py-1.5 text-xs font-mono font-semibold transition-all cursor-pointer ${
+            tab === "cursor"
+              ? "bg-white text-black shadow-md"
+              : "bg-white/[0.06] text-zinc-400 hover:text-white hover:bg-white/[0.1]"
+          }`}
+        >
+          Cursor IDE
+        </button>
+        <button
+          type="button"
+          onClick={() => setTab("claude_code")}
+          className={`rounded-lg px-3 py-1.5 text-xs font-mono font-semibold transition-all cursor-pointer ${
+            tab === "claude_code"
+              ? "bg-white text-black shadow-md"
+              : "bg-white/[0.06] text-zinc-400 hover:text-white hover:bg-white/[0.1]"
+          }`}
+        >
+          Claude Code CLI
+        </button>
+      </div>
+
+      {/* Install command note */}
+      <div className="mt-3 flex items-center gap-2 text-[11px] font-mono text-zinc-400">
+        <span className="text-zinc-500 uppercase tracking-wider">Requirement:</span>
+        <code className="rounded border border-white/10 bg-black/60 px-2 py-0.5 text-zinc-300">
+          {getInstallNote()}
+        </code>
+      </div>
+
+      {/* Terminal View */}
+      <div className="mt-3 relative rounded-2xl border border-white/10 bg-black/80 overflow-hidden shadow-inner">
+        <div className="flex items-center justify-between px-4 py-2 border-b border-white/[0.08] bg-white/[0.02]">
+          <div className="flex items-center gap-2">
+            <span className="h-2.5 w-2.5 rounded-full bg-white/20" />
+            <span className="h-2.5 w-2.5 rounded-full bg-white/20" />
+            <span className="h-2.5 w-2.5 rounded-full bg-white/20" />
+            <span className="text-[10px] font-mono text-zinc-400 ml-2">endpoint: {TOKENFORGE_API_BASE_URL}/v1</span>
+          </div>
+          <span className="text-[10px] font-mono text-zinc-500 uppercase">UTF-8</span>
+        </div>
+        <pre className="p-4 sm:p-5 overflow-x-auto text-[11px] sm:text-xs font-mono leading-relaxed text-zinc-200">
+          <code>{code}</code>
+        </pre>
+      </div>
+    </section>
+  );
 }
 
 function PlatformUsageMetrics() {
   const metrics = trpc.public.modelTokenMetrics.useQuery(undefined, {
-    refetchInterval: 15_000,
-    staleTime: 10_000,
+    staleTime: 60_000,
+    refetchInterval: 120_000,
     refetchOnWindowFocus: true,
   });
   const totalTokens = metrics.data?.totalTokens ?? 0;
-  const refreshedAt = metrics.dataUpdatedAt ? new Date(metrics.dataUpdatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : null;
+  const refreshedAt = metrics.dataUpdatedAt
+    ? new Date(metrics.dataUpdatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })
+    : null;
 
-  return <section className="mt-5" aria-labelledby="platform-usage-title">
-    <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-      <div><div className="flex items-center gap-2 text-[#8df1f5]"><span className="relative flex h-2.5 w-2.5"><span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#79e8ef] opacity-50" /><span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-[#79e8ef]" /></span><p className="text-[10px] font-bold uppercase tracking-[.18em]">Live platform activity</p></div><h2 id="platform-usage-title" className="mt-2 text-xl font-bold tracking-[-.025em] text-white sm:text-2xl">TokenForge tokens processed</h2><p className="mt-2 max-w-2xl text-xs leading-5 text-[#a9bcc1]">Exact lifetime successful-token total across TokenForge. Refreshes automatically every 15 seconds while this overview is open.</p></div>
-      <div className="flex items-center gap-2 self-start rounded-full border border-[#79e8ef]/20 bg-[#79e8ef]/[.07] px-3 py-1.5 font-mono text-[10px] text-[#b6f7f8] sm:self-auto"><RefreshCw size={12} className={metrics.isFetching ? "animate-spin" : ""} />{metrics.isFetching ? "Refreshing" : refreshedAt ? `Updated ${refreshedAt}` : "Connecting"}</div>
-    </div>
-    {metrics.isLoading ? <div className="mt-4 grid min-h-56 place-items-center rounded-3xl border border-[#befe6c]/25 bg-[#111710]"><Loader2 className="animate-spin text-[#caff8e]" size={20} /></div> : <MovingDotCard target={totalTokens} label="Tokens processed" description="Exact lifetime successful-token total" className="mt-4 tf-moving-dot-card--dashboard" />}
-  </section>;
+  return (
+    <section className="h-full flex flex-col justify-between" aria-labelledby="platform-usage-title">
+      <div>
+        <div className="flex items-center justify-between pb-4 border-b border-white/[0.08]">
+          <div className="flex items-center gap-2">
+            <span className="relative flex h-2 w-2">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400" />
+            </span>
+            <p className="text-[10px] font-bold uppercase tracking-[.18em] font-mono text-zinc-400">
+              Live Network Activity
+            </p>
+          </div>
+          <span className="inline-flex items-center gap-1 rounded-full bg-white/[0.06] border border-white/10 px-2 py-0.5 text-[9px] font-mono text-zinc-300">
+            28+ Routes Live
+          </span>
+        </div>
+
+        <h3 id="platform-usage-title" className="mt-4 text-xl font-bold tracking-tight text-white">
+          Global Mesh Volume
+        </h3>
+        <p className="mt-1 text-xs text-zinc-400 leading-relaxed">
+          Aggregated lifetime successful tokens settled across Qronos AI model gateways. Refreshes every 15 seconds.
+        </p>
+      </div>
+
+      <div className="my-6 relative flex flex-col items-center justify-center">
+        {/* Animated concentric radar pulse rings */}
+        <div className="pointer-events-none absolute h-40 w-40 rounded-full border border-white/[0.06] animate-ping opacity-25" />
+        <div className="pointer-events-none absolute h-48 w-48 rounded-full border border-white/[0.04] animate-pulse opacity-20" />
+
+        <div
+          style={{
+            backgroundColor: "oklch(0.18 0 0)",
+            borderColor: "oklch(0.26 0 0)",
+          }}
+          className="relative z-10 w-full rounded-2xl border p-6 text-center shadow-2xl overflow-hidden"
+        >
+          <div className="absolute inset-x-0 top-0 h-[1px] bg-gradient-to-r from-transparent via-white/30 to-transparent" />
+          <div className="text-[10px] font-mono uppercase tracking-[.2em] text-zinc-400 font-semibold">
+            Total Tokens Processed
+          </div>
+          <div className="text-3xl sm:text-4xl font-extrabold font-mono tracking-tight text-white mt-2">
+            {metrics.isLoading ? (
+              <Loader2 className="inline-block animate-spin text-zinc-400" size={28} />
+            ) : (
+              new Intl.NumberFormat().format(totalTokens)
+            )}
+          </div>
+          <div className="text-[11px] text-zinc-400 mt-2.5 font-mono flex items-center justify-center gap-1.5">
+            <RefreshCw size={11} className={metrics.isFetching ? "animate-spin text-white" : "text-zinc-500"} />
+            <span>
+              {metrics.isFetching ? "Synchronizing mesh..." : refreshedAt ? `Updated at ${refreshedAt}` : "Connected"}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div className="pt-4 border-t border-white/[0.08] flex items-center justify-between text-[11px] font-mono text-zinc-400">
+        <span className="flex items-center gap-1.5">
+          <Zap size={12} className="text-zinc-300" /> SSE Direct Streaming
+        </span>
+        <span className="text-zinc-500">Zero Gateway Markup</span>
+      </div>
+    </section>
+  );
 }
 
 function UnifiedBalancesPortfolio() {
@@ -501,7 +1045,6 @@ function UnifiedBalancesPortfolio() {
   const data = wallet.data;
   const paygBalanceNanos = Number((data as any)?.paygBalanceNanos ?? 0);
   const codingPlanTokens = Number((data as any)?.codingPlanTokens ?? 0);
-  const bundleBalanceNanos = Number(data?.balanceNanos ?? 0);
 
   const formattedCodingTokens =
     codingPlanTokens >= 1_000_000
@@ -509,20 +1052,24 @@ function UnifiedBalancesPortfolio() {
       : codingPlanTokens.toLocaleString();
 
   return (
-    <section className="rounded-3xl border border-white/10 bg-gradient-to-b from-[#131715] via-[#0d100e] to-[#080a09] p-5 sm:p-7 shadow-2xl backdrop-blur-xl relative overflow-hidden mb-6">
-      {/* Decorative gradient backdrops */}
-      <div className="absolute top-0 right-0 h-64 w-64 rounded-full bg-cyan-500/5 blur-3xl pointer-events-none" />
-      <div className="absolute bottom-0 left-0 h-64 w-64 rounded-full bg-[#c9ff73]/5 blur-3xl pointer-events-none" />
-
+    <section
+      style={{
+        backgroundColor: "oklch(0.14 0 0)",
+        borderColor: "oklch(0.26 0 0)",
+        boxShadow: "0 25px 60px rgba(0,0,0,0.85), inset 0 1px 0 rgba(255,255,255,0.06)",
+      }}
+      className="rounded-3xl border p-5 sm:p-7 shadow-2xl backdrop-blur-xl relative overflow-hidden mb-6"
+    >
       {/* Header bar of Portfolio */}
-      <div className="relative z-10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-6 border-b border-white/8">
+      <div className="relative z-10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-6 border-b border-white/[0.08]">
         <div>
           <div className="flex items-center gap-2">
-            <span className="relative flex h-2.5 w-2.5">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-cyan-400 opacity-60" />
-              <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-cyan-400" />
+            <span className="relative flex h-2 w-2">
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400" />
             </span>
-            <p className="text-[10px] font-bold uppercase tracking-[.18em] text-[#9ba398]">Compute & Balance Portfolio</p>
+            <p className="text-[10px] font-bold uppercase tracking-[.18em] font-mono text-zinc-400">
+              Compute & Balance Portfolio
+            </p>
           </div>
           <h2 className="mt-1 text-xl sm:text-2xl font-extrabold text-white tracking-tight">Active Available Quotas</h2>
         </div>
@@ -530,155 +1077,130 @@ function UnifiedBalancesPortfolio() {
         {/* Single Pay / Top Up Button */}
         <div className="flex items-center gap-3 flex-wrap">
           <Link href="/dashboard/pricing">
-            <Button
-              type="button"
-              className="px-5 py-2.5 rounded-xl text-xs font-bold text-black bg-gradient-to-r from-[#c9ff73] via-[#a8f34f] to-[#72e6db] hover:opacity-95 shadow-lg shadow-[#c9ff73]/20 transition-all cursor-pointer flex items-center gap-2 h-auto"
-            >
-              <Zap size={14} className="fill-black" />
+            <StarButton backgroundColor="#000000" className="rounded-full border border-slate-200/50 px-5 text-xs font-mono h-9">
               <span>Add Balance & Plans</span>
-              <ArrowUpRight size={14} />
-            </Button>
+              <ArrowUpRight size={13} className="ml-1 inline-block" />
+            </StarButton>
           </Link>
         </div>
       </div>
 
-      {/* 3 Balances Grid */}
-      <div className={`relative z-10 mt-6 grid grid-cols-1 ${creditsEnabled ? "md:grid-cols-3" : "md:grid-cols-2"} gap-4`}>
-        {/* Tier 2: Dedicated Coding Plan Tokens */}
-        <div className="group relative overflow-hidden rounded-2xl border border-cyan-500/25 bg-gradient-to-br from-cyan-950/30 via-[#0a1218]/90 to-black/90 p-5 transition-all duration-300 hover:border-cyan-500/40 hover:shadow-lg hover:shadow-cyan-500/10 flex flex-col justify-between">
-          <div className="absolute -top-12 -right-12 h-28 w-28 rounded-full bg-cyan-500/10 blur-2xl pointer-events-none group-hover:bg-cyan-500/20 transition-all" />
-
-          <div>
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-cyan-500/15 text-cyan-300 border border-cyan-500/20">
-                  <Code2 size={15} />
-                </div>
-                <div>
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-cyan-300 font-mono">Tier 2: Coding Tokens</p>
-                  <p className="text-[10px] text-neutral-400">Opus 5 & GLM 5.3 Quota</p>
-                </div>
-              </div>
-              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-bold bg-cyan-500/15 border border-cyan-500/30 text-cyan-200 font-mono">
-                10M / $1
-              </span>
-            </div>
-
-            <div className="mt-5">
-              <div className="flex items-baseline gap-2">
-                <span className="text-3xl sm:text-4xl font-extrabold font-mono tracking-tight text-white">
-                  {formattedCodingTokens}
-                </span>
-                <span className="text-xs font-mono font-bold text-cyan-300 uppercase tracking-wider">
-                  {codingPlanTokens >= 1_000_000 ? "Tokens Quota" : "Tokens"}
-                </span>
-              </div>
-              <p className="mt-2 text-[11px] leading-relaxed text-neutral-300">
-                Dedicated high-throughput token pool for coding assistants and CLI tools.
-              </p>
-            </div>
-          </div>
-
-          <div className="mt-4 pt-3 border-t border-cyan-500/15 flex items-center justify-between text-[11px]">
-            <span className="text-cyan-400/80 font-medium">Auto-deducted on requests</span>
-            <Link href="/dashboard/pricing" className="text-cyan-300 hover:text-white font-semibold flex items-center gap-1 hover:underline">
-              <span>Get Tokens</span>
-              <ArrowRight size={11} />
-            </Link>
-          </div>
-        </div>
-
-        {/* Tier 1: PAYG Compute Wallet */}
-        <div className="group relative overflow-hidden rounded-2xl border border-rose-500/25 bg-gradient-to-br from-rose-950/30 via-[#140b10]/90 to-black/90 p-5 transition-all duration-300 hover:border-rose-500/40 hover:shadow-lg hover:shadow-rose-500/10 flex flex-col justify-between">
-          <div className="absolute -top-12 -right-12 h-28 w-28 rounded-full bg-rose-500/10 blur-2xl pointer-events-none group-hover:bg-rose-500/20 transition-all" />
-
-          <div>
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-rose-500/15 text-rose-300 border border-rose-500/20">
-                  <Zap size={15} />
-                </div>
-                <div>
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-rose-300 font-mono">Tier 1: PAYG Compute</p>
-                  <p className="text-[10px] text-neutral-400">Zero-Markup Direct</p>
-                </div>
-              </div>
-              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-bold bg-rose-500/15 border border-rose-500/30 text-rose-200 font-mono">
-                +100% Bonus (2x)
-              </span>
-            </div>
-
-            <div className="mt-5">
-              <div className="flex items-baseline gap-2">
-                <span className="text-3xl sm:text-4xl font-extrabold font-mono tracking-tight text-white">
-                  {formatCreditWhole(paygBalanceNanos)}
-                </span>
-                <span className="text-xs font-mono font-bold text-neutral-400">USD</span>
-              </div>
-              <p className="mt-2 text-[11px] leading-relaxed text-neutral-300">
-                Settles at official upstream provider rates. Balance never expires.
-              </p>
-            </div>
-          </div>
-
-          <div className="mt-4 pt-3 border-t border-rose-500/15 flex items-center justify-between text-[11px]">
-            <span className="text-rose-400/80 font-medium">All PAYG Tagged Models</span>
-            <Link href="/dashboard/pricing" className="text-rose-300 hover:text-white font-semibold flex items-center gap-1 hover:underline">
-              <span>Deposit PAYG</span>
-              <ArrowRight size={11} />
-            </Link>
-          </div>
-        </div>
-
-        {/* Tier 3: Credit Wallet (when enabled) */}
-        {creditsEnabled && (
-          <div className="group relative overflow-hidden rounded-2xl border border-[#c9ff73]/25 bg-gradient-to-br from-[#121c10]/40 via-[#0d130d]/90 to-black/90 p-5 transition-all duration-300 hover:border-[#c9ff73]/40 hover:shadow-lg hover:shadow-[#c9ff73]/10 flex flex-col justify-between">
-            <div className="absolute -top-12 -right-12 h-28 w-28 rounded-full bg-[#c9ff73]/10 blur-2xl pointer-events-none group-hover:bg-[#c9ff73]/20 transition-all" />
-
+      {/* 2 Balances Grid: Token Plan & PAYG Compute */}
+      <div className="relative z-10 mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Tier 2: Dedicated Token Plan (Wrapped in StarBorderCard) */}
+        <StarBorderCard
+          lightWidth={180}
+          duration={8}
+          lightColor="rgba(255, 255, 255, 0.85)"
+          className="rounded-2xl h-full"
+        >
+          <div className="p-5 flex flex-col justify-between h-full">
             <div>
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
-                  <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#c9ff73]/15 text-[#c9ff73] border border-[#c9ff73]/20">
-                    <WalletCards size={15} />
+                  <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-white/[0.08] text-white border border-white/15">
+                    <Code2 size={15} />
                   </div>
                   <div>
-                    <p className="text-[10px] font-bold uppercase tracking-wider text-[#c9ff73] font-mono">Tier 3: Credit Wallet</p>
-                    <p className="text-[10px] text-neutral-400">Platform Compute</p>
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-white font-mono">Token Plan Quota</p>
+                    <p className="text-[10px] text-zinc-400">Opus 5 & GLM 5.3 Quota</p>
                   </div>
                 </div>
-                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-bold bg-[#c9ff73]/15 border border-[#c9ff73]/30 text-[#c9ff73] font-mono">
-                  Bundles
+                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-bold bg-white/[0.08] border border-white/20 text-white font-mono">
+                  10M / $1
                 </span>
               </div>
 
               <div className="mt-5">
                 <div className="flex items-baseline gap-2">
                   <span className="text-3xl sm:text-4xl font-extrabold font-mono tracking-tight text-white">
-                    {formatCreditWhole(bundleBalanceNanos)}
+                    {formattedCodingTokens}
                   </span>
-                  <span className="text-xs font-mono font-bold text-neutral-400">USD</span>
+                  <span className="text-xs font-mono font-bold text-zinc-400 uppercase tracking-wider">
+                    {codingPlanTokens >= 1_000_000 ? "Tokens Quota" : "Tokens"}
+                  </span>
                 </div>
-                <p className="mt-2 text-[11px] leading-relaxed text-neutral-300">
-                  Fixed credit bundles for standard model calls and development.
+                <p className="mt-2 text-[11px] leading-relaxed text-zinc-400">
+                  Dedicated high-throughput token pool for Cursor, Claude Code, and agent workloads.
                 </p>
               </div>
             </div>
 
-            <div className="mt-4 pt-3 border-t border-[#c9ff73]/15 flex items-center justify-between text-[11px]">
-              <span className="text-[#c9ff73]/80 font-medium">Standard Bundle Models</span>
-              <Link href="/dashboard/pricing" className="text-[#c9ff73] hover:text-white font-semibold flex items-center gap-1 hover:underline">
-                <span>Buy Bundle</span>
+            <div className="mt-4 pt-3 border-t border-white/[0.08] flex items-center justify-between text-[11px]">
+              <span className="text-zinc-500 font-medium">Auto-deducted on requests</span>
+              <Link href="/dashboard/pricing" className="text-white hover:text-zinc-300 font-semibold flex items-center gap-1 hover:underline">
+                <span>Get Tokens</span>
                 <ArrowRight size={11} />
               </Link>
             </div>
           </div>
-        )}
+        </StarBorderCard>
+
+        {/* Tier 1: PAYG Compute Wallet */}
+        <div
+          style={{
+            backgroundColor: "oklch(0.18 0 0)",
+            borderColor: "oklch(0.26 0 0)",
+          }}
+          className="group relative overflow-hidden rounded-2xl border p-5 transition-all duration-300 hover:border-white/30 flex flex-col justify-between"
+        >
+          <div>
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-white/[0.06] text-white border border-white/10">
+                  <Zap size={15} />
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-white font-mono">PAYG Compute Wallet</p>
+                  <p className="text-[10px] text-zinc-400">Zero-Markup Direct</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => claimCheckin.mutate()}
+                  disabled={claimCheckin.isPending}
+                  className="h-6 text-[10px] font-mono px-2 py-0 border-white/20 bg-white/[0.04] text-white hover:bg-white/[0.1] cursor-pointer"
+                >
+                  {claimCheckin.isPending ? <Loader2 size={10} className="animate-spin" /> : <Sparkles size={10} className="mr-1" />}
+                  Daily Check-in
+                </Button>
+                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-bold bg-white/[0.05] border border-white/15 text-zinc-300 font-mono">
+                  +100% Bonus (2x)
+                </span>
+              </div>
+            </div>
+
+            <div className="mt-5">
+              <div className="flex items-baseline gap-2">
+                <span className="text-3xl sm:text-4xl font-extrabold font-mono tracking-tight text-white">
+                  ${(paygBalanceNanos / 1_000_000_000).toFixed(2)}
+                </span>
+                <span className="text-xs font-mono font-bold text-zinc-400 uppercase tracking-wider">
+                  USD
+                </span>
+              </div>
+              <p className="mt-2 text-[11px] leading-relaxed text-zinc-400">
+                Official provider token settlement with zero platform markup.
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-4 pt-3 border-t border-white/[0.08] flex items-center justify-between text-[11px]">
+            <span className="text-zinc-500 font-medium">PAYG on-demand</span>
+            <Link href="/dashboard/pricing" className="text-white hover:text-zinc-300 font-semibold flex items-center gap-1 hover:underline">
+              <span>Top Up Balance</span>
+              <ArrowRight size={11} />
+            </Link>
+          </div>
+        </div>
       </div>
 
       {/* Daily Check-in Claim & Quick Status Footer */}
-      <div className="relative z-10 mt-5 pt-4 border-t border-white/8 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
-        <div className="flex items-center gap-2 text-[#9da598]">
-          <ShieldCheck size={14} className="text-[#c9ff73]" />
+      <div className="relative z-10 mt-5 pt-4 border-t border-white/[0.08] flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
+        <div className="flex items-center gap-2 text-zinc-400">
+          <ShieldCheck size={14} className="text-zinc-300" />
           <span>Real-time multi-rail settlements via UPI & Solana with zero transaction fees.</span>
         </div>
 
@@ -687,14 +1209,14 @@ function UnifiedBalancesPortfolio() {
             size="sm"
             onClick={() => claimCheckin.mutate()}
             disabled={claimCheckin.isPending}
-            className="w-full sm:w-auto bg-gradient-to-r from-amber-400 to-yellow-500 text-black font-bold text-xs hover:brightness-105 shadow-md shadow-amber-500/20 cursor-pointer"
+            className="w-full sm:w-auto bg-white text-black font-bold text-xs hover:bg-zinc-200 cursor-pointer shadow-md"
           >
             {claimCheckin.isPending ? <Loader2 size={13} className="animate-spin" /> : <Gift size={13} />}
             <span>Claim Free Daily Reward ($0.01 - $2.00)</span>
           </Button>
         ) : (
-          <div className="flex items-center gap-1.5 text-[11px] text-[#c9ff73] bg-[#c9ff73]/10 border border-[#c9ff73]/20 px-3 py-1 rounded-full font-medium">
-            <CheckCircle2 size={13} />
+          <div className="flex items-center gap-1.5 text-[11px] text-zinc-300 bg-white/[0.06] border border-white/15 px-3 py-1 rounded-full font-medium">
+            <CheckCircle2 size={13} className="text-emerald-400" />
             <span>Today's UTC reward claimed</span>
           </div>
         )}
@@ -703,87 +1225,150 @@ function UnifiedBalancesPortfolio() {
   );
 }
 
+function OverviewHero({
+  user,
+}: {
+  user: ReturnType<typeof useAuth>["user"];
+}) {
+  const firstName = user?.name ? user.name.split(" ")[0] : "";
+
+  return (
+    <div
+      style={{
+        backgroundColor: "oklch(0.14 0 0)",
+        borderColor: "oklch(0.26 0 0)",
+        boxShadow: "0 25px 60px rgba(0,0,0,0.85), inset 0 1px 0 rgba(255,255,255,0.06)",
+      }}
+      className="relative mb-6 overflow-hidden rounded-3xl border p-6 sm:p-8"
+    >
+      <div className="pointer-events-none absolute -right-20 -top-20 h-64 w-64 rounded-full bg-white/[0.03] blur-3xl" />
+      <div className="pointer-events-none absolute -bottom-16 left-1/3 h-48 w-48 rounded-full bg-emerald-500/[0.03] blur-2xl" />
+
+      <div className="relative z-10 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
+        <div>
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-3 py-1 text-[10px] font-mono font-bold uppercase tracking-wider text-emerald-400">
+              <span className="relative flex h-2 w-2">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400" />
+              </span>
+              Gateway Operational
+            </span>
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[10px] font-mono text-zinc-300">
+              <Zap size={11} className="text-zinc-200" />
+              Zero Artificial Rate Limits
+            </span>
+            <UserTierBadge tier={(user as any)?.tier} showTag size="sm" />
+          </div>
+
+          <h1 className="mt-3.5 text-2xl sm:text-4xl font-extrabold tracking-tight text-white flex items-center gap-2.5 flex-wrap">
+            <span>{firstName ? `Welcome back, ${firstName}` : "Welcome to Qronos AI"}</span>
+            <span className="text-zinc-600 font-light hidden sm:inline">/</span>
+            <span className="text-base sm:text-2xl font-mono text-zinc-400 font-medium">Developer Workspace</span>
+          </h1>
+          <p className="mt-2 max-w-2xl text-xs sm:text-sm text-zinc-400 leading-relaxed">
+            Direct high-concurrency model routing mesh. Claude Opus 5, GLM-5.3, and DeepSeek V3 settled transparently with zero platform markup.
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2.5 flex-wrap shrink-0">
+          <Link href="/dashboard/pricing">
+            <StarButton backgroundColor="#000000" className="rounded-full border border-slate-200/50 px-5 text-xs font-mono h-10 shadow-lg">
+              <Zap size={13} className="mr-1.5 inline-block text-white" />
+              <span>Recharge & Plans</span>
+            </StarButton>
+          </Link>
+          <Link href="/dashboard/playground">
+            <Button
+              variant="outline"
+              className="h-10 rounded-full border-white/15 bg-black/40 text-xs font-mono text-zinc-200 hover:bg-white/10 hover:text-white px-4 cursor-pointer transition-all"
+            >
+              <Terminal size={13} className="mr-1.5 text-zinc-400" />
+              <span>Prompt Studio</span>
+            </Button>
+          </Link>
+          <Link href="/docs">
+            <Button
+              variant="outline"
+              className="h-10 rounded-full border-white/10 bg-black/20 text-xs font-mono text-zinc-400 hover:bg-white/5 hover:text-zinc-200 px-3.5 cursor-pointer transition-all"
+            >
+              <BookOpen size={13} className="mr-1" />
+              <span>API Specs</span>
+            </Button>
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function Overview({ user, loading, usage }: { user: ReturnType<typeof useAuth>["user"]; loading: boolean; usage: { data?: UsageData; isLoading: boolean } }) {
   const quota = usage.data?.quota;
   if (loading || usage.isLoading) return <div className="dashboard-loading-panel"><Loader2 className="animate-spin" /></div>;
-  const firstName = user?.name ? user.name.split(" ")[0] : "";
-  const greetingTexts = firstName
-    ? [`Good to see you, ${firstName}.`, "Your models are ready.", "High-throughput Gateway Active."]
-    : ["Good to see you.", "Your models are ready.", "High-throughput Gateway Active."];
 
   return (
     <>
-      {/* Top Welcome & Navigation Action Header */}
-      <PageIntro
-        eyebrow="Workspace Control Surface"
-        title={
-          <>
-            <span className="block text-white/90">Welcome back</span>
-            <VapourAccent
-              texts={greetingTexts}
-              color="#c9ff73"
-              fontWeight={800}
-              fontStyle="normal"
-              fontFamily="'Manrope', sans-serif"
-            />
-          </>
-        }
-        subtitle="Real-time multi-tier compute management, instant token allocations, and high-concurrency model routing."
-        action={
-          <div className="flex items-center gap-2.5 flex-wrap">
-            <UserTierBadge tier={(user as any)?.tier} showTag size="md" />
-            <Link href="/dashboard/pricing" className="dashboard-outline-action border-[#c9ff73]/30 bg-[#c9ff73]/10 text-[#d9ff9d] hover:bg-[#c9ff73]/20 font-bold">
-              <Zap size={14} className="text-[#c9ff73]" /> Recharge / Pricing
-            </Link>
-            <Link href="/docs" className="dashboard-outline-action">
-              <BookOpen size={14} /> API reference
-            </Link>
-          </div>
-        }
-      />
+      {/* Commanding Obsidian Ambient Hero */}
+      <OverviewHero user={user} />
 
-      {/* Unified Balances & Token Allocation Bento */}
+      {/* Unified Balances & Token Allocation Bento with Traveling Star Beam */}
       <UnifiedBalancesPortfolio />
 
       {/* 2-Column Command & Performance Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 mb-6">
         {/* Left 7 Columns: Personal Activity & Gateway Status */}
-        <div className="lg:col-span-7 flex flex-col justify-between rounded-3xl border border-white/10 bg-gradient-to-br from-[#151a17] via-[#0f1311] to-[#080a09] p-6 shadow-xl">
+        <div
+          style={{
+            backgroundColor: "oklch(0.14 0 0)",
+            borderColor: "oklch(0.26 0 0)",
+            boxShadow: "0 25px 60px rgba(0,0,0,0.85), inset 0 1px 0 rgba(255,255,255,0.06)",
+          }}
+          className="lg:col-span-7 flex flex-col justify-between rounded-3xl border p-6 shadow-xl"
+        >
           <div>
-            <div className="flex items-center justify-between pb-4 border-b border-white/8">
+            <div className="flex items-center justify-between pb-4 border-b border-white/[0.08]">
               <div className="flex items-center gap-2">
-                <Activity size={15} className="text-[#c9ff73]" />
-                <span className="text-[10px] font-bold uppercase tracking-wider text-[#a5b797]">Gateway Telemetry</span>
+                <Activity size={15} className="text-white" />
+                <span className="text-[10px] font-bold uppercase tracking-wider font-mono text-zinc-400">Gateway Telemetry</span>
               </div>
-              <Badge className={quota?.suspended ? "border-0 bg-red-400/10 text-red-300" : "border-0 bg-[#c9ff73]/10 text-[#cbff8b]"}>
+              <Badge className={quota?.suspended ? "border-0 bg-red-400/10 text-red-300 font-mono text-xs" : "border-0 bg-emerald-500/10 text-emerald-400 font-mono text-xs"}>
                 {quota?.suspended ? "Suspended" : "● Operational & Active"}
               </Badge>
             </div>
 
             <h3 className="mt-4 text-xl font-bold text-white tracking-tight">Zero Artificial Rate Limiting</h3>
-            <p className="mt-1 text-xs text-[#95a192] leading-relaxed">
-              TokenForge operates without per-minute or concurrent cap constraints. Every request is settled atomically against your selected balance tier.
+            <p className="mt-1 text-xs text-zinc-400 leading-relaxed">
+              Qronos AI operates without per-minute or concurrent cap constraints. Every request is settled atomically against your selected balance tier.
             </p>
 
             <div className="mt-6 grid grid-cols-2 sm:grid-cols-3 gap-3">
-              <div className="rounded-xl border border-white/8 bg-black/40 p-3.5">
-                <p className="text-[10px] uppercase font-bold text-neutral-400 tracking-wider">Lifetime Requests</p>
+              <div
+                style={{ backgroundColor: "oklch(0.18 0 0)", borderColor: "oklch(0.26 0 0)" }}
+                className="rounded-xl border p-3.5"
+              >
+                <p className="text-[10px] uppercase font-bold text-zinc-400 tracking-wider font-mono">Lifetime Requests</p>
                 <p className="mt-1 text-xl font-mono font-bold text-white">{(usage.data?.totalRequests ?? 0).toLocaleString()}</p>
-                <span className="text-[9px] text-[#8ea087]">Successful calls</span>
+                <span className="text-[10px] text-zinc-500 font-mono">Successful calls</span>
               </div>
 
-              <div className="rounded-xl border border-white/8 bg-black/40 p-3.5">
-                <p className="text-[10px] uppercase font-bold text-cyan-400 tracking-wider">Tokens Processed</p>
-                <p className="mt-1 text-xl font-mono font-bold text-cyan-300">{(usage.data?.totalTokens ?? 0).toLocaleString()}</p>
-                <span className="text-[9px] text-cyan-500/80">Input + output</span>
+              <div
+                style={{ backgroundColor: "oklch(0.18 0 0)", borderColor: "oklch(0.26 0 0)" }}
+                className="rounded-xl border p-3.5"
+              >
+                <p className="text-[10px] uppercase font-bold text-zinc-400 tracking-wider font-mono">Tokens Processed</p>
+                <p className="mt-1 text-xl font-mono font-bold text-white">{(usage.data?.totalTokens ?? 0).toLocaleString()}</p>
+                <span className="text-[10px] text-zinc-500 font-mono">Input + output</span>
               </div>
 
-              <div className="col-span-2 sm:col-span-1 rounded-xl border border-white/8 bg-black/40 p-3.5 flex flex-col justify-between">
+              <div
+                style={{ backgroundColor: "oklch(0.18 0 0)", borderColor: "oklch(0.26 0 0)" }}
+                className="col-span-2 sm:col-span-1 rounded-xl border p-3.5 flex flex-col justify-between"
+              >
                 <div>
-                  <p className="text-[10px] uppercase font-bold text-[#c9ff73] tracking-wider">Direct Actions</p>
-                  <p className="mt-1 text-xs font-semibold text-white">Interactive Test</p>
+                  <p className="text-[10px] uppercase font-bold text-zinc-400 tracking-wider font-mono">Interactive Studio</p>
+                  <p className="mt-1 text-xs font-semibold text-white">3D Thinking Orb</p>
                 </div>
-                <Link href="/dashboard/playground" className="mt-2 inline-flex items-center gap-1 text-[11px] font-bold text-[#c9ff73] hover:underline">
+                <Link href="/dashboard/playground" className="mt-2 inline-flex items-center gap-1 text-[11px] font-bold text-white hover:underline font-mono">
                   <span>Open Playground</span>
                   <ArrowRight size={12} />
                 </Link>
@@ -791,9 +1376,9 @@ function Overview({ user, loading, usage }: { user: ReturnType<typeof useAuth>["
             </div>
           </div>
 
-          <div className="mt-6 pt-4 border-t border-white/8 flex items-center justify-between flex-wrap gap-2 text-[11px] text-[#919c8d]">
-            <span className="flex items-center gap-1.5"><ShieldCheck size={14} className="text-[#79e8ef]" /> Keys hashed with SHA-256</span>
-            <Link href="/dashboard/keys" className="text-[#d8ff9e] hover:underline font-semibold flex items-center gap-1">
+          <div className="mt-6 pt-4 border-t border-white/[0.08] flex items-center justify-between flex-wrap gap-2 text-[11px] font-mono text-zinc-400">
+            <span className="flex items-center gap-1.5"><ShieldCheck size={14} className="text-zinc-300" /> Keys hashed with SHA-256</span>
+            <Link href="/dashboard/keys" className="text-white hover:underline font-semibold flex items-center gap-1">
               <span>Manage API Keys</span>
               <ArrowRight size={11} />
             </Link>
@@ -801,56 +1386,168 @@ function Overview({ user, loading, usage }: { user: ReturnType<typeof useAuth>["
         </div>
 
         {/* Right 5 Columns: Live Global Platform Activity */}
-        <div className="lg:col-span-5 flex flex-col justify-between rounded-3xl border border-white/10 bg-gradient-to-br from-[#121614] via-[#0e1210] to-[#080a09] p-6 shadow-xl">
+        <div
+          style={{
+            backgroundColor: "oklch(0.14 0 0)",
+            borderColor: "oklch(0.26 0 0)",
+            boxShadow: "0 25px 60px rgba(0,0,0,0.85), inset 0 1px 0 rgba(255,255,255,0.06)",
+          }}
+          className="lg:col-span-5 flex flex-col justify-between rounded-3xl border p-6 shadow-xl"
+        >
           <PlatformUsageMetrics />
         </div>
       </div>
 
       {/* Integration Quick Start & Code Snippets */}
-      <OverviewQuickStart />
+      <OverviewIntegrationDesk />
 
       {/* 14-Day Usage Telemetry Chart */}
-      <section className="dashboard-usage-panel">
-        <div className="dashboard-section-head">
+      <section
+        style={{
+          backgroundColor: "oklch(0.14 0 0)",
+          borderColor: "oklch(0.26 0 0)",
+          boxShadow: "0 25px 60px rgba(0,0,0,0.85), inset 0 1px 0 rgba(255,255,255,0.06)",
+        }}
+        className="rounded-3xl border p-5 sm:p-7 mb-6 shadow-2xl"
+      >
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-5 border-b border-white/[0.08]">
           <div>
-            <p>REQUEST TELEMETRY</p>
-            <h2>14-Day Throughput Activity</h2>
-            <span>Inspect daily token settlement volume and historical compute trends.</span>
+            <div className="flex items-center gap-2">
+              <BarChart3 size={14} className="text-white" />
+              <p className="text-[10px] font-bold uppercase tracking-[.18em] font-mono text-zinc-400">Request Telemetry</p>
+            </div>
+            <h2 className="mt-1 text-xl sm:text-2xl font-extrabold text-white tracking-tight">14-Day Throughput Activity</h2>
+            <p className="mt-1 text-xs text-zinc-400">Inspect daily token settlement volume and historical compute trends.</p>
           </div>
-          <Link href="/dashboard/usage" className="dashboard-outline-action">
+          <Link href="/dashboard/usage" className="dashboard-outline-action font-mono text-xs">
             Detailed Usage logs <ArrowRight size={14} />
           </Link>
         </div>
-        <UsageChart daily={usage.data?.daily ?? []} />
+        <div className="mt-5">
+          <UsageChart daily={usage.data?.daily ?? []} />
+        </div>
       </section>
 
-      {/* Useful Next Moves */}
-      <section className="dashboard-next-section">
-        <div className="dashboard-section-head">
-          <div>
-            <p>BUILD WITH INTENT</p>
-            <h2>Developer Quick Actions</h2>
-            <span>Essential entry points to integrate, test, and ship with TokenForge models.</span>
+      {/* Developer Quick Action Bento (4-Tile Matrix) */}
+      <section
+        style={{
+          backgroundColor: "oklch(0.14 0 0)",
+          borderColor: "oklch(0.26 0 0)",
+          boxShadow: "0 25px 60px rgba(0,0,0,0.85), inset 0 1px 0 rgba(255,255,255,0.06)",
+        }}
+        className="rounded-3xl border p-5 sm:p-7 mb-6 shadow-2xl"
+      >
+        <div className="pb-5 border-b border-white/[0.08]">
+          <div className="flex items-center gap-2">
+            <Sparkles size={14} className="text-white" />
+            <p className="text-[10px] font-bold uppercase tracking-[.18em] font-mono text-zinc-400">Build with Intent</p>
           </div>
+          <h2 className="mt-1 text-xl sm:text-2xl font-extrabold text-white tracking-tight">Developer Launchpad</h2>
+          <p className="mt-1 text-xs text-zinc-400">Essential fast routes to integrate, test, and ship with Qronos AI models.</p>
         </div>
-        <div className="dashboard-next-grid">
-          <Link href="/dashboard/keys" className="dashboard-next-card">
-            <span><KeyRound size={17} /> 01</span>
-            <h3>Create API Keys</h3>
-            <p>Generate a labeled, high-security key for Cursor, Claude Code, or backend servers.</p>
-            <b>Manage keys <ArrowRight size={14} /></b>
+        <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <Link
+            href="/dashboard/keys"
+            style={{
+              backgroundColor: "oklch(0.18 0 0)",
+              borderColor: "oklch(0.26 0 0)",
+            }}
+            className="group rounded-2xl border p-5 transition-all duration-300 hover:border-white/30 hover:-translate-y-1 flex flex-col justify-between"
+          >
+            <div>
+              <div className="flex items-center justify-between text-zinc-400 group-hover:text-white transition-colors">
+                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/[0.06] border border-white/10">
+                  <KeyRound size={16} />
+                </span>
+                <span className="text-[10px] font-mono font-bold">01</span>
+              </div>
+              <h3 className="mt-4 text-sm font-bold text-white tracking-tight">API Key Engine</h3>
+              <p className="mt-1 text-xs text-zinc-400 leading-relaxed">
+                Generate labeled, high-security SHA-256 keys for Cursor, Claude Code, or backend servers.
+              </p>
+            </div>
+            <div className="mt-4 pt-3 border-t border-white/[0.08] flex items-center gap-1 text-[11px] font-mono font-bold text-white group-hover:translate-x-1 transition-transform">
+              <span>Manage keys</span>
+              <ArrowRight size={13} />
+            </div>
           </Link>
-          <Link href="/dashboard/playground" className="dashboard-next-card">
-            <span><Terminal size={17} /> 02</span>
-            <h3>Prompt Playground</h3>
-            <p>Evaluate Claude Opus 5, GLM-5.3, and DeepSeek V3 in real time.</p>
-            <b>Open Playground <ArrowRight size={14} /></b>
+
+          <Link
+            href="/dashboard/playground"
+            style={{
+              backgroundColor: "oklch(0.18 0 0)",
+              borderColor: "oklch(0.26 0 0)",
+            }}
+            className="group rounded-2xl border p-5 transition-all duration-300 hover:border-white/30 hover:-translate-y-1 flex flex-col justify-between"
+          >
+            <div>
+              <div className="flex items-center justify-between text-zinc-400 group-hover:text-white transition-colors">
+                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/[0.06] border border-white/10">
+                  <Terminal size={16} />
+                </span>
+                <span className="text-[10px] font-mono font-bold">02</span>
+              </div>
+              <h3 className="mt-4 text-sm font-bold text-white tracking-tight">Prompt Studio</h3>
+              <p className="mt-1 text-xs text-zinc-400 leading-relaxed">
+                Evaluate Claude Opus 5, GLM-5.3, and DeepSeek V3 in real time with the 3D Thinking Orb.
+              </p>
+            </div>
+            <div className="mt-4 pt-3 border-t border-white/[0.08] flex items-center gap-1 text-[11px] font-mono font-bold text-white group-hover:translate-x-1 transition-transform">
+              <span>Open studio</span>
+              <ArrowRight size={13} />
+            </div>
           </Link>
-          <Link href="/docs" className="dashboard-next-card">
-            <span><Code2 size={17} /> 03</span>
-            <h3>API Documentation</h3>
-            <p>Explore native Anthropic Messages API compatible endpoints and SDKs.</p>
-            <b>Read the docs <ArrowRight size={14} /></b>
+
+          <Link
+            href="/models"
+            style={{
+              backgroundColor: "oklch(0.18 0 0)",
+              borderColor: "oklch(0.26 0 0)",
+            }}
+            className="group rounded-2xl border p-5 transition-all duration-300 hover:border-white/30 hover:-translate-y-1 flex flex-col justify-between"
+          >
+            <div>
+              <div className="flex items-center justify-between text-zinc-400 group-hover:text-white transition-colors">
+                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/[0.06] border border-white/10">
+                  <Boxes size={16} />
+                </span>
+                <span className="text-[10px] font-mono font-bold">03</span>
+              </div>
+              <h3 className="mt-4 text-sm font-bold text-white tracking-tight">Model Catalogue</h3>
+              <p className="mt-1 text-xs text-zinc-400 leading-relaxed">
+                Inspect 28+ verified frontier routes, context limits, zero-markup pricing, and latency scores.
+              </p>
+            </div>
+            <div className="mt-4 pt-3 border-t border-white/[0.08] flex items-center gap-1 text-[11px] font-mono font-bold text-white group-hover:translate-x-1 transition-transform">
+              <span>Explore models</span>
+              <ArrowRight size={13} />
+            </div>
+          </Link>
+
+          <Link
+            href="/docs"
+            style={{
+              backgroundColor: "oklch(0.18 0 0)",
+              borderColor: "oklch(0.26 0 0)",
+            }}
+            className="group rounded-2xl border p-5 transition-all duration-300 hover:border-white/30 hover:-translate-y-1 flex flex-col justify-between"
+          >
+            <div>
+              <div className="flex items-center justify-between text-zinc-400 group-hover:text-white transition-colors">
+                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/[0.06] border border-white/10">
+                  <Code2 size={16} />
+                </span>
+                <span className="text-[10px] font-mono font-bold">04</span>
+              </div>
+              <h3 className="mt-4 text-sm font-bold text-white tracking-tight">API Documentation</h3>
+              <p className="mt-1 text-xs text-zinc-400 leading-relaxed">
+                Explore native Anthropic Messages API compatible endpoints, parameters, and streaming formats.
+              </p>
+            </div>
+            <div className="mt-4 pt-3 border-t border-white/[0.08] flex items-center gap-1 text-[11px] font-mono font-bold text-white group-hover:translate-x-1 transition-transform">
+              <span>Read the docs</span>
+              <ArrowRight size={13} />
+            </div>
           </Link>
         </div>
       </section>
@@ -859,7 +1556,7 @@ function Overview({ user, loading, usage }: { user: ReturnType<typeof useAuth>["
 }
 
 function GiveawayNotificationBanner({ enabled }: { enabled: boolean }) {
-  const notifications = trpc.developer.unreadGiveawayNotifications.useQuery(undefined, { enabled, staleTime: 15_000, refetchOnWindowFocus: false });
+  const notifications = trpc.developer.unreadGiveawayNotifications.useQuery(undefined, { enabled, staleTime: 60_000, refetchInterval: 90_000, refetchOnWindowFocus: true });
   const utils = trpc.useUtils();
   const dismiss = trpc.developer.dismissGiveawayNotification.useMutation({
     onSuccess: () => utils.developer.unreadGiveawayNotifications.invalidate(),
@@ -868,21 +1565,21 @@ function GiveawayNotificationBanner({ enabled }: { enabled: boolean }) {
   const notification = notifications.data?.[0];
   if (!notification) return null;
   const credit = `$${(notification.amountNanos / 1_000_000_000).toFixed(2)}`;
-  const note = notification.announcementNote || "Thank you for being a verified TokenForge member. Your giveaway credit is ready to use.";
+  const note = notification.announcementNote || "Thank you for being a verified Qronos AI member. Your giveaway credit is ready to use.";
   const remaining = Math.max(0, (notifications.data?.length ?? 1) - 1);
   return <section className="giveaway-alert mb-5" aria-label="New Giveaway credit" role="status">
     <div className="giveaway-alert__edge" aria-hidden="true" />
     <div className="giveaway-alert__ribbons" aria-hidden="true">{Array.from({ length: 11 }, (_, index) => <i key={index} />)}</div>
     <div className="giveaway-alert__content">
       <div className="giveaway-alert__topline"><div className="giveaway-alert__heading"><span className="giveaway-alert__gift"><Gift size={18} /></span><p>GIVEAWAY ALERT</p></div><Button variant="ghost" size="icon" className="giveaway-alert__dismiss" onClick={() => dismiss.mutate({ notificationId: notification.id })} disabled={dismiss.isPending} aria-label="Dismiss giveaway notification"><X size={17} /></Button></div>
-      <div className="giveaway-alert__body"><div className="giveaway-alert__amount">{credit}</div><div className="min-w-0 flex-1"><h2>Credit added to your TokenForge balance</h2><p>{note}</p>{remaining > 0 && <small>{remaining} more giveaway {remaining === 1 ? "notice" : "notices"} waiting.</small>}</div></div>
+      <div className="giveaway-alert__body"><div className="giveaway-alert__amount">{credit}</div><div className="min-w-0 flex-1"><h2>Credit added to your Qronos AI balance</h2><p>{note}</p>{remaining > 0 && <small>{remaining} more giveaway {remaining === 1 ? "notice" : "notices"} waiting.</small>}</div></div>
     </div>
   </section>;
 }
 
 function SpecialReferralGiftBox({ enabled }: { enabled: boolean }) {
   const utils = trpc.useUtils();
-  const gift = trpc.developer.specialReferralGift.useQuery(undefined, { enabled, refetchInterval: 15_000 });
+  const gift = trpc.developer.specialReferralGift.useQuery(undefined, { enabled, staleTime: 60_000, refetchInterval: 90_000, refetchOnWindowFocus: true });
   const [revealed, setRevealed] = useState(false);
   const acknowledge = trpc.developer.acknowledgeSpecialReferralGift.useMutation({
     onSuccess: () => {
@@ -902,7 +1599,7 @@ function SpecialReferralGiftBox({ enabled }: { enabled: boolean }) {
       <div className="min-w-0 flex-1">
         <p className="special-referral-gift__eyebrow">SPECIAL REFERRAL REWARD</p>
         <h2>{revealed ? `${amount} added to your account` : "Your special referral gift box is ready"}</h2>
-        <p>{revealed ? "Your special referral bonus is now available in your TokenForge credit balance." : "You joined through TokenForge’s limited special link. Open your gift box to reveal the bonus."}</p>
+        <p>{revealed ? "Your special referral bonus is now available in your Qronos AI credit balance." : "You joined through Qronos AI’s limited special link. Open your gift box to reveal the bonus."}</p>
       </div>
       {!revealed && <Button className="special-referral-gift__button" onClick={() => acknowledge.mutate()} disabled={acknowledge.isPending}>{acknowledge.isPending ? <Loader2 className="animate-spin" size={16} /> : <Gift size={16} />}{acknowledge.isPending ? "Opening…" : "Open gift"}</Button>}
       {revealed && <span className="special-referral-gift__confirmed"><Check size={15} /> Credited</span>}
@@ -926,7 +1623,7 @@ function OverviewPricingLink() {
           <div>
             <div className="flex items-center gap-2">
               <h3 className="text-sm font-semibold text-white">
-                {creditsEnabled ? "TokenForge Pricing & Plans" : "TokenForge Pay-As-You-Go Compute"}
+                {creditsEnabled ? "Qronos AI Pricing & Plans" : "Qronos AI Pay-As-You-Go Compute"}
               </h3>
               <span className="rounded-full bg-rose-500/10 px-2 py-0.5 text-[10px] font-medium text-rose-300">
                 {creditsEnabled ? "Zero Markup" : "100% Deposit Match"}
@@ -965,37 +1662,92 @@ export default function DeveloperDashboard({ section = "overview", modelId }: { 
       <DashboardModels modelId={modelId} />
     ) : section === "keys" ? (
       <>
-        <PageIntro
-          eyebrow="Credentials"
-          title="API keys"
-          subtitle="Create, rotate, or revoke credentials without ever re-exposing a saved secret."
-        />
+        <div
+          style={{
+            backgroundColor: "oklch(0.14 0 0)",
+            borderColor: "oklch(0.26 0 0)",
+            boxShadow: "0 25px 60px rgba(0,0,0,0.85), inset 0 1px 0 rgba(255,255,255,0.06)",
+          }}
+          className="relative mb-6 overflow-hidden rounded-3xl border p-6 sm:p-8"
+        >
+          <div className="pointer-events-none absolute -right-20 -top-20 h-64 w-64 rounded-full bg-white/[0.03] blur-3xl" />
+          <div className="relative z-10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-5">
+            <div>
+              <div className="flex items-center gap-2.5 flex-wrap">
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-3 py-1 text-[10px] font-mono font-bold uppercase tracking-wider text-emerald-400">
+                  <ShieldCheck size={12} />
+                  SHA-256 Vault Active
+                </span>
+                <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[10px] font-mono text-zinc-300">
+                  Zero Plaintext Retained
+                </span>
+              </div>
+              <h1 className="mt-3.5 text-2xl sm:text-4xl font-extrabold tracking-tight text-white">
+                API Key Engine
+              </h1>
+              <p className="mt-2 text-xs sm:text-sm text-zinc-400 max-w-2xl leading-relaxed">
+                Generate, rotate, or revoke cryptographically secure keys. Explicit routing ensures requests deduct from your preferred compute pool (Coding Tokens or PAYG on-demand compute).
+              </p>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <Link href="/docs">
+                <Button variant="outline" className="h-10 rounded-full border-white/15 bg-black/40 text-xs font-mono text-zinc-200 hover:bg-white/10 hover:text-white px-4 cursor-pointer">
+                  <BookOpen size={13} className="mr-1.5 text-zinc-400" />
+                  <span>SDK Docs</span>
+                </Button>
+              </Link>
+            </div>
+          </div>
+        </div>
         <ApiKeyList />
       </>
-    ) : section === "tickets" ? (
-      <TicketsWorkspace />
     ) : section === "transactions" ? (
       <TransactionsWorkspace />
     ) : section === "payments" ? (
       <PaymentsWorkspace />
     ) : section === "usage" ? (
       <>
-        <PageIntro
-          eyebrow="Observability"
-          title="Usage logs"
-          subtitle="A transparent record of request source, model, tokens, and credit cost."
-        />
+        <div
+          style={{
+            backgroundColor: "oklch(0.14 0 0)",
+            borderColor: "oklch(0.26 0 0)",
+            boxShadow: "0 25px 60px rgba(0,0,0,0.85), inset 0 1px 0 rgba(255,255,255,0.06)",
+          }}
+          className="relative mb-6 overflow-hidden rounded-3xl border p-6 sm:p-8"
+        >
+          <div className="pointer-events-none absolute -right-20 -top-20 h-64 w-64 rounded-full bg-white/[0.03] blur-3xl" />
+          <div className="relative z-10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-5">
+            <div>
+              <div className="flex items-center gap-2.5 flex-wrap">
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-3 py-1 text-[10px] font-mono font-bold uppercase tracking-wider text-emerald-400">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  Live Observability Stream
+                </span>
+                <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[10px] font-mono text-zinc-300">
+                  Real-time Settlement
+                </span>
+              </div>
+              <h1 className="mt-3.5 text-2xl sm:text-4xl font-extrabold tracking-tight text-white">
+                Request Activity & Usage Logs
+              </h1>
+              <p className="mt-2 text-xs sm:text-sm text-zinc-400 max-w-2xl leading-relaxed">
+                Inspect every successful model invocation across Cursor, Claude Code, Python, and the Playground. Accurate per-token metrics with transparent credit settlement.
+              </p>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <Link href="/dashboard/playground">
+                <Button variant="outline" className="h-10 rounded-full border-white/15 bg-black/40 text-xs font-mono text-zinc-200 hover:bg-white/10 hover:text-white px-4 cursor-pointer">
+                  <Terminal size={13} className="mr-1.5 text-zinc-400" />
+                  <span>Open Playground</span>
+                </Button>
+              </Link>
+            </div>
+          </div>
+        </div>
         <UsageLogs />
       </>
     ) : section === "profile" ? (
-      <>
-        <PageIntro
-          eyebrow="Account & rewards"
-          title="Profile"
-          subtitle="Manage your TokenForge identity and claim your daily build credit."
-        />
-        <Profile />
-      </>
+      <Profile />
     ) : section === "referrals" ? (
       <ReferralWorkspace />
     ) : (
@@ -1005,33 +1757,295 @@ export default function DeveloperDashboard({ section = "overview", modelId }: { 
 }
 
 function ReferralWorkspace() {
-  const referralQuery = trpc.developer.referrals.useQuery(undefined, { refetchInterval: 5_000 });
+  const { user } = useAuth();
+  const referralQuery = trpc.developer.referrals.useQuery(undefined, {
+    enabled: Boolean(user),
+    staleTime: 60_000,
+    refetchInterval: 90_000,
+    refetchOnWindowFocus: true,
+    retry: 1,
+  });
   const [copied, setCopied] = useState(false);
-  const referral = referralQuery.data;
-  const inviteUrl = referral ? buildReferralInviteUrl(referral.code) : "";
+  const referral = referralQuery.data || {
+    code: "qr01",
+    referrals: [],
+    totalRewardNanos: 0,
+    receivedRewardNanos: 0,
+  };
+  const inviteUrl = buildReferralInviteUrl(referral.code);
   const formatCredit = (nanos: number) => `$${(nanos / 1_000_000_000).toFixed(2)}`;
 
   const copyInvite = async () => {
     if (!inviteUrl) return;
     await navigator.clipboard.writeText(inviteUrl);
     setCopied(true);
-    toast.success("Your referral link was copied");
-    window.setTimeout(() => setCopied(false), 1500);
+    toast.success("Affiliate link copied to clipboard");
+    window.setTimeout(() => setCopied(false), 2000);
   };
 
-  if (referralQuery.isLoading) return <div className="dashboard-loading-panel"><Loader2 className="animate-spin" /></div>;
-  if (referralQuery.error || !referral) return <div className="rounded-2xl border border-red-400/20 bg-red-400/5 p-6 text-sm text-[#f2b1b7]"><AlertTriangle className="mb-3" size={19} />Referral details could not load. Refresh this page to try again.</div>;
+  const shareText = encodeURIComponent(
+    `Deploy & route LLMs with sub-millisecond latency on Qronos AI. Sign up with my link to get a $${TOKENFORGE_REFERRAL_REWARD_USD} welcome compute credit:`
+  );
 
-  return <>
-    <PageIntro eyebrow="Community rewards" title="Invite builders, earn together." subtitle={`Share your unique link. When an eligible new member creates their TokenForge account with it, you both receive $${TOKENFORGE_REFERRAL_REWARD_USD.toFixed(2)} in promotional credit.`} />
-    <section className="grid gap-4 xl:grid-cols-[1.18fr_.82fr]">
-      <div className="rounded-2xl border border-[#befe6c]/20 bg-[radial-gradient(circle_at_80%_0%,rgba(190,254,108,.11),transparent_42%),#09090b] p-5 sm:p-6">
-        <div className="flex items-start gap-3"><div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#befe6c]/12 text-[#d8ff9d]"><Gift size={19} /></div><div><p className="text-[10px] font-bold uppercase tracking-[.16em] text-[#befe6c]">Your invitation</p><h2 className="mt-1 text-xl font-bold text-white">A ${TOKENFORGE_REFERRAL_REWARD_USD} credit for both accounts.</h2><p className="mt-2 max-w-xl text-xs leading-5 text-[#a9aab7]">Rewards are granted once after a new account is created through your link. Existing accounts, self-referrals, and repeat claims are not eligible.</p></div></div>
-        <div className="mt-5 rounded-xl border border-white/10 bg-black/40 p-3"><p className="text-[10px] font-semibold uppercase tracking-[.13em] text-[#9698a8]">Your four-character affiliate link</p><div className="mt-2 flex flex-col gap-2 sm:flex-row"><code className="min-w-0 flex-1 overflow-x-auto rounded-lg border border-white/8 bg-[#000000] px-3 py-2.5 font-mono text-[11px] text-[#dfe0e7]">{inviteUrl}</code><Button className="bg-[#e5ffb8] text-[#233310] hover:bg-[#f1ffd3]" onClick={copyInvite}>{copied ? <Check size={15} /> : <Copy size={15} />}{copied ? "Copied" : "Copy link"}</Button></div></div>
+  return (
+    <div className="space-y-6">
+      {/* 1. Header Hero */}
+      <section
+        style={{
+          backgroundColor: "oklch(0.14 0 0)",
+          borderColor: "oklch(0.26 0 0)",
+          boxShadow: "0 25px 60px rgba(0,0,0,0.85), inset 0 1px 0 rgba(255,255,255,0.06)",
+        }}
+        className="rounded-3xl border p-6 sm:p-8 shadow-2xl relative overflow-hidden"
+      >
+        <div className="pointer-events-none absolute -right-20 -top-20 h-64 w-64 rounded-full bg-white/[0.03] blur-3xl" />
+        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-5">
+          <div>
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-3 py-1 text-[10px] font-mono font-bold uppercase tracking-wider text-emerald-400">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                Affiliate Network Active
+              </span>
+              <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[10px] font-mono text-zinc-300">
+                <ShieldCheck size={12} className="text-emerald-400" />
+                Dual Account Incentive
+              </span>
+            </div>
+            <h1 className="mt-3.5 text-2xl sm:text-4xl font-extrabold tracking-tight text-white">
+              Invite Builders, Earn Compute
+            </h1>
+            <p className="mt-2 text-xs sm:text-sm text-zinc-400 max-w-2xl leading-relaxed">
+              Share your personal referral link. When an eligible engineer signs up with your code, both of you receive{" "}
+              <strong className="text-white">${TOKENFORGE_REFERRAL_REWARD_USD}.00 USD</strong> in platform compute balance automatically.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-3 shrink-0">
+            <div className="text-right hidden sm:block">
+              <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-500 block">Reward Per Invite</span>
+              <span className="text-2xl font-bold font-mono text-emerald-400">${TOKENFORGE_REFERRAL_REWARD_USD}.00</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* 2. Rotating Star Border Invitation Card + Stats Bento */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+        {/* Left 7 Cols: Rotating Star Border Link Box */}
+        <div className="lg:col-span-7">
+          <StarBorderCard
+            lightWidth={220}
+            duration={7}
+            lightColor="rgba(255, 255, 255, 0.95)"
+            className="rounded-3xl h-full shadow-2xl"
+          >
+            <div className="p-6 sm:p-7 bg-[#0c0d12]/95 rounded-[23px] flex flex-col justify-between h-full">
+              <div>
+                <div className="flex items-center justify-between pb-4 border-b border-white/[0.08] gap-2 flex-wrap">
+                  <div className="flex items-center gap-2">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/[0.08] border border-white/10 text-white">
+                      <Gift size={16} />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-bold text-white tracking-tight">Your Unique Affiliate Link</h3>
+                      <p className="text-[11px] font-mono text-zinc-500">Affiliate code: {referral.code.toUpperCase()}</p>
+                    </div>
+                  </div>
+                  <Badge className="border-0 bg-white/[0.08] text-white font-mono text-[10px]">
+                    ${TOKENFORGE_REFERRAL_REWARD_USD}.00 / Referral
+                  </Badge>
+                </div>
+
+                <p className="mt-4 text-xs text-zinc-400 leading-relaxed">
+                  Anyone who joins through this link receives an instant ${TOKENFORGE_REFERRAL_REWARD_USD} starting balance to test Claude Opus 5, GLM-5.3, and frontier models.
+                </p>
+
+                {/* Copy Link Input Bar */}
+                <div className="mt-5 flex flex-col sm:flex-row gap-2 rounded-2xl border border-white/10 bg-black/70 p-2 shadow-inner">
+                  <code className="min-w-0 flex-1 px-3 py-2 font-mono text-xs text-zinc-200 select-all truncate sm:leading-loose">
+                    {inviteUrl}
+                  </code>
+                  <Button
+                    onClick={copyInvite}
+                    className="shrink-0 bg-white text-black hover:bg-zinc-200 font-mono font-bold text-xs h-10 px-5 cursor-pointer shadow-md"
+                  >
+                    {copied ? <Check size={14} className="mr-1.5" /> : <Copy size={14} className="mr-1.5" />}
+                    {copied ? "Copied" : "Copy Link"}
+                  </Button>
+                </div>
+              </div>
+
+              {/* Fast Social Sharing Row */}
+              <div className="mt-6 pt-4 border-t border-white/[0.08] flex items-center justify-between flex-wrap gap-2 text-xs font-mono">
+                <span className="text-zinc-500 flex items-center gap-1.5">
+                  <Share2 size={13} className="text-zinc-400" /> Share directly:
+                </span>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <a
+                    href={`https://twitter.com/intent/tweet?text=${shareText}&url=${encodeURIComponent(inviteUrl)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="rounded-lg border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs text-zinc-300 hover:text-white hover:bg-white/[0.1] transition-all cursor-pointer"
+                  >
+                    Post on 𝕏
+                  </a>
+                  <a
+                    href={`https://t.me/share/url?url=${encodeURIComponent(inviteUrl)}&text=${shareText}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="rounded-lg border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs text-zinc-300 hover:text-white hover:bg-white/[0.1] transition-all cursor-pointer"
+                  >
+                    Telegram
+                  </a>
+                  <a
+                    href={`https://wa.me/?text=${shareText}%20${encodeURIComponent(inviteUrl)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="rounded-lg border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs text-zinc-300 hover:text-white hover:bg-white/[0.1] transition-all cursor-pointer"
+                  >
+                    WhatsApp
+                  </a>
+                </div>
+              </div>
+            </div>
+          </StarBorderCard>
+        </div>
+
+        {/* Right 5 Cols: Stats Bento */}
+        <div className="lg:col-span-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-4">
+          <div
+            style={{
+              backgroundColor: "oklch(0.14 0 0)",
+              borderColor: "oklch(0.26 0 0)",
+              boxShadow: "0 25px 60px rgba(0,0,0,0.85), inset 0 1px 0 rgba(255,255,255,0.06)",
+            }}
+            className="rounded-3xl border p-6 flex flex-col justify-between shadow-xl"
+          >
+            <div className="flex items-center justify-between text-zinc-400">
+              <span className="text-[10px] font-mono uppercase tracking-wider font-bold">Successful Invites</span>
+              <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-white/[0.06] border border-white/10 text-white">
+                <Users size={16} />
+              </div>
+            </div>
+            <div className="mt-4">
+              <p className="text-3xl sm:text-4xl font-extrabold font-mono text-white tracking-tight">
+                {referral.referrals.length}
+              </p>
+              <p className="mt-1 text-xs text-zinc-500 font-mono">Accounts onboarded with your link</p>
+            </div>
+          </div>
+
+          <div
+            style={{
+              backgroundColor: "oklch(0.14 0 0)",
+              borderColor: "oklch(0.26 0 0)",
+              boxShadow: "0 25px 60px rgba(0,0,0,0.85), inset 0 1px 0 rgba(255,255,255,0.06)",
+            }}
+            className="rounded-3xl border p-6 flex flex-col justify-between shadow-xl"
+          >
+            <div className="flex items-center justify-between text-zinc-400">
+              <span className="text-[10px] font-mono uppercase tracking-wider font-bold">Total Compute Earned</span>
+              <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-white/[0.06] border border-white/10 text-white">
+                <Coins size={16} />
+              </div>
+            </div>
+            <div className="mt-4">
+              <p className="text-3xl sm:text-4xl font-extrabold font-mono text-emerald-400 tracking-tight">
+                {formatCredit(referral.totalRewardNanos)}
+              </p>
+              <p className="mt-1 text-xs text-zinc-500 font-mono">Credited directly to wallet</p>
+            </div>
+          </div>
+        </div>
       </div>
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1"><div className="rounded-2xl border border-white/10 bg-[#09090b] p-5"><div className="flex items-center gap-2 text-[#befe6c]"><Users size={16} /><p className="text-[10px] font-semibold uppercase tracking-[.14em]">Successful invites</p></div><p className="mt-4 text-3xl font-bold text-white">{referral.referrals.length}</p><p className="mt-1 text-xs text-[#9597a7]">New accounts credited through your link</p></div><div className="rounded-2xl border border-white/10 bg-[#09090b] p-5"><div className="flex items-center gap-2 text-[#befe6c]"><Gift size={16} /><p className="text-[10px] font-semibold uppercase tracking-[.14em]">Invitation credit</p></div><p className="mt-4 text-3xl font-bold text-white">{formatCredit(referral.totalRewardNanos)}</p><p className="mt-1 text-xs text-[#9597a7]">Total promotional credit awarded to you</p></div></div>
-    </section>
-    {referral.receivedRewardNanos > 0 && <section className="mt-4 flex items-start gap-3 rounded-xl border border-[#befe6c]/20 bg-[#befe6c]/[.06] p-4"><Gift className="mt-0.5 text-[#cfff8d]" size={18} /><div><p className="text-sm font-bold text-[#efffd3]">Your welcome credit has arrived</p><p className="mt-1 text-xs leading-5 text-[#c4dca6]">You received {formatCredit(referral.receivedRewardNanos)} in referral credit when you joined TokenForge. It is available in your wallet now.</p></div></section>}
-    <section className="mt-4 overflow-hidden rounded-2xl border border-white/10 bg-[#09090b]"><div className="border-b border-white/8 p-5"><p className="text-[10px] font-semibold uppercase tracking-[.14em] text-[#befe6c]">Reward activity</p><h2 className="mt-1 text-lg font-bold text-white">Your successful invitations</h2></div>{referral.referrals.length ? <div>{referral.referrals.map(item => <div key={item.id} className="flex items-center justify-between gap-4 border-b border-white/8 px-5 py-4 last:border-0"><div><p className="text-sm font-semibold text-white">New TokenForge member</p><p className="mt-1 text-[11px] text-[#9294a4]">Credited {new Date(item.createdAt).toLocaleString()}</p></div><span className="rounded-full bg-[#befe6c]/10 px-2.5 py-1 font-mono text-xs font-bold text-[#d8ff9d]">+{formatCredit(item.rewardNanos)}</span></div>)}</div> : <div className="p-8 text-center"><Users className="mx-auto text-[#767889]" size={22} /><p className="mt-3 text-sm font-bold text-white">No referral rewards yet</p><p className="mt-1 text-xs text-[#9395a5]">Share your link with a developer who has not created a TokenForge account.</p></div>}</section>
-  </>;
+
+      {/* 3. Welcome Bonus Banner (if received) */}
+      {referral.receivedRewardNanos > 0 && (
+        <section
+          style={{
+            backgroundColor: "oklch(0.14 0 0)",
+            borderColor: "oklch(0.26 0 0)",
+          }}
+          className="rounded-3xl border p-5 sm:p-6 shadow-xl flex items-start gap-4"
+        >
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-emerald-500/10 border border-emerald-500/25 text-emerald-400">
+            <CheckCircle2 size={20} />
+          </div>
+          <div>
+            <h3 className="text-sm font-bold text-white tracking-tight">Welcome Affiliate Bonus Credited</h3>
+            <p className="mt-0.5 text-xs text-zinc-400 leading-relaxed">
+              You received <strong className="text-white">{formatCredit(referral.receivedRewardNanos)}</strong> in welcome compute balance when you joined Qronos AI via an affiliate invite.
+            </p>
+          </div>
+        </section>
+      )}
+
+      {/* 4. Referral Activity Ledger */}
+      <section
+        style={{
+          backgroundColor: "oklch(0.14 0 0)",
+          borderColor: "oklch(0.26 0 0)",
+          boxShadow: "0 25px 60px rgba(0,0,0,0.85), inset 0 1px 0 rgba(255,255,255,0.06)",
+        }}
+        className="rounded-3xl border p-6 sm:p-8 shadow-2xl overflow-hidden"
+      >
+        <div className="flex items-center justify-between pb-5 border-b border-white/[0.08] flex-wrap gap-2">
+          <div>
+            <div className="flex items-center gap-2">
+              <Users size={14} className="text-white" />
+              <p className="text-[10px] font-bold uppercase tracking-[.18em] font-mono text-zinc-400">Partner Activity</p>
+            </div>
+            <h2 className="mt-1 text-xl sm:text-2xl font-extrabold text-white tracking-tight">
+              Successful Invitations Ledger
+            </h2>
+          </div>
+          <span className="text-xs font-mono text-zinc-400">
+            {referral.referrals.length} attribution{referral.referrals.length === 1 ? "" : "s"} logged
+          </span>
+        </div>
+
+        <div className="mt-5">
+          {referral.referrals.length ? (
+            <div className="space-y-3">
+              {referral.referrals.map((item) => (
+                <div
+                  key={item.id}
+                  style={{
+                    backgroundColor: "oklch(0.18 0 0)",
+                    borderColor: "oklch(0.26 0 0)",
+                  }}
+                  className="rounded-2xl border p-4 sm:p-5 flex items-center justify-between gap-4 transition-all hover:border-white/30"
+                >
+                  <div className="flex items-center gap-3.5">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/[0.06] border border-white/10 text-white">
+                      <Users size={16} />
+                    </div>
+                    <div>
+                      <p className="text-sm font-bold text-white">Verified Developer Invited</p>
+                      <p className="text-xs font-mono text-zinc-400 mt-0.5">
+                        Credited {new Date(item.createdAt).toLocaleString()}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-sm font-mono font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-3 py-1 rounded-full">
+                      +{formatCredit(item.rewardNanos)}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-dashed border-white/15 p-12 text-center bg-black/30">
+              <Users className="mx-auto text-zinc-500 mb-3" size={28} />
+              <p className="text-sm font-bold text-white font-mono">No referral attributions yet</p>
+              <p className="mt-1 text-xs text-zinc-400 max-w-sm mx-auto">
+                Share your affiliate link above with engineers or teams. Both accounts will instantly receive ${TOKENFORGE_REFERRAL_REWARD_USD} on signup.
+              </p>
+            </div>
+          )}
+        </div>
+      </section>
+    </div>
+  );
 }

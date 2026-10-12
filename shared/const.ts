@@ -1,17 +1,19 @@
 export const COOKIE_NAME = "app_session_id";
 export const ONE_YEAR_MS = 1000 * 60 * 60 * 24 * 365;
+export const THIRTY_DAYS_MS = 1000 * 60 * 60 * 24 * 30;
+export const DEFAULT_SESSION_MAX_AGE_MS = THIRTY_DAYS_MS;
 export const AXIOS_TIMEOUT_MS = 30_000;
 export const UNAUTHED_ERR_MSG = 'Please login (10001)';
 export const NOT_ADMIN_ERR_MSG = 'You do not have required permission (10002)';
 
 /**
  * Single source of truth for the public origin. The server resolves it from
- * TOKENFORGE_PUBLIC_ORIGIN (its OAuth callback builder already does this);
- * the client reads VITE_PUBLIC_ORIGIN. Falls back to the deployed origin.
+ * QRONOS_PUBLIC_ORIGIN; the client reads VITE_PUBLIC_ORIGIN. Falls back to localhost.
  */
 export const PUBLIC_ORIGIN =
-  (typeof process !== "undefined" && process.env?.VITE_PUBLIC_ORIGIN) ||
-  "https://tokenforge.ai.studio";
+  (typeof window !== "undefined" && window.location?.origin) ||
+  (typeof process !== "undefined" && (process.env?.QRONOS_PUBLIC_ORIGIN || process.env?.VITE_PUBLIC_ORIGIN || process.env?.APP_URL)) ||
+  "http://localhost:3000";
 
 export const PRICING_URL = `${PUBLIC_ORIGIN}/pricing`;
 

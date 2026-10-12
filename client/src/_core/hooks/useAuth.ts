@@ -21,18 +21,6 @@ export function useAuth(options?: UseAuthOptions) {
     refetchOnWindowFocus: false,
   });
 
-  const sessionTokenQuery = trpc.auth.getSessionToken.useQuery(undefined, {
-    enabled: Boolean(meQuery.data),
-    staleTime: 1000 * 60 * 60 * 24, // 24 hours
-    refetchOnWindowFocus: false,
-  });
-
-  useEffect(() => {
-    if (sessionTokenQuery.data?.sessionToken) {
-      persistSessionToken(sessionTokenQuery.data.sessionToken);
-    }
-  }, [sessionTokenQuery.data?.sessionToken]);
-
   const logoutMutation = trpc.auth.logout.useMutation({
     onSuccess: () => {
       utils.auth.me.setData(undefined, null);
@@ -51,8 +39,6 @@ export function useAuth(options?: UseAuthOptions) {
       }
       throw error;
     } finally {
-      // Clear persistent tokens across localStorage and sessionStorage so
-      // header-based sessions and storage-based sessions are fully logged out.
       clearStoredSession();
       utils.auth.me.setData(undefined, null);
       await utils.auth.me.invalidate();
@@ -60,10 +46,6 @@ export function useAuth(options?: UseAuthOptions) {
   }, [logoutMutation, utils]);
 
   const state = useMemo(() => {
-    localStorage.setItem(
-      "manus-runtime-user-info",
-      JSON.stringify(meQuery.data)
-    );
     return {
       user: meQuery.data ?? null,
       loading: meQuery.isLoading || logoutMutation.isPending,

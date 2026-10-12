@@ -245,16 +245,16 @@ export function CacheDebuggerTab() {
 
       {/* Session Filter indicator if active */}
       {filterSession && (
-        <div className="flex items-center justify-between rounded-xl border border-[#c9ff73]/20 bg-[#c9ff73]/5 px-4 py-2 text-xs text-[#c9ff73]">
+        <div className="flex items-center justify-between rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-xs font-mono text-emerald-300">
           <span>
-            Filtered by Session: <code className="font-mono font-bold">{filterSession}</code> ({filteredRequests.length}{" "}
+            Filtered by Session: <code className="font-mono font-bold text-white">{filterSession}</code> ({filteredRequests.length}{" "}
             turns)
           </span>
           <Button
             size="sm"
             variant="ghost"
             onClick={() => setFilterSession(null)}
-            className="h-6 px-2 text-xs text-[#c9ff73] hover:bg-[#c9ff73]/10"
+            className="h-6 px-2 text-xs text-emerald-300 hover:bg-emerald-500/20 cursor-pointer font-mono"
           >
             <X size={12} className="mr-1" /> Clear Filter
           </Button>
@@ -262,18 +262,24 @@ export function CacheDebuggerTab() {
       )}
 
       {/* Requests Feed Table */}
-      <div className="dashboard-card overflow-hidden">
-        <div className="flex items-center justify-between border-b border-white/10 px-5 py-3">
+      <div
+        style={{
+          backgroundColor: "oklch(0.14 0 0)",
+          borderColor: "oklch(0.26 0 0)",
+        }}
+        className="rounded-3xl border overflow-hidden shadow-xl"
+      >
+        <div className="flex items-center justify-between border-b border-white/10 px-5 py-3.5">
           <div className="flex items-center gap-2">
-            <Layers size={16} className="text-[#c9ff73]" />
+            <Layers size={16} className="text-white" />
             <h3 className="text-sm font-semibold text-white">Recent Requests ({filteredRequests.length})</h3>
           </div>
-          <span className="text-[11px] text-[#808193]">In-memory ring buffer (last 100 entries)</span>
+          <span className="text-[11px] font-mono text-zinc-500">In-memory ring buffer (last 100 entries)</span>
         </div>
 
         {requestsQuery.isLoading ? (
           <div className="grid h-48 place-items-center">
-            <Loader2 className="animate-spin text-[#c9ff73]" size={24} />
+            <Loader2 className="animate-spin text-zinc-400" size={24} />
           </div>
         ) : filteredRequests.length === 0 ? (
           <div className="grid min-h-[220px] place-items-center p-6 text-center">

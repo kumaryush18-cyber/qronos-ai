@@ -1,0 +1,13 @@
+allowBuilds:
+  '@firebase/util': true
+  bufferutil: true
+  esbuild: true
+  protobufjs: true
+  utf-8-validate: true
+  '@tailwindcss/oxide': true
+
+patchedDependencies:
+  'wouter@3.7.1': patches/wouter@3.7.1.patch
+
+overrides:
+  'tailwindcss>nanoid': '3.3.7'

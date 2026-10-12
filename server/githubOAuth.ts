@@ -1,4 +1,4 @@
-import { COOKIE_NAME, ONE_YEAR_MS, PUBLIC_ORIGIN } from "@shared/const";
+import { COOKIE_NAME, DEFAULT_SESSION_MAX_AGE_MS, PUBLIC_ORIGIN } from "@shared/const";
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { parse as parseCookieHeader } from "cookie";
 import fs from "node:fs";
@@ -15,7 +15,7 @@ const GITHUB_API_URL = "https://api.github.com";
 const GITHUB_STATE_COOKIE = "tf_github_oauth_state";
 const GITHUB_VERIFIER_COOKIE = "tf_github_oauth_verifier";
 const GITHUB_REFERRAL_COOKIE = "tf_github_oauth_ref";
-const LOCAL_SESSION_MAX_AGE_MS = ONE_YEAR_MS;
+const LOCAL_SESSION_MAX_AGE_MS = DEFAULT_SESSION_MAX_AGE_MS;
 export const MINIMUM_GITHUB_ACCOUNT_AGE_MS = 14 * 24 * 60 * 60 * 1000;
 export const GITHUB_OAUTH_LOG_FILE = "/tmp/github-oauth.log";
 
@@ -58,7 +58,7 @@ export function appOrigin(req: Pick<Request, "protocol" | "hostname" | "headers"
   }
 
   // Fallback to explicitly configured environment origins
-  const configuredOrigin = process.env.TOKENFORGE_PUBLIC_ORIGIN?.trim() || process.env.APP_URL?.trim();
+  const configuredOrigin = process.env.QRONOS_PUBLIC_ORIGIN?.trim() || process.env.APP_URL?.trim();
   if (configuredOrigin) {
     try {
       return new URL(configuredOrigin).origin;
@@ -149,7 +149,7 @@ async function getGitHubIdentity(accessToken: string) {
   const emailsResponse = await fetch(`${GITHUB_API_URL}/user/emails`, { headers });
   const emails = emailsResponse.ok ? await emailsResponse.json() as GitHubEmail[] : [];
   const email = selectVerifiedGitHubEmail(profile.email, emails);
-  if (!profile.id || !email || !profile.created_at) throw new Error("GitHub did not provide the verified identity details required by TokenForge");
+  if (!profile.id || !email || !profile.created_at) throw new Error("GitHub did not provide the verified identity details required by Qronos AI");
   return { providerUserId: String(profile.id), email, name: profile.name?.trim() || profile.login?.trim() || null, accountCreatedAt: profile.created_at };
 }
 
@@ -200,7 +200,17 @@ function renderOAuthError(res: Response, errorKey: string, heading: string, deta
 }
 
 export function registerGitHubOAuthRoutes(app: Express) {
-  app.get("/api/auth/github/logs", (_req: Request, res: Response) => {
+  app.get("/api/auth/github/logs", async (req: Request, res: Response) => {
+    // Administrator authentication enforcement: protect user PII and OAuth audit history
+    try {
+      const user = await sdk.authenticateRequest(req);
+      if (!user?.isAdminSession) {
+        return res.status(403).json({ error: "Forbidden: Administrator session required to access audit logs" });
+      }
+    } catch {
+      return res.status(401).json({ error: "Unauthorized: Authentication required" });
+    }
+
     try {
       if (fs.existsSync(GITHUB_OAUTH_LOG_FILE)) {
         const content = fs.readFileSync(GITHUB_OAUTH_LOG_FILE, "utf8");
@@ -325,14 +335,14 @@ export function registerGitHubOAuthRoutes(app: Express) {
       const mayBypassAge = mayBypassGitHubAccountAge({ verifiedEmail: identity.email, hasPreProvisionedReservation });
       if (!mayBypassAge && !isGitHubAccountOldEnough(identity.accountCreatedAt)) {
         logGitHubOAuth("Account Age Validation Failed", { accountCreatedAt: identity.accountCreatedAt });
-        renderOAuthError(res, "account-too-new", "Account Too New", "GitHub accounts must be at least 14 days old to register on TokenForge.");
+        renderOAuthError(res, "account-too-new", "Account Too New", "GitHub accounts must be at least 14 days old to register on Qronos AI.");
         return;
       }
 
       const emailPolicy = await getEmailAllowlistConfig();
       if (!isPermanentEmailAddress(identity.email, emailPolicy?.entries)) {
         logGitHubOAuth("Email Address Disallowed", { email: identity.email });
-        renderOAuthError(res, "email-not-allowed", "Email Not Allowed", "Disposable or disallowed email addresses cannot be used with TokenForge.");
+        renderOAuthError(res, "email-not-allowed", "Email Not Allowed", "Disposable or disallowed email addresses cannot be used with Qronos AI.");
         return;
       }
 
@@ -344,7 +354,7 @@ export function registerGitHubOAuthRoutes(app: Express) {
       }
 
       const sessionVersion = await getAuthSessionVersion();
-      const sessionToken = await sdk.createSessionToken(result.user.openId, { expiresInMs: LOCAL_SESSION_MAX_AGE_MS, name: result.user.name ?? "TokenForge developer", sessionVersion });
+      const sessionToken = await sdk.createSessionToken(result.user.openId, { expiresInMs: LOCAL_SESSION_MAX_AGE_MS, name: result.user.name ?? "Qronos AI developer", sessionVersion });
       const cookieOpts = getSessionCookieOptions(req);
       res.cookie(COOKIE_NAME, sessionToken, {
         ...cookieOpts,

@@ -5,6 +5,7 @@ vi.mock("./db", () => ({
   getAuthSessionVersion: vi.fn(),
   getUserByOpenId: vi.fn(),
   upsertUser: vi.fn(),
+  isRevokedSessionTokenHashInDb: vi.fn(async () => false),
 }));
 
 import * as db from "./db";

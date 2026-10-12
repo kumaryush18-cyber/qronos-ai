@@ -311,6 +311,38 @@ export function registerSolanaPayGateway(app: Express) {
         });
       }
 
+      // Cryptographic on-chain transfer verification: Verify recipient and amount
+      const accountKeys = tx.transaction.message.accountKeys;
+      const merchantIndex = accountKeys.findIndex((acc: any) => {
+        const keyStr = typeof acc === "string" ? acc : (acc?.pubkey ? acc.pubkey.toString() : acc?.toString?.() || "");
+        return keyStr === MERCHANT_PUBLIC_KEY;
+      });
+
+      if (merchantIndex === -1) {
+        console.warn(`[Solana Pay] Fraud alert: Order ${orderId} transaction ${txSignature} did not involve merchant ${MERCHANT_PUBLIC_KEY}`);
+        return res.status(400).json({
+          success: false,
+          status: "FAILED",
+          error: "Invalid transaction: Merchant wallet was not included in transaction accounts.",
+        });
+      }
+
+      const preBalance = tx.meta.preBalances?.[merchantIndex] ?? 0;
+      const postBalance = tx.meta.postBalances?.[merchantIndex] ?? 0;
+      const receivedLamports = postBalance - preBalance;
+      const expectedLamports = Math.floor(expectedSol * LAMPORTS_PER_SOL);
+      // Strict tolerance: within 0.1% or 5,000 lamports
+      const minRequiredLamports = Math.max(0, expectedLamports - 5000);
+
+      if (receivedLamports < minRequiredLamports) {
+        console.warn(`[Solana Pay] Fraud alert: Underpayment for order ${orderId}: received ${receivedLamports} lamports, expected ${expectedLamports}`);
+        return res.status(400).json({
+          success: false,
+          status: "FAILED",
+          error: `Payment amount insufficient: Received ${(receivedLamports / LAMPORTS_PER_SOL).toFixed(5)} SOL, expected ${expectedSol} SOL.`,
+        });
+      }
+
       // Mark order as PAID and credit user
       const completedAt = new Date().toISOString().slice(0, 19).replace('T', ' ');
       await db.execute(

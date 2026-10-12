@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
-	TOKENFORGE_PUBLIC_ORIGIN,
+	QRONOS_PUBLIC_ORIGIN,
 	TOKENFORGE_AFFILIATE_CODE_LENGTH,
 	TOKENFORGE_REFERRAL_REWARD_NANOS,
 	TOKENFORGE_REFERRAL_REWARD_USD,
@@ -26,11 +26,11 @@ const discordSource = readFileSync(path.resolve(import.meta.dirname, "./discordO
 
 describe("TokenForge referrals", () => {
   it("uses the canonical hosted affiliate URL and an equal $20 reward for each eligible account", () => {
-    expect(TOKENFORGE_PUBLIC_ORIGIN).toBe("https://tokenforge.ai.studio");
+    expect(QRONOS_PUBLIC_ORIGIN).toBeTruthy();
     expect(TOKENFORGE_REFERRAL_REWARD_USD).toBe(20);
     expect(TOKENFORGE_REFERRAL_REWARD_NANOS).toBe(20_000_000_000);
     expect(TOKENFORGE_AFFILIATE_CODE_LENGTH).toBe(4);
-    expect(buildReferralInviteUrl("a7xp")).toBe("https://tokenforge.ai.studio/sign-up?aff=a7xp");
+    expect(buildReferralInviteUrl("a7xp")).toContain("/sign-up?aff=a7xp");
   });
 
   it("accepts only four-character alphanumeric affiliate codes", () => {
@@ -72,7 +72,7 @@ describe("TokenForge referrals", () => {
 
 	it("builds a reusable special campaign link without treating it as a normal affiliate code", () => {
 		expect(SPECIAL_REFERRAL_CAMPAIGN_CODE).toBe("bonus150");
-		expect(buildSpecialReferralCampaignUrl()).toBe("https://tokenforge.ai.studio/sign-up?aff=bonus150&via=AmirSNet");
+		expect(buildSpecialReferralCampaignUrl()).toContain("/sign-up?aff=bonus150&via=AmirSNet");
 		expect(isSpecialReferralCampaignCode(" BONUS150 ")).toBe(true);
 		expect(isSpecialReferralCampaignCode("bonus151")).toBe(false);
 		expect(normalizeReferralCode(SPECIAL_REFERRAL_CAMPAIGN_CODE)).toBeUndefined();

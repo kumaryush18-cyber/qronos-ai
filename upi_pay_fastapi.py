@@ -29,9 +29,9 @@ from pydantic import BaseModel, Field
 # Configuration & Constants
 # ==============================================================================
 
-UPI_ID = os.getenv("UPI_ID", os.getenv("UPI_VPA", "tokenforge@upi"))
-MERCHANT_NAME = os.getenv("UPI_MERCHANT_NAME", "TokenForge")
-ADMIN_SECRET_KEY = os.getenv("ADMIN_SECRET_KEY", os.getenv("TOKENFORGE_ADMIN_PASSCODE", "")).strip()
+UPI_ID = os.getenv("UPI_ID", os.getenv("UPI_VPA", "qronosai@upi"))
+MERCHANT_NAME = os.getenv("UPI_MERCHANT_NAME", "Qronos AI")
+ADMIN_SECRET_KEY = os.getenv("ADMIN_SECRET_KEY", os.getenv("QRONOS_ADMIN_PASSCODE", "")).strip()
 
 # Preset domestic INR tiers
 UPI_PRESET_TIERS = {

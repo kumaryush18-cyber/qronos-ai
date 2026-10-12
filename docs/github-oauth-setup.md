@@ -19,9 +19,9 @@ https://ais-dev-hukhnq77hk4esm4otdhxoj-472441275739.asia-southeast1.run.app/api/
 https://ais-pre-hukhnq77hk4esm4otdhxoj-472441275739.asia-southeast1.run.app/api/auth/github/callback
 ```
 
-3. **Public / Custom Domain (when TOKENFORGE_PUBLIC_ORIGIN is configured)**:
+3. **Public / Custom Domain (when QRONOS_PUBLIC_ORIGIN is configured)**:
 ```
-https://tokenforge.ai.studio/api/auth/github/callback
+https://qronos.ai/api/auth/github/callback
 ```
 
 4. **Localhost (for local development outside Cloud Run)**:

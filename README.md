@@ -1,6 +1,6 @@
 <div align="center">
 
-# ⚡ TokenForge
+# ⚡ Qronos AI
 
 ### Enterprise-Grade Universal AI Gateway, Model Orchestration & High-Precision Settlement Platform
 
@@ -21,7 +21,7 @@
 
 ## 📌 Executive Summary
 
-Modern AI application stacks suffer from fragmented vendor APIs, erratic provider rate limits, lack of deterministic failover, and inaccurate token accounting. **TokenForge** solves these bottlenecks with an enterprise-grade API gateway and model orchestration engine.
+Modern AI application stacks suffer from fragmented vendor APIs, erratic provider rate limits, lack of deterministic failover, and inaccurate token accounting. **Qronos AI** solves these bottlenecks with an enterprise-grade API gateway and model orchestration engine.
 
 It exposes unified **OpenAI-compatible (`/v1/chat/completions`)** and **Anthropic-compatible (`/v1/messages`)** interfaces while transparently handling dynamic upstream key pooling, automated circuit-breaking, tool-call state hydration, and real-time Server-Sent Events (SSE) telemetry.
 
@@ -36,9 +36,10 @@ It exposes unified **OpenAI-compatible (`/v1/chat/completions`)** and **Anthropi
                                       └───────────────────────────┬────────────────────────────┘
                                                                   │
                                                 HTTP Bearer Token / Streaming SSE
+                                                (api_key: qr_*)
                                                                   ▼
 ┌─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
-│                                                 TOKENFORGE EDGE GATEWAY                                                 │
+│                                                  QRONOS AI EDGE GATEWAY                                                 │
 │                                                                                                                         │
 │  ┌───────────────────────────┐      ┌───────────────────────────┐      ┌─────────────────────────────────────────────┐  │
 │  │   Authentication & AuthZ  │ ───► │  Rate Limiting & Safety   │ ───► │        Universal Protocol Transformer       │  │
@@ -69,7 +70,7 @@ It exposes unified **OpenAI-compatible (`/v1/chat/completions`)** and **Anthropi
 ## 🚀 Key Capabilities
 
 ### 1. Universal Cross-SDK Compatibility
-- **Drop-in Interchangeability**: Developers point existing `OpenAI()` or `Anthropic()` client libraries to TokenForge simply by overriding `baseURL`.
+- **Drop-in Interchangeability**: Developers point existing `OpenAI()` or `Anthropic()` client libraries to Qronos AI simply by overriding `baseURL`.
 - **Bidirectional Streaming**: Translates disparate upstream chunk events into strict OpenAI `data: {"choices": [...]}` and Anthropic `event: content_block_delta` formats on the fly.
 - **Identity & Safety Sanitization**: Dynamically transforms model responses with brand and origin protection filters.
 
@@ -87,7 +88,7 @@ It exposes unified **OpenAI-compatible (`/v1/chat/completions`)** and **Anthropi
 
 ### 4. Multi-Modal Decentralized & Real-Time Payments
 - **Solana Pay**: Zero-gateway-fee, direct on-chain settlement with merchant wallet transaction verification and instant balance recharge.
-- **UPI QR Microservice**: Instant QR generation and webhook verification for seamless domestic payment flows.
+- **Direct UPI Rail**: Instant QR generation and webhook verification for seamless domestic payment flows.
 - **Credit Card / International Rails**: Unified billing via secure webhooks and audited ledger entries.
 
 ### 5. Enterprise Telemetry & Live Ops
@@ -103,16 +104,16 @@ It exposes unified **OpenAI-compatible (`/v1/chat/completions`)** and **Anthropi
 | :--- | :--- |
 | **Backend Core** | Node.js 22, Express, TypeScript, tRPC v11, Zod |
 | **Microservices** | Python 3.11, FastAPI, Uvicorn (Solana & UPI Gateways) |
-| **Database & ORM** | MySQL / Cloud SQL, Drizzle ORM, Firebase Firestore |
+| **Database & ORM** | MySQL 8.0+ / TiDB Cloud Serverless, Drizzle ORM |
 | **Frontend SPA** | React 19, Vite, Tailwind CSS v4, Radix UI, TanStack Query |
-| **Data Viz & Telemetry** | Cytoscape.js, Mermaid.js, Lucide Icons |
-| **Security & Auth** | PBKDF2 / Argon2id, AES-256-GCM, Discord OAuth 2.0, GitHub OAuth |
+| **Data Viz & Telemetry** | Cytoscape.js, Mermaid.js, Lucide Icons, Recharts |
+| **Security & Auth** | PBKDF2 / Argon2id, AES-256-GCM, GitHub OAuth, Discord OAuth |
 
 ---
 
 ## ⚡ API Specification
 
-TokenForge supports any standard LLM client with zero code changes.
+Qronos AI supports any standard LLM client with zero code changes.
 
 ### Calling with OpenAI SDK (Python)
 
@@ -120,12 +121,12 @@ TokenForge supports any standard LLM client with zero code changes.
 from openai import OpenAI
 
 client = OpenAI(
-    api_key="tf_live_xxxxxxxxxxxxxxxxxxxx",
-    base_url="https://tokenforge.ai.studio/v1"
+    api_key="qr_xxxxxxxxxxxxxxxxxxxx",
+    base_url="https://qronos.ai/v1"
 )
 
 response = client.chat.completions.create(
-    model="claude-3-7-sonnet",
+    model="claude-opus-5",
     messages=[{"role": "user", "content": "Explain zero-drift financial ledgers in one paragraph."}],
     stream=True
 )
@@ -141,12 +142,12 @@ for chunk in response:
 import Anthropic from "@anthropic-ai/sdk";
 
 const anthropic = new Anthropic({
-  apiKey: "tf_live_xxxxxxxxxxxxxxxxxxxx",
-  baseURL: "https://tokenforge.ai.studio/v1",
+  apiKey: "qr_xxxxxxxxxxxxxxxxxxxx",
+  baseURL: "https://qronos.ai/v1",
 });
 
 const message = await anthropic.messages.create({
-  model: "claude-3-7-sonnet",
+  model: "claude-opus-5",
   max_tokens: 1024,
   messages: [{ role: "user", content: "Analyze distributed circuit breakers." }],
 });
@@ -157,12 +158,12 @@ console.log(message.content[0].text);
 ### Direct cURL Request
 
 ```bash
-curl -X POST https://tokenforge.ai.studio/v1/chat/completions \
-  -H "Authorization: Bearer tf_live_your_api_key" \
+curl -X POST https://qronos.ai/v1/chat/completions \
+  -H "Authorization: Bearer qr_your_api_key" \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "deepseek-r1",
-    "messages": [{"role": "user", "content": "Hello TokenForge!"}],
+    "model": "deepseek-v4-pro",
+    "messages": [{"role": "user", "content": "Hello Qronos AI!"}],
     "temperature": 0.7
   }'
 ```
@@ -171,7 +172,7 @@ curl -X POST https://tokenforge.ai.studio/v1/chat/completions \
 
 ## 💳 Nanodollar Settlement Engine
 
-To guarantee zero financial drift across millions of micro-transactions, TokenForge uses integer-based nanodollars:
+To guarantee zero financial drift across millions of micro-transactions, Qronos AI uses integer-based nanodollars:
 
 $$\text{Charge (nanos)} = (\text{Input Tokens} \times \text{Rate}_{\text{input}}) + (\text{Output Tokens} \times \text{Rate}_{\text{output}})$$
 
@@ -221,8 +222,7 @@ await db.transaction(async (tx) => {
 │   └── solanaPayGateway.ts     # Web3 Solana settlement bridge
 ├── drizzle/                    # Database migrations & relational schemas
 │   └── schema.ts               # Core database definitions in Drizzle
-├── solana_pay_fastapi.py       # Standalone high-speed Solana settlement engine
-├── upi_pay_fastapi.py          # Unified Payments Interface QR microservice
+├── Dockerfile                  # Container packaging for Cloud / VM
 └── package.json                # Dependencies, scripts, and build tasks
 ```
 
@@ -233,21 +233,21 @@ await db.transaction(async (tx) => {
 ### Prerequisites
 - **Node.js**: `v20.x` or `v22.x`
 - **Package Manager**: `npm` or `pnpm`
-- **Database**: MySQL 8.0+ or Google Cloud SQL
+- **Database**: MySQL 8.0+ or TiDB Cloud Serverless
 
 ### Installation
 
 ```bash
 # 1. Clone repository
-git clone https://github.com/ArpitKumar8649/tokenforge_v2.git
-cd tokenforge_v2
+git clone https://github.com/ArpitKumar8649/Infergate.git
+cd Infergate
 
 # 2. Install dependencies
 npm install
 
 # 3. Configure environment variables
 cp .env.example .env
-# Edit .env with your database connection string and secret keys
+# Edit .env with your TiDB/MySQL database URL, GitHub OAuth, and strong JWT_SECRET
 
 # 4. Run database migrations
 npm run db:push
@@ -263,7 +263,7 @@ The application will be live at `http://localhost:3000`.
 ## 🛡 Security & Compliance
 
 - **Zero-Storage Credential Policy**: Upstream provider credentials are encrypted in-memory and in secure vaults; plaintext secrets are never written to disk or audit logs.
-- **One-Way Cryptographic Key Hashing**: Developer API keys (`tf_live_*`) are shown exactly once at generation and stored as salted hashes.
+- **One-Way Cryptographic Key Hashing**: Developer API keys (`qr_*`) are shown exactly once at generation and stored as salted hashes.
 - **Audit Trails**: Every administrative override, giveaway, and credential pool rotation creates an immutable record in `audit_events`.
 
 ---

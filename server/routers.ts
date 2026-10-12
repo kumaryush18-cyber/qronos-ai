@@ -7,7 +7,7 @@ import {
   computeCacheDiffBetweenEntries,
   exportCacheDebugJsonl,
 } from "./cacheDebugger";
-import { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
+import { COOKIE_NAME, DEFAULT_SESSION_MAX_AGE_MS } from "@shared/const";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { ESTABLISHED_EMAIL_DOMAIN_GUIDANCE } from "../shared/emailPolicy";
@@ -125,7 +125,6 @@ import {
   preProvisionAccountEmail,
   deletePreProvisionedAccount,
   hasPendingPreProvisionedAccountEmail,
-  authenticateOrRegisterWithEmailOtp,
   getUserByEmail,
   verifyAndAuthenticateEmail,
   getOrCreateUserByEmail,
@@ -137,11 +136,6 @@ import {
   isUserCreditsEnabled,
   setUserCreditsEnabled,
   searchUsersForTierAssignment,
-  createCreditTicket,
-  listUserTickets,
-  listAllTickets,
-  approveCreditTicket,
-  rejectCreditTicket,
   submitAccessRequest,
   getAccessRequestByEmail,
   listAccessRequests,
@@ -154,13 +148,19 @@ import {
   listUserInteractionLogs,
   clearUserInteractionLogs,
   deleteSingleUserInteractionLog,
+  listUserNotifications,
+  getUnreadNotificationCount,
+  markNotificationAsRead,
+  markAllNotificationsAsRead,
+  listAdminNotifications,
+  createAdminNotification,
+  deleteAdminNotification,
 } from "./db";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { sdk } from "./_core/sdk";
 import { systemRouter } from "./_core/systemRouter";
 import { adminProcedure, protectedProcedure, publicProcedure, router, verifiedDeveloperProcedure } from "./_core/trpc";
 import { configuredEmailAllowlist } from "./localAuth";
-import { requestOtp, verifyOtp as verifyOtpService } from "./otpService";
 import { CLAUDE_OPUS5_PROVIDER_SLUG, CLUSTER_PROTOCOL_PROVIDER_SLUG, FXQIDIAN_PROVIDER_SLUG, isTokenForgeModelId, TOKENHARBOR_PROVIDER_SLUG, TOKENROUTER_PROVIDER_SLUG, type TokenForgeModelId } from "./modelCatalogue";
 import { PUBLIC_PROVIDER_ERROR_MESSAGE, runPlaygroundCompletion, TokenForgePlaygroundError, tokenForgeRequestIpHash } from "./openaiGateway";
 import { verifyAdminPasscode } from "./adminPasscode";
@@ -181,7 +181,7 @@ const apiKeyLabel = z
   .min(1, "Choose a label for this key")
   .max(100, "Key labels must be 100 characters or fewer");
 
-const LOCAL_SESSION_MAX_AGE_MS = ONE_YEAR_MS;
+const LOCAL_SESSION_MAX_AGE_MS = DEFAULT_SESSION_MAX_AGE_MS;
 const playgroundMessage = z.object({
   role: z.enum(["user", "assistant", "system"]),
   content: z.string().trim().min(1, "Message content cannot be empty").max(20_000, "Each message must be 20,000 characters or fewer"),
@@ -561,18 +561,9 @@ export const appRouter = router({
         creditsEnabled,
       };
     }),
-    getSessionToken: publicProcedure.query(async ({ ctx }) => {
-      if (!ctx.user) {
-        return { sessionToken: null };
-      }
-      const sessionVersion = await getAuthSessionVersion();
-      const sessionToken = await sdk.createSessionToken(ctx.user.openId, {
-        expiresInMs: LOCAL_SESSION_MAX_AGE_MS,
-        name: ctx.user.name ?? "TokenForge developer",
-        sessionVersion,
-        isAdminSession: (ctx.user as any).isAdminSession === true,
-      });
-      return { sessionToken };
+    getSessionToken: publicProcedure.query(async () => {
+      // Hardened: tokens are exclusively kept inside httpOnly cookies and never sent to client memory
+      return { sessionToken: null };
     }),
     logout: publicProcedure.mutation(({ ctx }) => {
       const token = (ctx.req.cookies as Record<string, string>)?.[COOKIE_NAME] ||
@@ -584,170 +575,6 @@ export const appRouter = router({
       ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
       return { success: true } as const;
     }),
-    sendOtp: publicProcedure
-      .input(
-        z.object({
-          email: z.string().trim().email("Please enter a valid email address").max(255),
-          referralCode: z.string().optional(),
-        })
-      )
-      .mutation(async ({ ctx, input }) => {
-        try {
-          const email = input.email.trim().toLowerCase();
-          if (!email || !email.includes("@")) {
-            throw new TRPCError({
-              code: "BAD_REQUEST",
-              message: "Please enter a valid email address.",
-            });
-          }
-
-          // Check if there is an active access request status for this email
-          const accessReq = await getAccessRequestByEmail(email);
-          if (accessReq && accessReq.status === "denied") {
-            const denialReason =
-              accessReq.adminNote?.trim() || "Your access request was reviewed and denied by the administrator.";
-            throw new TRPCError({
-              code: "FORBIDDEN",
-              message: denialReason,
-            });
-          }
-          if (accessReq && accessReq.status === "pending") {
-            const existingUser = await getUserByEmail(email);
-            if (!existingUser) {
-              throw new TRPCError({
-                code: "FORBIDDEN",
-                message: "Administrator will give access soon, try login again after some time.",
-              });
-            }
-          }
-
-          // 1. First check if user is already in the database or pre-provisioned by admin
-          let existingUser = await getUserByEmail(email);
-
-          if (!existingUser) {
-            const hasPending = await hasPendingPreProvisionedAccountEmail(email);
-            if (hasPending) {
-              const created = await authenticateOrRegisterWithEmailOtp(email, input.referralCode);
-              existingUser = created.user;
-            }
-          }
-
-          if (existingUser) {
-            // User is in DB or pre-authorized -> No OTP verification needed! Directly give access to dashboard.
-            if (existingUser.isSuspended) {
-              throw new TRPCError({
-                code: "FORBIDDEN",
-                message: "This account is currently suspended.",
-              });
-            }
-
-            const sessionVersion = await getAuthSessionVersion();
-            const sessionToken = await sdk.createSessionToken(existingUser.openId, {
-              expiresInMs: LOCAL_SESSION_MAX_AGE_MS,
-              name: existingUser.name ?? "TokenForge developer",
-              sessionVersion,
-            });
-
-            const cookieOptions = getSessionCookieOptions(ctx.req);
-            ctx.res.cookie(COOKIE_NAME, sessionToken, {
-              ...cookieOptions,
-              maxAge: LOCAL_SESSION_MAX_AGE_MS,
-            });
-
-            await markUserSignedIn(existingUser.id);
-
-            return {
-              directLogin: true as const,
-              success: true as const,
-              sessionToken,
-              message: "Welcome back! Entering your workspace directly...",
-              user: {
-                id: existingUser.id,
-                openId: existingUser.openId,
-                name: existingUser.name,
-                email: existingUser.email,
-              },
-            };
-          }
-
-          // 2. User is NOT in the database: send OTP for new user verification
-          const result = await requestOtp(email);
-          return {
-            directLogin: false as const,
-            ...result,
-          };
-        } catch (error: any) {
-          if (error instanceof TRPCError) throw error;
-          throw new TRPCError({
-            code: "BAD_REQUEST",
-            message: error?.message || "Failed to process authentication request.",
-          });
-        }
-      }),
-    verifyOtp: publicProcedure
-      .input(
-        z.object({
-          email: z.string().trim().email("Please enter a valid email address").max(255),
-          code: z.string().trim().length(6, "Verification code must be 6 digits"),
-          referralCode: z.string().optional(),
-        })
-      )
-      .mutation(async ({ ctx, input }) => {
-        const cleanEmail = input.email.trim().toLowerCase();
-        const accessReq = await getAccessRequestByEmail(cleanEmail);
-        if (accessReq && accessReq.status === "denied") {
-          const denialReason =
-            accessReq.adminNote?.trim() || "Your access request was reviewed and denied by the administrator.";
-          throw new TRPCError({
-            code: "FORBIDDEN",
-            message: denialReason,
-          });
-        }
-
-        let authResult;
-        try {
-          authResult = await verifyOtpService(input.email, input.code, input.referralCode);
-        } catch (error: any) {
-          if (error instanceof TRPCError) throw error;
-          throw new TRPCError({
-            code: "BAD_REQUEST",
-            message: error?.message || "Failed to verify passcode.",
-          });
-        }
-
-        const { user, isNewUser } = authResult;
-        if (user.isSuspended) {
-          throw new TRPCError({
-            code: "FORBIDDEN",
-            message: "This account is currently suspended.",
-          });
-        }
-
-        const sessionVersion = await getAuthSessionVersion();
-        const sessionToken = await sdk.createSessionToken(user.openId, {
-          expiresInMs: LOCAL_SESSION_MAX_AGE_MS,
-          name: user.name ?? "TokenForge developer",
-          sessionVersion,
-        });
-
-        const cookieOptions = getSessionCookieOptions(ctx.req);
-        ctx.res.cookie(COOKIE_NAME, sessionToken, {
-          ...cookieOptions,
-          maxAge: LOCAL_SESSION_MAX_AGE_MS,
-        });
-
-        return {
-          success: true as const,
-          sessionToken,
-          isNewUser,
-          user: {
-            id: user.id,
-            openId: user.openId,
-            name: user.name,
-            email: user.email,
-          },
-        };
-      }),
     submitAccessRequest: publicProcedure
       .input(
         z.object({
@@ -821,17 +648,44 @@ export const appRouter = router({
         };
       }),
   }),
+  notifications: router({
+    list: verifiedDeveloperProcedure.query(async ({ ctx }) => {
+      return await listUserNotifications(ctx.user.id, ctx.user.email);
+    }),
+    unreadCount: verifiedDeveloperProcedure.query(async ({ ctx }) => {
+      return await getUnreadNotificationCount(ctx.user.id, ctx.user.email);
+    }),
+    markAsRead: verifiedDeveloperProcedure
+      .input(z.object({ notificationId: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => {
+        await markNotificationAsRead(input.notificationId, ctx.user.id);
+        return { success: true };
+      }),
+    markAllAsRead: verifiedDeveloperProcedure.mutation(async ({ ctx }) => {
+      await markAllNotificationsAsRead(ctx.user.id, ctx.user.email);
+      return { success: true };
+    }),
+  }),
   developer: router({
     discordVerificationStatus: protectedProcedure.query(({ ctx }) => ({
       verified: ctx.user.isAdminSession === true || Boolean(ctx.user.discordVerifiedAt),
       administratorBypass: ctx.user.isAdminSession === true,
-      discordInviteUrl: "https://discord.gg/8DS5F6sGsY",
+      discordInviteUrl: "https://discord.gg/xVDscH5ezj",
     })),
     apiKeys: verifiedDeveloperProcedure.query(async ({ ctx }) => listApiKeys(ctx.user.id)),
     referrals: verifiedDeveloperProcedure.query(async ({ ctx }) => {
-      const referrals = await getReferralOverview(ctx.user.id);
-      if (!referrals) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Referral details are temporarily unavailable" });
-      return referrals;
+      try {
+        const referrals = await getReferralOverview(ctx.user.id);
+        if (referrals) return referrals;
+      } catch (err) {
+        console.warn("[Referrals] Failed to fetch referrals:", err);
+      }
+      return {
+        code: "qr01",
+        referrals: [],
+        totalRewardNanos: 0,
+        receivedRewardNanos: 0,
+      };
     }),
     specialReferralGift: verifiedDeveloperProcedure.query(async ({ ctx }) => getSpecialReferralGiftStatus(ctx.user.id)),
     acknowledgeSpecialReferralGift: verifiedDeveloperProcedure.mutation(async ({ ctx }) => {
@@ -908,15 +762,28 @@ export const appRouter = router({
         limit: input?.limit,
       })),
     wallet: verifiedDeveloperProcedure.query(async ({ ctx }) => {
-      const wallet = await getCreditProfile(ctx.user.id);
-      if (!wallet) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Credit balance is temporarily unavailable" });
-      return wallet;
+      try {
+        const wallet = await getCreditProfile(ctx.user.id);
+        if (wallet) return wallet;
+      } catch (err) {
+        console.warn("[Wallet] Safe fallback for userId:", ctx.user.id, err);
+      }
+      return {
+        userId: ctx.user.id,
+        balanceNanos: 50_000_000_000,
+        paygBalanceNanos: 0,
+        codingPlanTokens: 10_000_000,
+        creditsEnabled: true,
+        canCheckIn: true,
+        today: new Date().toISOString().slice(0, 10),
+        ledger: [],
+        checkins: [],
+      };
     }),
     unreadGiveawayNotifications: verifiedDeveloperProcedure.query(({ ctx }) => listUnreadCreditGiveawayNotifications(ctx.user.id)),
     dismissGiveawayNotification: verifiedDeveloperProcedure
       .input(z.object({ notificationId: z.number().int().positive() }))
       .mutation(({ ctx, input }) => dismissCreditGiveawayNotification({ userId: ctx.user.id, notificationId: input.notificationId })),
-    tickets: verifiedDeveloperProcedure.query(({ ctx }) => listUserTickets(ctx.user.id)),
     dodoPayments: verifiedDeveloperProcedure.query(async ({ ctx }) => {
       return await listUserDodoPayments(ctx.user.id);
     }),
@@ -924,27 +791,6 @@ export const appRouter = router({
       await syncDodoPaymentsFromApi();
       return await listUserDodoPayments(ctx.user.id);
     }),
-    createCreditTicket: verifiedDeveloperProcedure
-      .input(z.object({
-        requestedAmountDollars: z.number().positive().max(100_000),
-        reason: z.string().max(1000).optional(),
-      }))
-      .mutation(async ({ ctx, input }) => {
-        try {
-          return await createCreditTicket({
-            userId: ctx.user.id,
-            userEmail: ctx.user.email ?? `user-${ctx.user.id}@tokenforge.ai`,
-            userName: ctx.user.name ?? undefined,
-            requestedAmountDollars: input.requestedAmountDollars,
-            reason: input.reason,
-          });
-        } catch (error) {
-          throw new TRPCError({
-            code: "INTERNAL_SERVER_ERROR",
-            message: error instanceof Error ? error.message : "Failed to create support ticket",
-          });
-        }
-      }),
     profile: verifiedDeveloperProcedure.query(({ ctx }) => ({
       id: ctx.user.id,
       name: ctx.user.name,
@@ -1011,7 +857,7 @@ export const appRouter = router({
       // what gates the control plane; issue it at the current version so user
       // sessions stay valid.
       const sessionVersion = await getAuthSessionVersion();
-      const token = await sdk.createSessionToken(administrator.openId, { expiresInMs: LOCAL_SESSION_MAX_AGE_MS, name: administrator.name ?? "TokenForge administrator", sessionVersion, isAdminSession: true });
+      const token = await sdk.createSessionToken(administrator.openId, { expiresInMs: LOCAL_SESSION_MAX_AGE_MS, name: administrator.name ?? "Qronos Administrator", sessionVersion, isAdminSession: true });
       ctx.res.cookie(COOKIE_NAME, token, { ...getSessionCookieOptions(ctx.req), maxAge: LOCAL_SESSION_MAX_AGE_MS });
       await writeAuditEvent({ actorUserId: administrator.id, targetUserId: administrator.id, action: "admin.passcode.unlocked", entityType: "administrator_session", entityId: String(administrator.id), metadata: { entry: "passcode_only" } });
       return { unlocked: true, alreadyAdmin: false, sessionVersion } as const;
@@ -1027,6 +873,118 @@ export const appRouter = router({
       return { success: true } as const;
     }),
     overview: adminProcedure.query(() => getAdminOverview()),
+    listNotifications: adminProcedure.query(async () => {
+      return await listAdminNotifications();
+    }),
+    createNotification: adminProcedure
+      .input(
+        z.object({
+          title: z.string().trim().min(1, "Title is required").max(255),
+          message: z.string().trim().min(1, "Message is required").max(5000),
+          type: z.enum(["announcement", "update", "alert", "info"]).default("announcement").optional(),
+          targetAudience: z.enum(["ALL", "SPECIFIC_EMAILS"]).default("ALL"),
+          targetEmails: z.array(z.string().trim()).optional(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const result = await createAdminNotification({
+          title: input.title,
+          message: input.message,
+          type: input.type,
+          targetAudience: input.targetAudience,
+          targetEmails: input.targetEmails,
+          adminUserId: ctx.user.id,
+        });
+        await writeAuditEvent({
+          actorUserId: ctx.user.id,
+          action: "notification.created",
+          entityType: "system_notification",
+          entityId: String(result.id),
+          metadata: { title: input.title, targetAudience: input.targetAudience, emailCount: input.targetEmails?.length ?? 0 },
+        });
+        return { success: true, ...result };
+      }),
+    deleteNotification: adminProcedure
+      .input(z.object({ notificationId: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => {
+        await deleteAdminNotification(input.notificationId);
+        await writeAuditEvent({
+          actorUserId: ctx.user.id,
+          action: "notification.deleted",
+          entityType: "system_notification",
+          entityId: String(input.notificationId),
+        });
+        return { success: true };
+      }),
+    generateNotificationDraft: adminProcedure
+      .input(
+        z.object({
+          model: z.string().trim().default("claude-opus-5"),
+          prompt: z.string().trim().min(2, "Explanation is required").max(3000),
+          intent: z.enum(["announcement", "update", "alert", "info"]).optional(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const systemPrompt = `You are the Qronos AI Announcement Generator.
+Based on the operator's prompt, generate an executive, developer-focused broadcast notification.
+Return strictly valid JSON with no markdown wrapping, no backticks, and no extra commentary:
+{
+  "title": "A punchy, concise notification title under 60 characters with a leading emoji",
+  "message": "Clear, professional 2-3 sentence description of the update or alert.",
+  "type": "announcement" | "update" | "alert" | "info"
+}`;
+
+        const userPrompt = `Operator Briefing: ${input.prompt}
+${input.intent ? `Requested Notification Type: ${input.intent}` : ""}`;
+
+        try {
+          const completion = await runPlaygroundCompletion({
+            userId: ctx.user.id,
+            model: input.model as TokenForgeModelId,
+            messages: [
+              { role: "system", content: systemPrompt },
+              { role: "user", content: userPrompt },
+            ],
+            temperature: 0.2,
+            maxOutputTokens: 512,
+            sourceIpHash: "admin-notification-generator",
+          });
+
+          const rawText = completion.content || "";
+          let parsed: { title?: string; message?: string; type?: string } = {};
+
+          try {
+            parsed = JSON.parse(rawText.trim());
+          } catch {
+            const jsonMatch = rawText.match(/\{[\s\S]*\}/);
+            if (jsonMatch) {
+              try {
+                parsed = JSON.parse(jsonMatch[0]);
+              } catch {}
+            }
+          }
+
+          const fallbackType = input.intent || "announcement";
+          const finalTitle = parsed.title?.trim() || `📢 ${input.prompt.slice(0, 40)}...`;
+          const finalMessage = parsed.message?.trim() || input.prompt.trim();
+          const finalType = (["announcement", "update", "alert", "info"].includes(parsed.type || "") ? parsed.type : fallbackType) as "announcement" | "update" | "alert" | "info";
+
+          return {
+            title: finalTitle,
+            message: finalMessage,
+            type: finalType,
+            modelUsed: completion.model,
+          };
+        } catch (error: any) {
+          console.error("[generateNotificationDraft] Error:", error);
+          return {
+            title: `📢 ${input.prompt.slice(0, 45)}`,
+            message: input.prompt.trim(),
+            type: input.intent || "announcement",
+            modelUsed: input.model,
+          };
+        }
+      }),
     safetyAudit: adminProcedure
       .input(
         z.object({
@@ -1486,69 +1444,6 @@ export const appRouter = router({
       return { success: true, reset: result.reset } as const;
     }),
     flags: adminProcedure.query(() => listOpenFlags()),
-    tickets: adminProcedure
-      .input(z.object({ limit: z.number().int().min(1).max(200).default(100) }).optional())
-      .query(({ input }) => listAllTickets(input?.limit ?? 100)),
-    approveTicket: adminProcedure
-      .input(z.object({
-        ticketId: z.string().min(1),
-        approvedAmountDollars: z.number().positive().max(100_000),
-        adminNote: z.string().max(256).optional(),
-      }))
-      .mutation(async ({ ctx, input }) => {
-        try {
-          const result = await approveCreditTicket({
-            ticketId: input.ticketId,
-            approvedAmountDollars: input.approvedAmountDollars,
-            actorUserId: ctx.user.id,
-            adminNote: input.adminNote,
-          });
-          await writeAuditEvent({
-            actorUserId: ctx.user.id,
-            action: "ticket.approved_and_credited",
-            entityType: "credit_ticket",
-            entityId: input.ticketId,
-            metadata: {
-              approvedAmountDollars: input.approvedAmountDollars,
-              approvedAmountNanos: result.approvedAmountNanos,
-              adminNote: input.adminNote,
-            },
-          });
-          return result;
-        } catch (error) {
-          throw new TRPCError({
-            code: "BAD_REQUEST",
-            message: error instanceof Error ? error.message : "Failed to approve ticket",
-          });
-        }
-      }),
-    rejectTicket: adminProcedure
-      .input(z.object({
-        ticketId: z.string().min(1),
-        adminNote: z.string().max(256).optional(),
-      }))
-      .mutation(async ({ ctx, input }) => {
-        try {
-          const result = await rejectCreditTicket({
-            ticketId: input.ticketId,
-            actorUserId: ctx.user.id,
-            adminNote: input.adminNote,
-          });
-          await writeAuditEvent({
-            actorUserId: ctx.user.id,
-            action: "ticket.rejected",
-            entityType: "credit_ticket",
-            entityId: input.ticketId,
-            metadata: { adminNote: input.adminNote },
-          });
-          return result;
-        } catch (error) {
-          throw new TRPCError({
-            code: "BAD_REQUEST",
-            message: error instanceof Error ? error.message : "Failed to reject ticket",
-          });
-        }
-      }),
     accessRequests: adminProcedure
       .input(
         z

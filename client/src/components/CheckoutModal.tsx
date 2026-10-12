@@ -297,8 +297,8 @@ export function CheckoutModal({
           amount_sol: initialAmountSol,
           is_payg: isPayg,
           is_coding_plan: isCodingPlan,
-          label: isCodingPlan ? "TokenForge Coding Plan" : isPayg ? "TokenForge PAYG" : "TokenForge",
-          message: isCodingPlan ? `${matchedCoding?.tokensMillions || 250}M Coding Tokens` : isPayg ? `PAYG Deposit $${selectedUsd}` : "API Credits",
+          label: isCodingPlan ? "Qronos AI Token Plan" : isPayg ? "Qronos AI PAYG" : "Qronos AI",
+          message: isCodingPlan ? `${matchedCoding?.tokensMillions || 250}M Token Plan` : isPayg ? `PAYG Deposit $${selectedUsd}` : "API Credits",
         }),
       });
 
@@ -832,13 +832,13 @@ export function CheckoutModal({
             <div>
               <h2 className="text-base sm:text-lg font-semibold text-white tracking-tight flex items-center gap-2">
                 {isCodingPlan
-                  ? `Coding Plan: ${matchedCodingPlan?.tokensMillions || 250}M Tokens ($${matchedCodingPlan?.amountUsd || 25})`
+                  ? `Token Plan: ${matchedCodingPlan?.tokensMillions || 250}M Tokens ($${matchedCodingPlan?.amountUsd || 25})`
                   : isPayg
                   ? "Deposit Developer Compute Balance"
                   : "Top Up API Compute Units"}
                 <span className={`text-[10px] uppercase font-mono px-2 py-0.5 rounded-full font-medium ${
                   isCodingPlan
-                    ? "bg-cyan-500/15 border border-cyan-500/30 text-cyan-300"
+                    ? "bg-white/10 border border-white/20 text-white"
                     : isPayg
                     ? "bg-emerald-500/15 border border-emerald-500/30 text-emerald-300"
                     : "bg-rose-500/15 border border-rose-500/30 text-rose-300"
@@ -848,7 +848,7 @@ export function CheckoutModal({
               </h2>
               <p className="text-xs text-neutral-400">
                 {isCodingPlan
-                  ? `Instant ${matchedCodingPlan?.tokensMillions || 250} Million tokens allocated directly to your coding allowance.`
+                  ? `Instant ${matchedCodingPlan?.tokensMillions || 250} Million tokens allocated directly to your Token Plan allowance.`
                   : isPayg
                   ? "Deposit compute balance directly. Every recharge receives a 100% bonus (2x compute grant) for official model rates."
                   : "Instant compute allocation with high-availability multi-rail settlement"}
@@ -1591,8 +1591,8 @@ export function CheckoutModal({
                     const amountInr = upiOrder?.amount_inr ?? selectedUpiTier.scanAmountInr;
                     const isDirectAmount = upiOrder?.is_direct_amount ?? (amountInr >= 4000);
                     const effectiveIsDirect = forceDirectUpi !== null ? forceDirectUpi : isDirectAmount;
-                    const cleanVpa = upiOrder?.upi_id || "tokenforge@upi";
-                    const cleanName = encodeURIComponent("TokenForge");
+                    const cleanVpa = upiOrder?.upi_id || "qronosai@upi";
+                    const cleanName = encodeURIComponent("Qronos AI");
                     const activeUpiUri = effectiveIsDirect
                       ? (upiOrder?.direct_upi_uri || `upi://pay?pa=${cleanVpa}&pn=${cleanName}&cu=INR`)
                       : (upiOrder?.dynamic_upi_uri || upiOrder?.upi_uri);

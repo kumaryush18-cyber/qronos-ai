@@ -1,5 +1,5 @@
 import { PublicNav } from "@/components/PublicNav";
-import { TokenForgeGlyph } from "@/components/TokenForgeGlyph";
+import { QronosGlyph } from "@/components/QronosGlyph";
 import { Badge } from "@/components/ui/badge";
 import { demoSafetyNotice, publicModels } from "@/lib/tokenforgePresentation";
 import { ArrowRight, BarChart3, CircleAlert, KeyRound, LockKeyhole, Sparkles } from "lucide-react";
@@ -19,13 +19,13 @@ export default function DemoWorkspace() {
         <section className="demo-hero">
           <div>
             <div className="demo-kicker"><span /> Interactive preview</div>
-            <h1>Your TokenForge<br /><em>workspace, in motion.</em></h1>
+            <h1>Your Qronos AI<br /><em>workspace, in motion.</em></h1>
             <p>This is a safe, read-only tour of the developer workspace. It uses illustrative states only—no account, API key, provider call, or live usage record is exposed or created.</p>
           </div>
-          <TokenForgeGlyph className="demo-hero__glyph" />
+          <QronosGlyph size={64} className="demo-hero__glyph" />
         </section>
 
-        <section className="demo-grid" aria-label="Read-only TokenForge workspace preview">
+        <section className="demo-grid" aria-label="Read-only Qronos AI workspace preview">
           <article className="demo-card demo-card--quota"><div className="demo-card__head"><span>Today’s allowance</span><Badge>Preview</Badge></div><div className="demo-meter"><div className="demo-meter__ring"><strong>68%</strong><span>available</span></div><div><h2>68 requests</h2><p>of 100 daily requests</p></div></div><div className="demo-progress"><i /></div><small>Read-only example of the real quota display.</small></article>
           <article className="demo-card"><div className="demo-card__head"><span>Catalogue</span><Sparkles size={17} /></div><div className="demo-models">{publicModels.map(model => <div key={model.id}><b>{model.name}</b><span>{model.capabilities}</span></div>)}</div><Link href="/models" className="demo-inline-link">See model notes <ArrowRight size={14} /></Link></article>
           <article className="demo-card"><div className="demo-card__head"><span>API credential</span><KeyRound size={17} /></div><code className="demo-key">tf_demo_••••••••preview</code><p className="demo-muted">Demo credentials are visual placeholders. Create, rotate, and revoke real keys only after signing in.</p><Link href="/docs" className="demo-inline-link">Read key security <ArrowRight size={14} /></Link></article>

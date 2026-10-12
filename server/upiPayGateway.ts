@@ -267,11 +267,11 @@ function safeSecretCompare(received?: string, expected?: string): boolean {
 
 /**
  * Helper to authenticate admin requests via:
- * 1. Authenticated TokenForge session (cookie or Bearer token) with isAdminSession: true
- * 2. Explicit admin header secret (ADMIN_SECRET_KEY, UPI_ADMIN_SECRET, or TOKENFORGE_ADMIN_PASSCODE)
+ * 1. Authenticated administrator session (cookie or Bearer token) with isAdminSession: true
+ * 2. Explicit admin header secret (ADMIN_SECRET_KEY, UPI_ADMIN_SECRET, or QRONOS_ADMIN_PASSCODE)
  */
 async function isAuthorizedAdmin(req: Request): Promise<{ authorized: boolean; adminIdentifier: string }> {
-  // 1. Authenticated TokenForge administrator session
+  // 1. Authenticated administrator session
   try {
     const user = await sdk.authenticateRequest(req);
     if (
@@ -286,28 +286,22 @@ async function isAuthorizedAdmin(req: Request): Promise<{ authorized: boolean; a
     // Non-admin session or unauthenticated request
   }
 
-  // 2. Explicitly configured server admin secret or passcode
+  // 2. Explicitly configured server admin secret or passcode from environment
   const configuredSecrets = [
     process.env.ADMIN_SECRET_KEY?.trim(),
     process.env.UPI_ADMIN_SECRET?.trim(),
-    process.env.TOKENFORGE_ADMIN_PASSCODE?.trim(),
-    "tokenforge_upi_secret_2025",
+    process.env.QRONOS_ADMIN_PASSCODE?.trim(),
   ].filter(Boolean) as string[];
 
   const receivedKey =
     (req.headers["x-admin-key"] as string) ||
     (req.headers["x-admin-secret"] as string) ||
-    (req.headers["x-admin-passcode"] as string) ||
-    (req.query.admin_key as string) ||
-    (req.query.secret as string) ||
-    (req.query.passcode as string) ||
-    (req.body?.admin_key as string) ||
-    (req.body?.passcode as string);
+    (req.headers["x-admin-passcode"] as string);
 
-  if (receivedKey) {
+  if (receivedKey && configuredSecrets.length > 0) {
     const cleanKey = receivedKey.trim();
     for (const secret of configuredSecrets) {
-      if (cleanKey === secret || safeSecretCompare(cleanKey, secret)) {
+      if (safeSecretCompare(cleanKey, secret)) {
         return { authorized: true, adminIdentifier: "admin_secret_key" };
       }
     }

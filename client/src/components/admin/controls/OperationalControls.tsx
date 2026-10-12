@@ -292,7 +292,7 @@ export function OrcaRouterCredentialPanel() {
           <p className="text-xs font-bold text-red-200">Discord-unverified account cleanup</p>
           <p className="mt-1 text-[10px] leading-5 text-[#b9a1a8]">
             {cleanupCount.toLocaleString()} regular account{cleanupCount === 1 ? "" : "s"} lack Discord verification.
-            This permanently removes their TokenForge data without blocking later fresh signup. A local sign-in shows
+            This permanently removes their Qronos AI data without blocking later fresh signup. A local sign-in shows
             a one-time explanation after cleanup.
           </p>
           <AlertDialog
@@ -1426,7 +1426,7 @@ export function OperationalControls() {
           <p className="text-xs font-bold text-red-200">Discord-unverified account cleanup</p>
           <p className="mt-1 text-[10px] leading-5 text-[#b9a1a8]">
             {cleanupCount.toLocaleString()} regular account{cleanupCount === 1 ? "" : "s"} lack Discord verification.
-            This permanently removes their TokenForge data without blocking later fresh signup. A local sign-in shows a
+            This permanently removes their Qronos AI data without blocking later fresh signup. A local sign-in shows a
             one-time explanation after cleanup.
           </p>
           <AlertDialog
@@ -1572,7 +1572,7 @@ export function OperationalControls() {
                     value={giveawayAnnouncement}
                     onChange={(event) => setGiveawayAnnouncement(event.target.value)}
                     maxLength={256}
-                    placeholder="Example: Thank you for being a verified TokenForge Discord member."
+                    placeholder="Example: Thank you for being a verified Qronos AI Discord member."
                     className="min-h-20 border-[#c9ff73]/20 bg-black/20 text-xs text-white placeholder:text-[#767886]"
                     disabled={runGiveaway.isPending}
                   />

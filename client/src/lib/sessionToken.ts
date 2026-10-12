@@ -1,49 +1,31 @@
-import { COOKIE_NAME } from "@shared/const";
+/**
+ * Session Token Manager (Hardened)
+ *
+ * Security Notice:
+ * Tokens are NEVER persisted to localStorage or sessionStorage to protect
+ * against Cross-Site Scripting (XSS) credential exfiltration.
+ * Authentication relies strictly on secure, httpOnly, SameSite cookies managed
+ * by the browser.
+ */
 
-const TOKEN_KEY = "tokenforge_session_token";
-const COOKIE_STORAGE_KEY = "manus-cookie";
-
-export function persistSessionToken(token: string): void {
-  if (!token) return;
-  try {
-    localStorage.setItem(TOKEN_KEY, token);
-    localStorage.setItem(COOKIE_STORAGE_KEY, `${COOKIE_NAME}=${token}`);
-    sessionStorage.setItem(TOKEN_KEY, token);
-    sessionStorage.setItem(COOKIE_STORAGE_KEY, `${COOKIE_NAME}=${token}`);
-  } catch {
-    // ignore storage access restrictions
-  }
+export function persistSessionToken(_token: string): void {
+  // Deliberate no-op: tokens must not be persisted in browser storage
 }
 
 export function getStoredSessionToken(): string | null {
-  try {
-    const directToken =
-      localStorage.getItem(TOKEN_KEY) ||
-      sessionStorage.getItem(TOKEN_KEY);
-    if (directToken) return directToken;
-
-    const raw =
-      localStorage.getItem(COOKIE_STORAGE_KEY) ||
-      sessionStorage.getItem(COOKIE_STORAGE_KEY);
-    if (raw) {
-      const prefix = `${COOKIE_NAME}=`;
-      const pair = raw.split(";").find((s) => s.trim().startsWith(prefix));
-      const token = pair?.trim().slice(prefix.length);
-      if (token) return token;
-    }
-  } catch {
-    // ignore storage access restrictions
-  }
+  // Returns null: authentication uses httpOnly cookies with credentials: "include"
   return null;
 }
 
 export function clearStoredSession(): void {
   try {
-    localStorage.removeItem(TOKEN_KEY);
-    localStorage.removeItem(COOKIE_STORAGE_KEY);
+    localStorage.removeItem("tokenforge_session_token");
+    localStorage.removeItem("qronos_session_token");
+    localStorage.removeItem("manus-cookie");
     localStorage.removeItem("manus-runtime-user-info");
-    sessionStorage.removeItem(TOKEN_KEY);
-    sessionStorage.removeItem(COOKIE_STORAGE_KEY);
+    sessionStorage.removeItem("tokenforge_session_token");
+    sessionStorage.removeItem("qronos_session_token");
+    sessionStorage.removeItem("manus-cookie");
   } catch {
     // ignore storage access restrictions
   }

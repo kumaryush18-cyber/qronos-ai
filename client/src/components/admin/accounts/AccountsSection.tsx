@@ -57,7 +57,7 @@ export function AccountRow({
   const deleteAccount = trpc.admin.deleteAccount.useMutation({
     onSuccess: async () => {
       await Promise.all([utils.admin.overview.invalidate(), utils.admin.accounts.invalidate()]);
-      toast.success("Account and associated TokenForge data permanently deleted");
+      toast.success("Account and associated Qronos AI data permanently deleted");
     },
     onError: (error) => toast.error(error.message),
   });
@@ -143,16 +143,6 @@ export function AccountRow({
   const isWhitelisted = emailLower === "konchoor@gmail.com" || emailLower === "kumaryush18@gmail.com";
   const creditsEnabled = isWhitelisted ? true : Boolean(account.creditsEnabled);
 
-  const toggleCredits = trpc.admin.toggleUserCredits.useMutation({
-    onSuccess: (data) => {
-      toast.success(
-        `Credit system ${data.creditsEnabled ? "enabled" : "disabled"} for ${account.name || account.email}`
-      );
-      void utils.admin.accounts.invalidate();
-    },
-    onError: (error) => toast.error(error.message || "Failed to update credit system toggle"),
-  });
-
   const logUserMessages = Boolean(account.logUserMessages);
   const toggleLogging = trpc.admin.toggleUserMessageLogging.useMutation({
     onSuccess: (data) => {
@@ -182,47 +172,16 @@ export function AccountRow({
               value={(account.tier as UserTier) || "free"}
               disabled={assignTier.isPending}
               onChange={(e) => assignTier.mutate({ userId: account.id, tier: e.target.value as UserTier })}
-              className="h-5 rounded bg-transparent text-[10px] text-[#c9ff73] font-medium outline-none cursor-pointer hover:underline"
+              className="h-5 rounded bg-transparent text-[10px] text-white font-mono font-medium outline-none cursor-pointer hover:underline"
             >
               <option value="free" className="bg-[#121214] text-white">Free</option>
-              <option value="starter" className="bg-[#121214] text-white">Starter</option>
+              <option value="starter" className="bg-[#121214] text-white">Plus</option>
               <option value="pro" className="bg-[#121214] text-white">Pro</option>
-              <option value="max" className="bg-[#121214] text-white">Max</option>
-              <option value="power" className="bg-[#121214] text-white">Power</option>
-              <option value="ultra" className="bg-[#121214] text-white">Ultra</option>
+              <option value="power" className="bg-[#121214] text-white">Ultra</option>
+              <option value="ultra" className="bg-[#121214] text-white">Enterprise</option>
             </select>
-            {assignTier.isPending && <Loader2 className="h-2.5 w-2.5 animate-spin text-[#c9ff73]" />}
+            {assignTier.isPending && <Loader2 className="h-2.5 w-2.5 animate-spin text-white" />}
           </div>
-          {/* Credit System Toggle (Admin Control) */}
-          <button
-            type="button"
-            disabled={toggleCredits.isPending || isWhitelisted}
-            onClick={() => {
-              if (isWhitelisted) {
-                toast.info("Credit system is permanently locked ON for this key account.");
-                return;
-              }
-              toggleCredits.mutate({ userId: account.id, enabled: !creditsEnabled });
-            }}
-            title={
-              isWhitelisted
-                ? "Credit system is permanently enabled for this key account"
-                : creditsEnabled
-                ? "Click to disable credit system (switches user to PAYG only)"
-                : "Click to enable credit system for this user"
-            }
-            className={`inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-[10px] font-semibold border transition-all cursor-pointer ${
-              creditsEnabled
-                ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/25"
-                : "bg-neutral-800/80 border-neutral-700 text-neutral-400 hover:bg-neutral-700 hover:text-neutral-200"
-            } ${isWhitelisted ? "cursor-not-allowed opacity-90" : ""}`}
-          >
-            <span className={`h-1.5 w-1.5 rounded-full ${creditsEnabled ? "bg-emerald-400 animate-pulse" : "bg-neutral-500"}`} />
-            <span>Credits: {creditsEnabled ? "ON" : "OFF"}</span>
-            {isWhitelisted && <span className="text-[9px] text-emerald-400/80 font-normal">(Whitelisted)</span>}
-            {toggleCredits.isPending && <Loader2 className="h-2.5 w-2.5 animate-spin" />}
-          </button>
-
           {/* User Message Inspection Toggle (Admin Control) */}
           <button
             type="button"
@@ -243,48 +202,48 @@ export function AccountRow({
             <span>Inspect: {logUserMessages ? "ON" : "OFF"}</span>
             {toggleLogging.isPending && <Loader2 className="h-2.5 w-2.5 animate-spin" />}
           </button>
-          <Badge className="border-0 bg-white/6 text-[10px] text-[#c9c8d2]">Standard account</Badge>
+          <Badge className="border-0 bg-white/6 text-[10px] text-zinc-300 font-mono">Standard account</Badge>
           <Badge
-            className={`border-0 text-[10px] ${
-              account.discordVerifiedAt ? "bg-[#c9ff73]/10 text-[#c9ff73]" : "bg-[#f0c180]/10 text-[#f0c180]"
+            className={`border-0 text-[10px] font-mono ${
+              account.discordVerifiedAt ? "bg-emerald-500/10 text-emerald-400" : "bg-amber-500/10 text-amber-300"
             }`}
           >
             {account.discordVerifiedAt ? "Discord verified" : "Discord re-verification required"}
           </Badge>
           {account.specialReferralSlot && (
             <Badge
-              className={`border-0 text-[10px] ${
+              className={`border-0 text-[10px] font-mono ${
                 account.specialReferralAwardedAt
-                  ? "bg-[#f4bc4e]/15 text-[#ffe199]"
-                  : "bg-[#f0c180]/10 text-[#f0c180]"
+                  ? "bg-white/10 text-white"
+                  : "bg-amber-500/10 text-amber-300"
               }`}
             >
               Special referral #{account.specialReferralSlot}
               {account.specialReferralAwardedAt ? " · $150 credited" : " · awaiting verification"}
             </Badge>
           )}
-          {account.suspicious && <Badge className="border-0 bg-[#f0c180]/10 text-[10px] text-[#f0c180]">flagged</Badge>}
-          {account.suspended && <Badge className="border-0 bg-red-400/10 text-[10px] text-red-300">suspended</Badge>}
+          {account.suspicious && <Badge className="border-0 bg-amber-500/10 text-[10px] text-amber-300 font-mono">flagged</Badge>}
+          {account.suspended && <Badge className="border-0 bg-red-400/10 text-[10px] text-red-300 font-mono">suspended</Badge>}
           {isCurrentAdmin && (
-            <Badge className="border-0 bg-[#c9ff73]/10 text-[10px] text-[#c9ff73]">current admin</Badge>
+            <Badge className="border-0 bg-white/10 text-[10px] text-white font-mono">current admin</Badge>
           )}
         </div>
       </div>
       <div>
         <div className="grid grid-cols-3 gap-1.5 pb-1 border-b border-white/5">
           <div>
-            <p className="text-[9px] uppercase tracking-[.10em] text-[#77798b]">Bundle ($)</p>
-            <p className="mt-0.5 text-[11px] font-bold font-mono text-[#c9ff73]">{formatCredits(account.balanceNanos)}</p>
+            <p className="text-[9px] uppercase tracking-[.10em] text-zinc-400 font-mono">Bundle ($)</p>
+            <p className="mt-0.5 text-[11px] font-bold font-mono text-white">{formatCredits(account.balanceNanos)}</p>
           </div>
           <div className="text-center">
-            <p className="text-[9px] uppercase tracking-[.10em] text-rose-400 font-semibold">PAYG ($)</p>
-            <p className="mt-0.5 text-[11px] font-bold font-mono text-rose-300">
+            <p className="text-[9px] uppercase tracking-[.10em] text-zinc-400 font-mono font-semibold">PAYG ($)</p>
+            <p className="mt-0.5 text-[11px] font-bold font-mono text-white">
               {formatCredits(account.paygBalanceNanos ?? 0)}
             </p>
           </div>
           <div className="text-right">
-            <p className="text-[9px] uppercase tracking-[.10em] text-cyan-400 font-semibold">Coding (M)</p>
-            <p className="mt-0.5 text-[11px] font-bold font-mono text-cyan-300">
+            <p className="text-[9px] uppercase tracking-[.10em] text-zinc-400 font-mono font-semibold">Tokens (M)</p>
+            <p className="mt-0.5 text-[11px] font-bold font-mono text-white">
               {((account.codingPlanTokens ?? 0) / 1_000_000).toLocaleString()}M
             </p>
           </div>
@@ -302,10 +261,10 @@ export function AccountRow({
             <button
               type="button"
               onClick={() => setCreditTarget("payg")}
-              className={`flex-1 py-0.5 text-[8.5px] font-bold rounded transition-all cursor-pointer ${
+              className={`flex-1 py-0.5 text-[8.5px] font-mono font-bold rounded transition-all cursor-pointer ${
                 creditTarget === "payg"
-                  ? "bg-rose-500/25 text-rose-300 border border-rose-500/40 shadow-sm"
-                  : "text-neutral-400 hover:text-white"
+                  ? "bg-white text-black shadow-sm"
+                  : "text-zinc-400 hover:text-white"
               }`}
             >
               PAYG ($)
@@ -313,10 +272,10 @@ export function AccountRow({
             <button
               type="button"
               onClick={() => setCreditTarget("bundle")}
-              className={`flex-1 py-0.5 text-[8.5px] font-bold rounded transition-all cursor-pointer ${
+              className={`flex-1 py-0.5 text-[8.5px] font-mono font-bold rounded transition-all cursor-pointer ${
                 creditTarget === "bundle"
-                  ? "bg-[#c9ff73]/25 text-[#c9ff73] border border-[#c9ff73]/40 shadow-sm"
-                  : "text-neutral-400 hover:text-white"
+                  ? "bg-white text-black shadow-sm"
+                  : "text-zinc-400 hover:text-white"
               }`}
             >
               Bundle ($)
@@ -324,13 +283,13 @@ export function AccountRow({
             <button
               type="button"
               onClick={() => setCreditTarget("tokens")}
-              className={`flex-1 py-0.5 text-[8.5px] font-bold rounded transition-all cursor-pointer ${
+              className={`flex-1 py-0.5 text-[8.5px] font-mono font-bold rounded transition-all cursor-pointer ${
                 creditTarget === "tokens"
-                  ? "bg-cyan-500/25 text-cyan-300 border border-cyan-500/40 shadow-sm"
-                  : "text-neutral-400 hover:text-white"
+                  ? "bg-white text-black shadow-sm"
+                  : "text-zinc-400 hover:text-white"
               }`}
             >
-              Coding (M)
+              Tokens (M)
             </button>
           </div>
 
@@ -338,7 +297,7 @@ export function AccountRow({
             <button
               type="button"
               onClick={() => setCreditAction("add")}
-              className={`flex-1 py-0.5 text-[8.5px] font-semibold rounded transition-all cursor-pointer ${
+              className={`flex-1 py-0.5 text-[8.5px] font-mono font-semibold rounded transition-all cursor-pointer ${
                 creditAction === "add"
                   ? "bg-white/15 text-white shadow-xs"
                   : "text-neutral-500 hover:text-neutral-300"
@@ -349,20 +308,20 @@ export function AccountRow({
             <button
               type="button"
               onClick={() => setCreditAction("set")}
-              className={`flex-1 py-0.5 text-[8.5px] font-semibold rounded transition-all cursor-pointer ${
+              className={`flex-1 py-0.5 text-[8.5px] font-mono font-semibold rounded transition-all cursor-pointer ${
                 creditAction === "set"
-                  ? "bg-amber-500/20 text-amber-300 border border-amber-500/30 shadow-xs"
+                  ? "bg-white/15 text-white shadow-xs"
                   : "text-neutral-500 hover:text-neutral-300"
               }`}
             >
-              = Set / Reduce
+              = Set
             </button>
           </div>
         </div>
 
         <div className="mt-1.5 flex gap-1">
           <Input
-            aria-label={`${creditTarget === "tokens" ? "Coding Tokens" : creditTarget === "payg" ? "PAYG" : "Bundle"} ${creditAction === "set" ? "set" : "add"} amount`}
+            aria-label={`${creditTarget === "tokens" ? "Tokens" : creditTarget === "payg" ? "PAYG" : "Bundle"} ${creditAction === "set" ? "set" : "add"} amount`}
             type="number"
             min={creditAction === "set" ? "0" : "0.01"}
             step={creditTarget === "tokens" ? "1" : "0.01"}
@@ -374,28 +333,12 @@ export function AccountRow({
                 ? `Set ${creditTarget === "tokens" ? "Tokens (M)" : creditTarget === "payg" ? "PAYG ($)" : "Bundle ($)"}`
                 : `+ ${creditTarget === "tokens" ? "Tokens (M)" : creditTarget === "payg" ? "PAYG ($)" : "Bundle ($)"}`
             }
-            className={`h-8 min-w-0 bg-black/15 px-2 text-[10px] ${
-              creditAction === "set"
-                ? "border-amber-500/30 text-amber-300 placeholder:text-amber-400/50"
-                : creditTarget === "tokens"
-                ? "border-cyan-500/30 text-cyan-300 placeholder:text-cyan-400/50"
-                : creditTarget === "payg"
-                ? "border-rose-500/30 text-rose-300 placeholder:text-rose-400/50"
-                : "border-[#c9ff73]/20 text-[#c9ff73] placeholder:text-[#c9ff73]/50"
-            }`}
+            className="h-8 min-w-0 bg-black/60 px-2 text-[10px] font-mono border-white/10 text-white placeholder:text-zinc-500 focus:border-white/30"
             disabled={addCredit.isPending || setCredit.isPending}
           />
           <Button
             size="sm"
-            className={`h-8 shrink-0 px-2 text-[10px] cursor-pointer ${
-              creditAction === "set"
-                ? "bg-amber-500 text-black hover:bg-amber-400 font-semibold"
-                : creditTarget === "tokens"
-                ? "bg-cyan-500 text-black hover:bg-cyan-400 font-semibold"
-                : creditTarget === "payg"
-                ? "bg-rose-500 text-white hover:bg-rose-600 font-semibold"
-                : "bg-[#c9ff73] text-[#17210d] hover:bg-[#d8ff91] font-semibold"
-            }`}
+            className="h-8 shrink-0 px-2.5 text-[10px] font-mono font-bold bg-white text-black hover:bg-zinc-200 cursor-pointer shadow-sm"
             disabled={
               addCredit.isPending ||
               setCredit.isPending ||
@@ -433,7 +376,7 @@ export function AccountRow({
             size="sm"
             variant="outline"
             aria-label="Permanently delete account now"
-            title="Permanently delete this account and all associated TokenForge data"
+            title="Permanently delete this account and all associated Qronos AI data"
             className="h-8 shrink-0 border-red-400/20 px-2 text-red-300 hover:bg-red-400/10 hover:text-red-200"
             disabled={isCurrentAdmin || deleteAccount.isPending}
             onClick={() => deleteAccount.mutate({ userId: account.id })}
@@ -496,12 +439,12 @@ export function AccountRow({
               <AlertDialogTitle>Require Discord verification again?</AlertDialogTitle>
               <AlertDialogDescription className="text-[#a1a2b2]">
                 This clears only the account’s membership-verification timestamp. On the next protected dashboard
-                request, the member must complete the existing Discord OAuth and guild-membership check again. TokenForge
+                request, the member must complete the existing Discord OAuth and guild-membership check again. Qronos AI
                 does not retain a Discord identity or OAuth token.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <label className="mt-4 block text-xs font-semibold text-[#d9d8e1]" htmlFor={`reset-discord-${account.id}`}>
-              Type <span className="font-mono text-[#c9ff73]">{resetVerificationPhrase}</span> to confirm
+              Type <span className="font-mono text-white font-bold">{resetVerificationPhrase}</span> to confirm
             </label>
             <Input
               id={`reset-discord-${account.id}`}
@@ -509,7 +452,7 @@ export function AccountRow({
               onChange={(event) => setResetVerificationConfirmation(event.target.value)}
               placeholder={resetVerificationPhrase}
               autoComplete="off"
-              className="mt-2 border-[#c9ff73]/20 bg-black/20 font-mono text-xs"
+              className="mt-2 border-white/20 bg-black/40 font-mono text-xs text-white"
               disabled={resetDiscordVerification.isPending}
             />
             <AlertDialogFooter>
@@ -527,7 +470,7 @@ export function AccountRow({
                   resetDiscordVerification.isPending ||
                   resetVerificationConfirmation.trim() !== resetVerificationPhrase
                 }
-                className="bg-[#c9ff73] text-[#17210d] hover:bg-[#d8ff91]"
+                className="bg-white text-black hover:bg-zinc-200 font-bold font-mono"
               >
                 {resetDiscordVerification.isPending ? "Resetting…" : "Require re-verification"}
               </Button>
@@ -652,10 +595,16 @@ export function SetAllUsersCreditCard() {
   });
 
   return (
-    <section className="dashboard-card border-rose-500/25 bg-[radial-gradient(ellipse_at_top_right,rgba(244,63,94,0.06),transparent_50%)]">
+    <section
+      style={{
+        backgroundColor: "oklch(0.14 0 0)",
+        borderColor: "oklch(0.26 0 0)",
+      }}
+      className="rounded-3xl border p-5 sm:p-6 shadow-xl"
+    >
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
         <SectionHeader
-          icon={<WalletCards size={17} className={activeTab === "payg" ? "text-rose-400" : "text-[#c9ff73]"} />}
+          icon={<WalletCards size={17} className="text-white" />}
           title={activeTab === "payg" ? "Grant All Users PAYG Balance" : "Set All Users Promotional Credit Balance"}
           detail={
             activeTab === "payg"
@@ -663,20 +612,20 @@ export function SetAllUsersCreditCard() {
               : "Enter any amount to overwrite every user's promotional credit balance immediately."
           }
         />
-        <div className="flex items-center gap-1 p-0.5 rounded-lg bg-black/40 border border-white/10 self-start sm:self-auto">
+        <div className="flex items-center gap-1 p-0.5 rounded-xl bg-black/40 border border-white/10 self-start sm:self-auto">
           <button
             type="button"
             onClick={() => {
               setActiveTab("payg");
               setBulkCreditAmount("5.00");
             }}
-            className={`px-3 py-1 text-xs font-semibold rounded-md transition-all cursor-pointer ${
+            className={`px-3 py-1 text-xs font-mono font-semibold rounded-lg transition-all cursor-pointer ${
               activeTab === "payg"
-                ? "bg-rose-500 text-white shadow-sm"
-                : "text-neutral-400 hover:text-white"
+                ? "bg-white text-black font-bold shadow-sm"
+                : "text-zinc-400 hover:text-white"
             }`}
           >
-            Tier 1 PAYG
+            PAYG Compute
           </button>
           <button
             type="button"
@@ -684,13 +633,13 @@ export function SetAllUsersCreditCard() {
               setActiveTab("promo");
               setBulkCreditAmount("50.00");
             }}
-            className={`px-3 py-1 text-xs font-semibold rounded-md transition-all cursor-pointer ${
+            className={`px-3 py-1 text-xs font-mono font-semibold rounded-lg transition-all cursor-pointer ${
               activeTab === "promo"
-                ? "bg-[#c9ff73] text-[#17210d] shadow-sm"
-                : "text-neutral-400 hover:text-white"
+                ? "bg-white text-black font-bold shadow-sm"
+                : "text-zinc-400 hover:text-white"
             }`}
           >
-            Tier 2 Promotional
+            Promotional Credits
           </button>
         </div>
       </div>
@@ -709,7 +658,7 @@ export function SetAllUsersCreditCard() {
         }}
       >
         <div>
-          <label className="text-xs font-semibold text-[#dedfe7]" htmlFor="bulk-credit-amount">
+          <label className="text-xs font-mono font-semibold text-zinc-300" htmlFor="bulk-credit-amount">
             {activeTab === "payg" ? "PAYG Grant Amount ($ USD)" : "Credit Balance Target ($ USD)"}
           </label>
           <Input
@@ -722,16 +671,12 @@ export function SetAllUsersCreditCard() {
             value={bulkCreditAmount}
             onChange={(event) => setBulkCreditAmount(event.target.value)}
             placeholder={activeTab === "payg" ? "e.g. 5.00" : "e.g. 50.00"}
-            className={`mt-2 h-10 border bg-black/20 text-sm font-semibold placeholder:text-[#767886] ${
-              activeTab === "payg"
-                ? "border-rose-500/30 text-rose-300"
-                : "border-[#c9ff73]/30 text-[#c9ff73]"
-            }`}
+            className="mt-2 h-10 border border-white/10 bg-black/40 text-sm font-mono font-semibold text-white placeholder:text-zinc-500 focus:border-white/30"
             disabled={grantAllUsersPayg.isPending || setAllUsersCredit.isPending}
           />
         </div>
         <div>
-          <label className="text-xs font-semibold text-[#dedfe7]" htmlFor="bulk-credit-note">
+          <label className="text-xs font-mono font-semibold text-zinc-300" htmlFor="bulk-credit-note">
             Optional Note / Reason
           </label>
           <Input
@@ -739,18 +684,14 @@ export function SetAllUsersCreditCard() {
             value={bulkCreditNote}
             onChange={(event) => setBulkCreditNote(event.target.value)}
             placeholder={activeTab === "payg" ? "$5.00 PAYG starting compute grant" : "e.g. Platform credit reset / promotion"}
-            className="mt-2 h-10 border-white/10 bg-black/20 text-sm placeholder:text-[#767886]"
+            className="mt-2 h-10 border-white/10 bg-black/40 text-sm font-mono text-white placeholder:text-zinc-500 focus:border-white/30"
             disabled={grantAllUsersPayg.isPending || setAllUsersCredit.isPending}
           />
         </div>
         <div className="flex items-end">
           <Button
             type="submit"
-            className={`h-10 w-full font-semibold shadow-lg lg:w-auto ${
-              activeTab === "payg"
-                ? "bg-rose-500 text-white hover:bg-rose-600 shadow-rose-500/10"
-                : "bg-[#c9ff73] text-[#17210d] hover:bg-[#d8ff91] shadow-[#c9ff73]/10"
-            }`}
+            className="h-10 w-full font-mono font-bold text-xs bg-white text-black hover:bg-zinc-200 shadow-md lg:w-auto cursor-pointer"
             disabled={
               bulkCreditAmount === "" ||
               isNaN(Number(bulkCreditAmount)) ||
@@ -761,7 +702,7 @@ export function SetAllUsersCreditCard() {
           >
             {grantAllUsersPayg.isPending || setAllUsersCredit.isPending ? (
               <>
-                <Loader2 className="animate-spin" size={14} />
+                <Loader2 className="animate-spin mr-1" size={14} />
                 Executing Bulk Update…
               </>
             ) : activeTab === "payg" ? (
@@ -818,9 +759,9 @@ export function AccountsSection({ activeAdminId }: { activeAdminId: number }) {
     onSuccess: async (result) => {
       if (result.kind === "created") {
         setPreProvisionEmail("");
-        toast.success(`${result.email} added to database with $50 credit and authorized for instant login without OTP`);
+        toast.success(`${result.email} added to database with $50 credit and authorized for instant login`);
       } else if (result.kind === "existing_user") {
-        toast.info("A TokenForge account already exists in the database for that email");
+        toast.info("A Qronos AI account already exists in the database for that email");
       } else {
         toast.info("That email is already authorized for dashboard access");
       }
@@ -902,12 +843,12 @@ export function AccountsSection({ activeAdminId }: { activeAdminId: number }) {
           </div>
           <Button
             type="submit"
-            className="h-10 bg-[#c9ff73] text-[#17210d] hover:bg-[#d8ff91]"
+            className="h-10 bg-white text-black hover:bg-zinc-200 font-mono font-bold text-xs shadow-md"
             disabled={!preProvisionEmail.trim() || preProvisionAccount.isPending}
           >
             {preProvisionAccount.isPending ? (
               <>
-                <Loader2 className="animate-spin" size={14} />
+                <Loader2 className="animate-spin mr-1" size={14} />
                 Authorizing…
               </>
             ) : (
@@ -923,7 +864,7 @@ export function AccountsSection({ activeAdminId }: { activeAdminId: number }) {
           </div>
           {preProvisionedAccounts.isLoading ? (
             <div className="grid h-24 place-items-center">
-              <Loader2 className="animate-spin text-[#c9ff73]" size={16} />
+              <Loader2 className="animate-spin text-white" size={16} />
             </div>
           ) : (preProvisionedAccounts.data as PreProvisionedAccount[] | undefined)?.length ? (
             (preProvisionedAccounts.data as PreProvisionedAccount[]).map((record) => (
@@ -939,8 +880,8 @@ export function AccountsSection({ activeAdminId }: { activeAdminId: number }) {
                   </p>
                 </div>
                 <Badge
-                  className={`h-fit border-0 text-[10px] ${
-                    record.activatedAt ? "bg-[#c9ff73]/10 text-[#c9ff73]" : "bg-[#f0c180]/10 text-[#f0c180]"
+                  className={`h-fit border-0 text-[10px] font-mono ${
+                    record.activatedAt ? "bg-emerald-500/10 text-emerald-400" : "bg-amber-500/10 text-amber-300"
                   }`}
                 >
                   {record.activatedAt

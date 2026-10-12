@@ -46,7 +46,7 @@ export const trpcRateLimit = rateLimit({
     res.status(429).json([
       {
         error: {
-          message: "Too many requests to TokenForge services from this IP. Please slow down.",
+          message: "Too many requests to Qronos AI services from this IP. Please slow down.",
           code: -32029,
           data: { httpStatus: 429 },
         },

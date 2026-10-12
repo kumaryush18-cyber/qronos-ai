@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 import { Loader2, Send, User } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { Streamdown } from "streamdown";
-import { TokenForgeGlyph } from "./TokenForgeGlyph";
+import { QronosGlyph } from "./QronosGlyph";
 
 /**
  * Message type matching server-side LLM Message interface
@@ -125,8 +125,26 @@ export function AIChatBox({
   const [input, setInput] = useState("");
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const inputWrapRef = useRef<HTMLDivElement>(null);
   const inputAreaRef = useRef<HTMLFormElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [inputPath, setInputPath] = useState<string>("");
+
+  useEffect(() => {
+    const updatePath = () => {
+      if (inputWrapRef.current) {
+        const w = inputWrapRef.current.offsetWidth;
+        const h = inputWrapRef.current.offsetHeight;
+        if (w > 0 && h > 0) {
+          setInputPath(`path('M 0 0 H ${w} V ${h} H 0 V 0')`);
+        }
+      }
+    };
+    updatePath();
+    const observer = new ResizeObserver(updatePath);
+    if (inputWrapRef.current) observer.observe(inputWrapRef.current);
+    return () => observer.disconnect();
+  }, []);
 
   // Filter out system messages
   const displayMessages = messages.filter((msg) => msg.role !== "system");
@@ -209,7 +227,7 @@ export function AIChatBox({
           <div className="flex h-full flex-col p-3 sm:p-4 overflow-y-auto">
             <div className="flex flex-1 flex-col items-center justify-center gap-5 sm:gap-6 text-muted-foreground my-auto py-6">
               <div className="flex flex-col items-center gap-2.5 text-center px-4">
-                <TokenForgeGlyph className="size-10 sm:size-12 opacity-30" label="TokenForge" />
+                <QronosGlyph size={48} className="opacity-30" alt="Qronos AI" />
                 <p className="text-xs sm:text-sm max-w-md">{emptyStateMessage}</p>
               </div>
 
@@ -256,7 +274,7 @@ export function AIChatBox({
                   >
                     {message.role === "assistant" && (
                       <div className="size-7 sm:size-8 shrink-0 mt-0.5 rounded-full bg-primary/10 flex items-center justify-center">
-                        <TokenForgeGlyph className="size-3.5 sm:size-4 text-primary" label="TokenForge response" />
+                        <QronosGlyph size={16} alt="Qronos AI response" />
                       </div>
                     )}
 
@@ -269,7 +287,7 @@ export function AIChatBox({
                       )}
                     >
                       {isPendingAssistant ? (
-                        <Loader2 className="size-4 animate-spin text-muted-foreground" aria-label="TokenForge is responding" />
+                        <Loader2 className="size-4 animate-spin text-muted-foreground" aria-label="Qronos AI is responding" />
                       ) : message.role === "assistant" ? (
                         <div className="min-w-0 w-full overflow-hidden">
                           {message.thinking ? (
@@ -310,7 +328,7 @@ export function AIChatBox({
                   }
                 >
                   <div className="size-7 sm:size-8 shrink-0 mt-0.5 rounded-full bg-primary/10 flex items-center justify-center">
-                    <TokenForgeGlyph className="size-3.5 sm:size-4 text-primary" label="TokenForge is responding" />
+                    <QronosGlyph size={16} alt="Qronos AI is responding" />
                   </div>
                   <div className="rounded-xl bg-muted px-3 sm:px-4 py-2 sm:py-2.5">
                     <Loader2 className="size-4 animate-spin text-muted-foreground" />
@@ -322,34 +340,64 @@ export function AIChatBox({
         )}
       </div>
 
-      {/* Input Area */}
-      <form
-        ref={inputAreaRef}
-        onSubmit={handleSubmit}
-        className="flex gap-2 p-2.5 sm:p-4 border-t bg-background/50 items-end min-w-0 max-w-full"
-      >
-        <Textarea
-          ref={textareaRef}
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder={placeholder}
-          className="flex-1 max-h-32 resize-none min-h-9 text-xs sm:text-sm min-w-0"
-          rows={1}
-        />
-        <Button
-          type="submit"
-          size="icon"
-          disabled={!input.trim() || isLoading}
-          className="shrink-0 h-[38px] w-[38px]"
+      {/* Input Area with Rotating Border Light */}
+      <div className="p-2.5 sm:p-4 border-t border-white/[0.08] bg-black/40">
+        <div
+          ref={inputWrapRef}
+          style={{
+            ["--duration" as any]: 6,
+            ["--light-width" as any]: "160px",
+            ["--light-color" as any]: "rgba(255, 255, 255, 0.9)",
+            ["--path" as any]: inputPath,
+            isolation: "isolate",
+          }}
+          className="relative rounded-2xl p-[1px] overflow-hidden group transition-all duration-300"
         >
-          {isLoading ? (
-            <Loader2 className="size-4 animate-spin" />
-          ) : (
-            <Send className="size-4" />
+          {/* Rotating Light Beam around Input Box Border */}
+          {inputPath && (
+            <div
+              aria-hidden="true"
+              className="absolute aspect-square inset-0 animate-star-btn pointer-events-none z-0"
+              style={{
+                offsetPath: "var(--path)",
+                offsetDistance: "0%",
+                width: "var(--light-width)",
+                background:
+                  "radial-gradient(ellipse at center, var(--light-color) 0%, rgba(255,255,255,0.4) 30%, transparent 70%)",
+                filter: "blur(2px)",
+              }}
+            />
           )}
-        </Button>
-      </form>
+
+          <form
+            ref={inputAreaRef}
+            onSubmit={handleSubmit}
+            className="relative z-10 flex gap-2 p-2 sm:p-2.5 rounded-[15px] bg-[#0a0c10]/95 backdrop-blur-2xl border border-white/10 items-end min-w-0 max-w-full focus-within:border-white/30 transition-all"
+          >
+            <Textarea
+              ref={textareaRef}
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder={placeholder}
+              className="flex-1 max-h-32 resize-none min-h-9 text-xs sm:text-sm min-w-0 bg-transparent border-0 focus-visible:ring-0 text-white placeholder:text-zinc-500 font-sans shadow-none"
+              rows={1}
+            />
+            <Button
+              type="submit"
+              size="icon"
+              disabled={!input.trim() || isLoading}
+              className="shrink-0 h-[38px] w-[38px] rounded-xl bg-white text-black hover:bg-zinc-200 disabled:opacity-30 disabled:hover:bg-white transition-all cursor-pointer shadow-sm"
+            >
+              {isLoading ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <Send className="size-4" />
+              )}
+            </Button>
+          </form>
+        </div>
+      </div>
     </div>
   );
 }

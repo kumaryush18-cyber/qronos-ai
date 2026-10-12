@@ -46,7 +46,7 @@ export function FirstTimeOnboarding({ user }: { user: { id: number; name?: strin
         <div className="relative p-5 sm:p-7">
           <div className="grid h-12 w-12 place-items-center rounded-2xl border border-[#c9ff73]/25 bg-[#c9ff73]/10 text-[#c9ff73] shadow-[0_0_0_7px_rgba(201,255,115,.045)]"><Sparkles size={21} /></div>
           <DialogHeader className="mt-5 text-left">
-            <p className="text-[10px] font-bold uppercase tracking-[.18em] text-[#a6c970]">Welcome to TokenForge</p>
+            <p className="text-[10px] font-bold uppercase tracking-[.18em] text-[#a6c970]">Welcome to Qronos AI</p>
             <DialogTitle className="mt-2 text-2xl font-bold tracking-[-.04em] text-white">Your workspace is active, {user.name?.split(" ")[0] || "developer"}.</DialogTitle>
             <DialogDescription className="pt-2 text-sm leading-6 text-[#aeb7a7]">Your account is verified and loaded with build credit. Create an API key or test live models in the playground to begin.</DialogDescription>
           </DialogHeader>

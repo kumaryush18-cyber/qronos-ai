@@ -1,26 +1,34 @@
 import { defineConfig } from "drizzle-kit";
 
-const DIRECT_DATABASE_URL = "mysql://426Z9KBUqRumUkQ.root:GdEOEZstbT2tQmJy@gateway01.ap-southeast-1.prod.aws.tidbcloud.com:4000/test";
+const connectionString = process.env.CUSTOM_DATABASE_URL || process.env.DATABASE_URL;
 
-const connectionString = DIRECT_DATABASE_URL || process.env.CUSTOM_DATABASE_URL || process.env.DATABASE_URL;
-if (!connectionString) {
-  throw new Error("CUSTOM_DATABASE_URL or DATABASE_URL is required to run drizzle commands");
+let credentials: any = { url: connectionString || "" };
+
+if (connectionString) {
+  try {
+    const parsed = new URL(connectionString);
+    const isSsl = /tidbcloud\.com|aivencloud\.com/i.test(parsed.hostname);
+    if (isSsl) {
+      credentials = {
+        host: parsed.hostname,
+        port: parsed.port ? Number(parsed.port) : 4000,
+        user: decodeURIComponent(parsed.username),
+        password: decodeURIComponent(parsed.password),
+        database: parsed.pathname.replace(/^\//, "").split("?")[0],
+        ssl: { rejectUnauthorized: true },
+      };
+    } else {
+      credentials = { url: connectionString };
+    }
+  } catch {
+    credentials = { url: connectionString };
+  }
 }
-
-// Parse connection URL for TiDB SSL support
-const url = new URL(connectionString);
-const sslEnabled = url.hostname.includes("tidbcloud.com");
 
 export default defineConfig({
   schema: "./drizzle/schema.ts",
   out: "./drizzle",
   dialect: "mysql",
-  dbCredentials: {
-    url: connectionString,
-    ...(sslEnabled ? {
-      connection: {
-        ssl: { rejectUnauthorized: true },
-      },
-    } : {}),
-  },
+  dbCredentials: credentials,
 });
+

@@ -20,7 +20,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { useIsMobile } from "@/hooks/useMobile";
-import { ArrowLeftRight, Boxes, ChartNoAxesCombined, CreditCard, FlaskConical, Gift, KeyRound, LayoutDashboard, LifeBuoy, LogOut, PanelLeft, Receipt, Settings2, Shield, Ticket, UserRound } from "lucide-react";
+import { ArrowLeftRight, Boxes, ChartNoAxesCombined, ChevronDown, CreditCard, FlaskConical, Gift, KeyRound, LayoutDashboard, LifeBuoy, LogOut, PanelLeft, Receipt, Settings2, Shield, Terminal, UserRound } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
@@ -30,22 +30,21 @@ import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
 import { LoginWelcomeTour } from "./LoginWelcomeTour";
 import { AnnouncementBanner } from "./AnnouncementBanner";
 import { MaintenanceCountdownBanner } from "./MaintenanceCountdownBanner";
-import { TokenForgeGlyph } from "./TokenForgeGlyph";
+import { QronosGlyph } from "./QronosGlyph";
 import { PearlAvatar } from "@/components/ui/pearl-avatar";
 import { UserTierBadge } from "@/components/UserTierBadge";
+import { NotificationBell } from "@/components/NotificationBell";
 import "./dashboard-shell.css";
 
 const menuItems = [
   { icon: LayoutDashboard, label: "Overview", path: "/dashboard" },
-  { icon: FlaskConical, label: "Playground", path: "/dashboard/playground" },
-  { icon: Boxes, label: "Models", path: "/dashboard/models" },
+  { icon: Terminal, label: "Playground", path: "/dashboard/playground" },
+  { icon: Boxes, label: "Models", path: "/models" },
   { icon: CreditCard, label: "Pricing", path: "/dashboard/pricing" },
   { icon: KeyRound, label: "API keys", path: "/dashboard/keys" },
-  { icon: Ticket, label: "Tickets", path: "/dashboard/tickets" },
   { icon: Gift, label: "Referrals", path: "/dashboard/referrals" },
   { icon: ChartNoAxesCombined, label: "Usage logs", path: "/dashboard/usage" },
   { icon: ArrowLeftRight, label: "Transactions", path: "/dashboard/transactions" },
-  { icon: Receipt, label: "Payments", path: "/dashboard/payments" },
   { icon: UserRound, label: "Profile", path: "/dashboard/profile" },
   { icon: Shield, label: "Admin", path: "/admin", adminOnly: true },
   { icon: Settings2, label: "Settings", path: "/admin/settings", adminOnly: true },
@@ -84,7 +83,7 @@ export default function DashboardLayout({
               Sign in to continue
             </h1>
             <p className="text-sm text-muted-foreground text-center max-w-sm">
-              Access to this dashboard requires a TokenForge account. Create one or sign in to continue.
+              Access to this dashboard requires a Qronos AI account. Create one or sign in to continue.
             </p>
           </div>
           <div className="w-full flex flex-col sm:flex-row items-center justify-center gap-3">
@@ -190,17 +189,21 @@ function DashboardLayoutContent({
               </button>
               {!isCollapsed ? (
                 <div className="dashboard-sidebar-brand min-w-0">
-                  <TokenForgeGlyph className="dashboard-sidebar-brand__glyph" />
-                  <div><span>Token<span>Forge</span></span><small>Developer gateway</small></div>
+                  <QronosGlyph size={28} className="dashboard-sidebar-brand__glyph" />
+                  <div><span>Qronos <span>AI</span></span><small>LLM Gateway</small></div>
                 </div>
-              ) : <TokenForgeGlyph className="dashboard-sidebar-brand__glyph dashboard-sidebar-brand__glyph--collapsed" />}
+              ) : <QronosGlyph size={24} className="dashboard-sidebar-brand__glyph dashboard-sidebar-brand__glyph--collapsed" />}
             </div>
           </SidebarHeader>
 
           <SidebarContent className="gap-0">
             <SidebarMenu className="px-2 py-1">
               {menuItems.filter(item => !item.adminOnly || user?.isAdminSession === true || user?.role === "admin").map(item => {
-                const isActive = location === item.path || (item.path === "/dashboard/models" && location.startsWith("/dashboard/models/"));
+                const isActive =
+                  location === item.path ||
+                  (item.path === "/models" && (location === "/dashboard/models" || location.startsWith("/models/") || location.startsWith("/dashboard/models/"))) ||
+                  (item.path === "/dashboard/playground" && (location === "/dashboard/playground" || location === "/playground")) ||
+                  (item.path === "/dashboard/pricing" && (location === "/dashboard/pricing" || location === "/pricing"));
                 return (
                   <SidebarMenuItem key={item.path}>
                     <SidebarMenuButton
@@ -219,40 +222,6 @@ function DashboardLayoutContent({
               })}
             </SidebarMenu>
           </SidebarContent>
-
-          <SidebarFooter className="p-3">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button className="flex items-center gap-3 rounded-xl px-2 py-2 hover:bg-white/[0.04] transition-colors w-full text-left group-data-[collapsible=icon]:justify-center focus:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                  <PearlAvatar
-                    size={36}
-                    letter={user?.name?.charAt(0).toUpperCase() || user?.email?.charAt(0).toUpperCase() || "A"}
-                  />
-                  <div className="flex-1 min-w-0 group-data-[collapsible=icon]:hidden">
-                    <p className="text-sm font-medium truncate leading-none text-white/90">
-                      {user?.name || "-"}
-                    </p>
-                    <p className="text-xs text-muted-foreground truncate mt-1.5">
-                      {user?.email || "-"}
-                    </p>
-                    <div className="mt-1.5 flex items-center gap-1.5 flex-wrap">
-                      <UserTierBadge tier={(user as any)?.tier} size="xs" showTag />
-                      {user?.isAdminSession === true && <p className="inline-flex rounded-md bg-[#c9ff73]/10 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-[.12em] text-[#8abd34]">Admin</p>}
-                    </div>
-                  </div>
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-48">
-                <DropdownMenuItem
-                  onClick={() => void handleSignOut()}
-                  className="cursor-pointer text-destructive focus:text-destructive"
-                >
-                  <LogOut className="mr-2 h-4 w-4" />
-                  <span>Sign out</span>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </SidebarFooter>
         </Sidebar>
         <div
           className={`absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-primary/20 transition-colors ${isCollapsed ? "hidden" : ""}`}
@@ -268,32 +237,77 @@ function DashboardLayoutContent({
         <header className="dashboard-topbar">
           <div className="dashboard-topbar__brand">
             {isMobile && <SidebarTrigger className="dashboard-topbar__trigger shrink-0" />}
-            <Link href="/dashboard" className="dashboard-topbar__logo shrink-0" aria-label="TokenForge dashboard home">
-              <TokenForgeGlyph className="dashboard-topbar__glyph" />
-              <span>Token<span>Forge</span></span>
+            <Link href="/dashboard" className="dashboard-topbar__logo shrink-0" aria-label="Qronos AI dashboard home">
+              <QronosGlyph size={24} className="dashboard-topbar__glyph" />
+              <span>Qronos <span>AI</span></span>
             </Link>
             <span className="dashboard-topbar__divider hidden sm:block" />
             <span className="dashboard-topbar__section hidden sm:inline-block truncate max-w-[120px] md:max-w-[200px]">{activeMenuItem?.label ?? "Workspace"}</span>
           </div>
           <div className="dashboard-topbar__actions">
-            <UserTierBadge tier={(user as any)?.tier} size="xs" showTag className="hidden md:inline-flex" />
-            <UserTierBadge tier={(user as any)?.tier} size="xs" showTag={false} className="inline-flex md:hidden" />
-            {user?.isAdminSession === true && (
-              <span className="rounded-md bg-[#c9ff73]/10 px-2 py-1 text-[9px] font-bold uppercase tracking-[.12em] text-[#9fd743] shrink-0">
-                Admin<span className="hidden sm:inline"> session</span>
-              </span>
-            )}
-            <span className="dashboard-topbar__status shrink-0">
+            <span className="dashboard-topbar__status shrink-0 hidden sm:inline-flex">
               <i /> <span className="hidden sm:inline">Gateway </span>ready
             </span>
-            <Link href="/docs" className="hidden lg:inline-block">Documentation</Link>
+            <Link href="/dashboard/playground" className="hidden md:inline-block hover:text-white transition-colors">Playground</Link>
+            <Link href="/models" className="hidden md:inline-block hover:text-white transition-colors">Models</Link>
+            <Link href="/dashboard/pricing" className="hidden md:inline-block hover:text-white transition-colors">Pricing</Link>
+            <Link href="/docs" className="hidden lg:inline-block hover:text-white transition-colors">Documentation</Link>
+
+            {/* Notification Bell */}
+            <NotificationBell />
+
+            {/* User Profile & Account Dropdown in Topbar */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button className="flex items-center gap-2 rounded-full pl-1.5 pr-2.5 py-1 bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 transition-all focus:outline-none cursor-pointer">
+                  <PearlAvatar
+                    size={28}
+                    letter={user?.name?.charAt(0).toUpperCase() || user?.email?.charAt(0).toUpperCase() || "Q"}
+                  />
+                  <div className="flex flex-col text-left hidden sm:flex">
+                    <span className="text-xs font-semibold text-white leading-none">
+                      {user?.name ? user.name.split(" ")[0] : "Account"}
+                    </span>
+                    <span className="text-[10px] text-zinc-400 font-mono leading-none mt-0.5 max-w-[110px] truncate">
+                      {user?.email || ""}
+                    </span>
+                  </div>
+                  <ChevronDown size={11} className="text-zinc-400 ml-0.5" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56 bg-[#0c0d12] border border-white/10 text-white rounded-2xl p-1.5 shadow-2xl">
+                <div className="px-2.5 py-2 border-b border-white/[0.08] mb-1">
+                  <p className="text-xs font-bold text-white truncate">{user?.name || "Developer"}</p>
+                  <p className="text-[11px] font-mono text-zinc-400 truncate mt-0.5">{user?.email || "-"}</p>
+                  <div className="mt-1.5 flex items-center gap-1.5">
+                    <UserTierBadge tier={(user as any)?.tier} size="xs" showTag />
+                  </div>
+                </div>
+                <DropdownMenuItem onClick={() => setLocation("/dashboard/profile")} className="cursor-pointer text-xs font-mono py-2 rounded-xl hover:bg-white/[0.08]">
+                  <UserRound className="mr-2 h-3.5 w-3.5 text-zinc-400" />
+                  <span>Profile & Account</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setLocation("/dashboard/keys")} className="cursor-pointer text-xs font-mono py-2 rounded-xl hover:bg-white/[0.08]">
+                  <KeyRound className="mr-2 h-3.5 w-3.5 text-zinc-400" />
+                  <span>API Keys</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setLocation("/dashboard/transactions")} className="cursor-pointer text-xs font-mono py-2 rounded-xl hover:bg-white/[0.08]">
+                  <ArrowLeftRight className="mr-2 h-3.5 w-3.5 text-zinc-400" />
+                  <span>Transactions</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => void handleSignOut()} className="cursor-pointer text-xs font-mono py-2 rounded-xl text-red-400 focus:text-red-300 hover:bg-red-500/10 mt-1 border-t border-white/[0.06]">
+                  <LogOut className="mr-2 h-3.5 w-3.5" />
+                  <span>Sign out</span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </header>
         <AnnouncementBanner />
         <MaintenanceCountdownBanner />
         <main className="dashboard-main">{children}</main>
         <footer className="dashboard-footer">
-          <div><TokenForgeGlyph className="dashboard-footer__glyph" /><span>Token<span>Forge</span> developer workspace</span></div>
+          <div><QronosGlyph size={20} className="dashboard-footer__glyph" /><span>Qronos <span>AI</span> developer workspace</span></div>
           <p>Curated models. Visible limits. Deliberate building. Credits are digital goods delivered instantly and are non-refundable once consumed.</p>
           <nav aria-label="Dashboard footer">
             <Link href="/models">Models</Link>
@@ -303,7 +317,7 @@ function DashboardLayoutContent({
             <Link href="/legal/privacy">Privacy Policy</Link>
             <Link href="/legal/refund">Refund Policy</Link>
             <a
-              href="https://discord.gg/8DS5F6sGsY"
+              href="https://discord.gg/xVDscH5ezj"
               target="_blank"
               rel="noreferrer"
               className="inline-flex items-center gap-1"

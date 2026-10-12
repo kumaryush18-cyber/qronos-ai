@@ -155,11 +155,11 @@ async function startServer() {
     serveStatic(app);
   }
 
-  const port = 3000;
+  const port = parseInt(process.env.PORT || "3000", 10);
 
   server.on("error", (err: NodeJS.ErrnoException) => {
     if (err.code === "EADDRINUSE") {
-      console.warn(`[TokenForge] Port ${port} is in use, retrying in 1 second...`);
+      console.warn(`[Qronos AI] Port ${port} is in use, retrying in 1 second...`);
       setTimeout(() => {
         try {
           server.close();
@@ -169,7 +169,7 @@ async function startServer() {
         server.listen(port, "0.0.0.0");
       }, 1000);
     } else {
-      console.error("[TokenForge] Server error:", err);
+      console.error("[Qronos AI] Server error:", err);
     }
   });
 
@@ -190,7 +190,7 @@ async function startServer() {
   process.on("SIGINT", shutdown);
 
   Promise.all([ensureCatalogue(), clearLegacyAdministratorRoles(), loadAndCacheModelPricingOverrides()]).catch(error => {
-    console.error("[TokenForge] Startup access and catalogue warmup failed; requests will retry catalogue initialization on demand", error);
+    console.error("[Qronos AI] Startup access and catalogue warmup failed; requests will retry catalogue initialization on demand", error);
   });
 }
 

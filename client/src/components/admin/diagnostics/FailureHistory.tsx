@@ -84,7 +84,7 @@ export function ProviderFailureLogEntry({ entry }: { entry: ClaudeOpus5FailureLo
             </div>
             <div>
               <p className="text-[9px] font-bold uppercase tracking-[.11em] text-[#c9ff73]">
-                Caller-visible TokenForge message
+                Caller-visible Qronos AI message
               </p>
               <p className="mt-1 rounded-lg border border-[#c9ff73]/20 bg-[#c9ff73]/[.055] p-2 font-mono text-[10px] leading-4 text-[#e6f7c5]">
                 {entry.publicMessage ?? "The selected model is temporarily unavailable. Please retry shortly."}
@@ -131,82 +131,82 @@ export function ProviderScopedFailureHistory({
   const dynamicModelLogs = trpc.admin.modelFailureLogs.useQuery(
     { modelId: model },
     {
-      refetchInterval: 5_000,
+      refetchInterval: 15_000,
       refetchIntervalInBackground: false,
     }
   );
 
   const opus = trpc.admin.claudeOpus5FailureLogs.useQuery(undefined, {
-    refetchInterval: 5_000,
+    refetchInterval: 15_000,
     refetchIntervalInBackground: false,
     enabled: model === "claude-opus-5",
   });
   const fable = trpc.admin.claudeFable5FailureLogs.useQuery(undefined, {
-    refetchInterval: 5_000,
+    refetchInterval: 15_000,
     refetchIntervalInBackground: false,
     enabled: model === "claude-fable-5.1",
   });
   const glm = trpc.admin.glm53FailureLogs.useQuery(undefined, {
-    refetchInterval: 5_000,
+    refetchInterval: 15_000,
     refetchIntervalInBackground: false,
     enabled: model === "glm-5.3",
   });
   const sonnet = trpc.admin.sonnet46FailureLogs.useQuery(undefined, {
-    refetchInterval: 5_000,
+    refetchInterval: 15_000,
     refetchIntervalInBackground: false,
     enabled: model === "claude-sonnet-4.6",
   });
   const deepseek = trpc.admin.deepseekV4ProFailureLogs.useQuery(undefined, {
-    refetchInterval: 5_000,
+    refetchInterval: 15_000,
     refetchIntervalInBackground: false,
     enabled: model === "deepseek-v4-pro",
   });
   const qwen = trpc.admin.qwen38MaxFailureLogs.useQuery(undefined, {
-    refetchInterval: 5_000,
+    refetchInterval: 15_000,
     refetchIntervalInBackground: false,
     enabled: model === "qwen3.8-max",
   });
   const gpt6Astra = trpc.admin.gpt6AstraFailureLogs.useQuery(undefined, {
-    refetchInterval: 5_000,
+    refetchInterval: 15_000,
     refetchIntervalInBackground: false,
     enabled: model === "gpt-6-astra",
   });
   const kimi = trpc.admin.kimiK3FailureLogs.useQuery(undefined, {
-    refetchInterval: 5_000,
+    refetchInterval: 15_000,
     refetchIntervalInBackground: false,
     enabled: model === "kimi-k3",
   });
 
   const opusSettings = trpc.admin.claudeOpus5ProviderSettings.useQuery(undefined, {
-    refetchInterval: 5_000,
+    refetchInterval: 15_000,
     refetchIntervalInBackground: false,
   });
   const fableSettings = trpc.admin.claudeFable5ProviderSettings.useQuery(undefined, {
-    refetchInterval: 5_000,
+    refetchInterval: 15_000,
     refetchIntervalInBackground: false,
   });
   const glmSettings = trpc.admin.glm53ProviderSettings.useQuery(undefined, {
-    refetchInterval: 5_000,
+    refetchInterval: 15_000,
     refetchIntervalInBackground: false,
   });
   const sonnetSettings = trpc.admin.sonnet46ProviderSettings.useQuery(undefined, {
-    refetchInterval: 5_000,
+    refetchInterval: 15_000,
     refetchIntervalInBackground: false,
   });
   const deepseekSettings = trpc.admin.deepseekV4ProProviderSettings.useQuery(undefined, {
-    refetchInterval: 5_000,
+    refetchInterval: 15_000,
     refetchIntervalInBackground: false,
   });
   const qwenSettings = trpc.admin.qwen38MaxProviderSettings.useQuery(undefined, {
-    refetchInterval: 5_000,
+    refetchInterval: 15_000,
     refetchIntervalInBackground: false,
   });
   const gpt6AstraSettings = trpc.admin.gpt6AstraProviderSettings.useQuery(undefined, {
-    refetchInterval: 5_000,
+    refetchInterval: 15_000,
     refetchIntervalInBackground: false,
   });
   const kimiSettings = trpc.admin.kimiK3ProviderSettings.useQuery(undefined, {
-    refetchInterval: 5_000,
+    refetchInterval: 15_000,
     refetchIntervalInBackground: false,
   });
 
@@ -223,7 +223,7 @@ export function ProviderScopedFailureHistory({
   const universalSettings = trpc.admin.universalModelProviderSettings.useQuery(
     { modelId: model },
     {
-      refetchInterval: 5_000,
+      refetchInterval: 15_000,
       refetchIntervalInBackground: false,
     }
   );
@@ -512,27 +512,27 @@ export function ProviderScopedFailureHistory({
 
 export function BaiDiagnosticViewer() {
   const opus = trpc.admin.claudeOpus5FailureLogs.useQuery(undefined, {
-    refetchInterval: 5_000,
+    refetchInterval: 15_000,
     refetchIntervalInBackground: false,
   });
   const fable = trpc.admin.claudeFable5FailureLogs.useQuery(undefined, {
-    refetchInterval: 5_000,
+    refetchInterval: 15_000,
     refetchIntervalInBackground: false,
   });
   const glm = trpc.admin.glm53FailureLogs.useQuery(undefined, {
-    refetchInterval: 5_000,
+    refetchInterval: 15_000,
     refetchIntervalInBackground: false,
   });
   const sonnet = trpc.admin.sonnet46FailureLogs.useQuery(undefined, {
-    refetchInterval: 5_000,
+    refetchInterval: 15_000,
     refetchIntervalInBackground: false,
   });
   const deepseek = trpc.admin.deepseekV4ProFailureLogs.useQuery(undefined, {
-    refetchInterval: 5_000,
+    refetchInterval: 15_000,
     refetchIntervalInBackground: false,
   });
   const qwen = trpc.admin.qwen38MaxFailureLogs.useQuery(undefined, {
-    refetchInterval: 5_000,
+    refetchInterval: 15_000,
     refetchIntervalInBackground: false,
   });
 
@@ -552,7 +552,7 @@ export function BaiDiagnosticViewer() {
       <SectionHeader
         icon={<AlertTriangle size={17} />}
         title="b.ai diagnostic viewer"
-        detail="Administrator-only, credential-redacted failures from provider groups named b.ai. End users receive only TokenForge’s neutral provider-unavailable message."
+        detail="Administrator-only, credential-redacted failures from provider groups named b.ai. End users receive only Qronos AI’s neutral provider-unavailable message."
       />
       <div className="mt-4 h-72 space-y-2 overflow-y-auto overscroll-contain pr-2">
         {entries.length ? (
@@ -590,7 +590,7 @@ export function ClaudeOpus5FailureHistory({
 
 export function ClaudeOpus5QwenFailureHistory() {
   const failureLogs = trpc.admin.claudeOpus5FailureLogs.useQuery(undefined, {
-    refetchInterval: 5_000,
+    refetchInterval: 15_000,
     refetchIntervalInBackground: false,
   });
   const entries = ((failureLogs.data ?? []) as ClaudeOpus5FailureLog[]).filter(
@@ -643,7 +643,7 @@ export function ClaudeOpus5QwenFailureHistory() {
                       </div>
                       <div className="rounded-lg border border-[#c9ff73]/20 bg-[#c9ff73]/[.055] p-2">
                         <p className="text-[9px] font-bold uppercase tracking-[.11em] text-[#c9ff73]">
-                          Caller-visible TokenForge message
+                          Caller-visible Qronos AI message
                         </p>
                         <p className="mt-1 font-mono text-[10px] leading-4 text-[#e6f7c5]">
                           {entry.publicMessage ?? "The selected model is temporarily unavailable. Please retry shortly."}

@@ -397,7 +397,7 @@ export function LowBalanceWarning({
             </div>
 
             <Link
-              href="/dashboard/pricing"
+              href="/pricing"
               className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#c9ff73] hover:underline mt-0.5"
             >
               <span>Explore full pricing & credit tiers</span>

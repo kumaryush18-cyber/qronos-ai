@@ -55,7 +55,7 @@ export function UniversalModelProviderBalancer({
   });
 
   const modelAvailabilityQuery = trpc.public.modelAvailability.useQuery(undefined, {
-    refetchInterval: 5_000,
+    refetchInterval: 20_000,
   });
 
   const selectedModelMeta = useMemo(() => {
@@ -102,7 +102,7 @@ export function UniversalModelProviderBalancer({
   const settingsQuery = trpc.admin.universalModelProviderSettings.useQuery(
     { modelId: selectedModelId },
     {
-      refetchInterval: 5_000,
+      refetchInterval: 20_000,
       refetchIntervalInBackground: false,
     }
   );
@@ -110,7 +110,7 @@ export function UniversalModelProviderBalancer({
   const metricsQuery = trpc.admin.universalModelKeyMetrics.useQuery(
     { modelId: selectedModelId },
     {
-      refetchInterval: 5_000,
+      refetchInterval: 20_000,
       refetchIntervalInBackground: false,
     }
   );
@@ -215,7 +215,7 @@ export function UniversalModelProviderBalancer({
               </Badge>
             </div>
             <p className="text-xs text-[#8e90a2]">
-              Select ANY model in TokenForge to configure multiple equal-share provider pools, health-aware API key rotation, dedicated pinned users, custom system prompt reinforcement, error masking, and per-provider failure diagnostics.
+              Select ANY model in Qronos AI to configure multiple equal-share provider pools, health-aware API key rotation, dedicated pinned users, custom system prompt reinforcement, error masking, and per-provider failure diagnostics.
             </p>
           </div>
 

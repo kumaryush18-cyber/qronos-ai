@@ -32,10 +32,10 @@ type LiveRequest = {
 };
 
 const STATUS_LABEL: Record<LiveRequest["status"], { text: string; cls: string; dot: string }> = {
-  success: { text: "Success", cls: "text-[#c9ff73] bg-[#c9ff73]/10 border-[#c9ff73]/25", dot: "bg-[#4ade80]" },
+  success: { text: "Success", cls: "text-emerald-400 bg-emerald-500/10 border-emerald-500/25", dot: "bg-emerald-400" },
   provider_error: { text: "Provider error", cls: "text-red-300 bg-red-400/10 border-red-300/25", dot: "bg-red-500" },
   rejected: { text: "Rejected", cls: "text-amber-200 bg-amber-300/10 border-amber-300/25", dot: "bg-amber-400" },
-  cancelled: { text: "Cancelled", cls: "text-[#a9aab8] bg-white/6 border-white/12", dot: "bg-[#a9aab8]" },
+  cancelled: { text: "Cancelled", cls: "text-zinc-400 bg-white/6 border-white/12", dot: "bg-zinc-400" },
 };
 
 const MAX_ROWS = 300;
@@ -212,7 +212,7 @@ export default function LiveRequestLog() {
     }
 
     if (Notification.permission === "denied") {
-      alert("Notifications are blocked in your browser or device settings. Please go to Site Settings in your mobile/desktop browser to allow notifications for TokenForge.");
+      alert("Notifications are blocked in your browser or device settings. Please go to Site Settings in your mobile/desktop browser to allow notifications for Qronos AI.");
       return;
     }
 
@@ -227,7 +227,7 @@ export default function LiveRequestLog() {
           userId: 1,
           userName: "Admin",
           modelId: "Live Alert Ready",
-          provider: "TokenForge",
+          provider: "Qronos AI",
           status: "provider_error",
           source: "api",
           stream: false,
@@ -345,25 +345,32 @@ export default function LiveRequestLog() {
   }, [rows, autoScroll]);
 
   return (
-    <section className="dashboard-card space-y-4">
+    <section
+      style={{
+        backgroundColor: "oklch(0.14 0 0)",
+        borderColor: "oklch(0.26 0 0)",
+        boxShadow: "0 25px 60px rgba(0,0,0,0.85), inset 0 1px 0 rgba(255,255,255,0.06)",
+      }}
+      className="rounded-3xl border p-5 sm:p-7 shadow-2xl space-y-4"
+    >
       {/* Top Header */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-white/[0.08]">
         <div>
           <div className="flex items-center gap-2">
-            <p className="text-[10px] font-bold uppercase tracking-[.13em] text-[#858697]">Live request monitor</p>
+            <p className="text-[10px] font-bold uppercase tracking-[.18em] font-mono text-zinc-400">Live request monitor</p>
             {sessionFailures > 0 && (
-              <span className="flex items-center gap-1 rounded-full border border-red-500/30 bg-red-500/15 px-2 py-0.5 text-[10px] font-semibold text-red-300">
+              <span className="flex items-center gap-1 rounded-full border border-red-500/30 bg-red-500/15 px-2 py-0.5 text-[10px] font-mono font-semibold text-red-300">
                 <AlertTriangle size={11} /> {sessionFailures} {sessionFailures === 1 ? "failure" : "failures"} in session
               </span>
             )}
             {reasoningFallbackCount > 0 && (
-              <span className="flex items-center gap-1 rounded-full border border-amber-400/30 bg-amber-500/15 px-2 py-0.5 text-[10px] font-semibold text-amber-300">
+              <span className="flex items-center gap-1 rounded-full border border-amber-400/30 bg-amber-500/15 px-2 py-0.5 text-[10px] font-mono font-semibold text-amber-300">
                 ⚡ {reasoningFallbackCount} reasoning {reasoningFallbackCount === 1 ? "fallback" : "fallbacks"}
               </span>
             )}
           </div>
-          <h2 className="mt-1 text-lg font-bold text-white">Real-time requests & failure alerts</h2>
-          <p className="mt-1 text-[10px] text-[#9091a3]">
+          <h2 className="mt-1 text-xl font-extrabold text-white tracking-tight">Real-time requests & failure alerts</h2>
+          <p className="mt-1 text-xs text-zinc-400">
             Instant mobile & desktop system push notifications with vibration whenever a request fails.
           </p>
         </div>
@@ -371,8 +378,8 @@ export default function LiveRequestLog() {
         {/* Action Controls & Notification Settings */}
         <div className="flex flex-wrap items-center gap-2">
           {/* Connection status */}
-          <span className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-medium ${connected ? "border-[#c9ff73]/25 bg-[#c9ff73]/10 text-[#c9ff73]" : "border-red-500/25 bg-red-500/10 text-red-300"}`}>
-            <Radio size={12} className={connected ? "animate-pulse text-[#c9ff73]" : "text-red-400"} />
+          <span className={`flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-mono font-medium ${connected ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400" : "border-red-500/25 bg-red-500/10 text-red-300"}`}>
+            <Radio size={12} className={connected ? "animate-pulse text-emerald-400" : "text-red-400"} />
             <span>{connected ? "Connected" : "Reconnecting…"}</span>
           </span>
 
@@ -387,21 +394,21 @@ export default function LiveRequestLog() {
                 ? "Click to disable mobile/system notifications"
                 : "Click to enable mobile/system push notifications"
             }
-            className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-medium transition-colors ${
+            className={`flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-mono font-medium transition-colors cursor-pointer ${
               desktopAlerts && notifPermission === "granted"
-                ? "border-[#c9ff73]/30 bg-[#c9ff73]/15 text-[#c9ff73]"
+                ? "border-white/30 bg-white text-black font-bold shadow-md"
                 : notifPermission === "denied"
                 ? "border-red-500/30 bg-red-500/10 text-red-300"
-                : "border-white/12 bg-white/5 text-[#a9aab8] hover:bg-white/10 hover:text-white"
+                : "border-white/12 bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-white"
             }`}
           >
             {desktopAlerts && notifPermission === "granted" ? <Smartphone size={13} /> : <BellOff size={13} />}
             <span>
               {notifPermission === "denied"
-                ? "System Alerts Blocked"
+                ? "Alerts Blocked"
                 : desktopAlerts && notifPermission === "granted"
-                ? "Device Alerts: ON"
-                : "Device Alerts: OFF"}
+                ? "Device: ON"
+                : "Device: OFF"}
             </span>
           </button>
 
@@ -410,10 +417,10 @@ export default function LiveRequestLog() {
             type="button"
             onClick={() => setSoundAlerts(v => !v)}
             title="Toggle audio tone chime on failure"
-            className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-medium transition-colors ${
+            className={`flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-mono font-medium transition-colors cursor-pointer ${
               soundAlerts
-                ? "border-[#c9ff73]/30 bg-[#c9ff73]/15 text-[#c9ff73]"
-                : "border-white/12 bg-white/5 text-[#a9aab8] hover:bg-white/10 hover:text-white"
+                ? "border-white/30 bg-white text-black font-bold shadow-md"
+                : "border-white/12 bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-white"
             }`}
           >
             {soundAlerts ? <Volume2 size={13} /> : <VolumeX size={13} />}
@@ -425,16 +432,16 @@ export default function LiveRequestLog() {
             type="button"
             onClick={handleTestAlert}
             title="Trigger a test phone/system alert notification & audio chime"
-            className="flex items-center gap-1.5 rounded-lg border border-white/12 bg-white/5 px-2.5 py-1.5 text-[11px] font-medium text-[#e6e6ee] hover:bg-white/10 hover:text-white transition-colors"
+            className="flex items-center gap-1.5 rounded-xl border border-white/15 bg-white/10 px-3 py-1.5 text-xs font-mono font-bold text-white hover:bg-white/20 transition-colors cursor-pointer shadow-sm"
           >
-            <Play size={11} className="fill-current text-[#c9ff73]" /> Test System Alert
+            <Play size={11} className="fill-current text-white" /> Test Alert
           </button>
 
           {/* Auto scroll toggle */}
           <button
             type="button"
             onClick={() => setAutoScroll(value => !value)}
-            className={`rounded-lg border px-2.5 py-1.5 text-[11px] transition-colors ${autoScroll ? "border-white/20 bg-white/10 text-[#e6e6ee]" : "border-white/10 text-[#858697] hover:bg-white/5"}`}
+            className={`rounded-xl border px-3 py-1.5 text-xs font-mono transition-colors cursor-pointer ${autoScroll ? "border-white/20 bg-white/10 text-white font-bold" : "border-white/10 text-zinc-500 hover:bg-white/5"}`}
           >
             {autoScroll ? "Auto-scroll: On" : "Auto-scroll: Off"}
           </button>

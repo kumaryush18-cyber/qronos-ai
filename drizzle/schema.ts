@@ -174,7 +174,7 @@ export const apiKeys = mysqlTable(
     keyPrefix: varchar("keyPrefix", { length: 24 }).notNull(),
     keyHash: varchar("keyHash", { length: 128 }).notNull().unique(),
     label: varchar("label", { length: 100 }).notNull(),
-    keyGroup: varchar("keyGroup", { length: 32 }).default("bundle").notNull(),
+    keyGroup: varchar("keyGroup", { length: 32 }).default("payg").notNull(),
     status: mysqlEnum("status", ["active", "revoked"]).default("active").notNull(),
     lastUsedAt: timestamp("lastUsedAt"),
     revokedAt: timestamp("revokedAt"),
@@ -796,4 +796,43 @@ export const imageSemanticDescriptions = mysqlTable(
 
 export type ImageSemanticDescription = typeof imageSemanticDescriptions.$inferSelect;
 export type InsertImageSemanticDescription = typeof imageSemanticDescriptions.$inferInsert;
+
+export const systemNotifications = mysqlTable(
+  "system_notifications",
+  {
+    id: bigint("id", { mode: "number" }).autoincrement().primaryKey(),
+    title: varchar("title", { length: 255 }).notNull(),
+    message: text("message").notNull(),
+    type: varchar("type", { length: 32 }).default("announcement").notNull(),
+    targetAudience: varchar("target_audience", { length: 32 }).default("ALL").notNull(),
+    targetEmails: text("target_emails"),
+    createdByUserId: int("created_by_user_id").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  table => [
+    index("system_notifications_audience_idx").on(table.targetAudience),
+    index("system_notifications_created_idx").on(table.createdAt),
+  ],
+);
+
+export type SystemNotification = typeof systemNotifications.$inferSelect;
+export type InsertSystemNotification = typeof systemNotifications.$inferInsert;
+
+export const userNotificationReads = mysqlTable(
+  "user_notification_reads",
+  {
+    id: bigint("id", { mode: "number" }).autoincrement().primaryKey(),
+    notificationId: bigint("notification_id", { mode: "number" }).notNull(),
+    userId: int("user_id").notNull(),
+    readAt: timestamp("read_at").defaultNow().notNull(),
+  },
+  table => [
+    index("user_notif_reads_user_idx").on(table.userId),
+    uniqueIndex("user_notif_reads_unique_idx").on(table.userId, table.notificationId),
+  ],
+);
+
+export type UserNotificationRead = typeof userNotificationReads.$inferSelect;
+export type InsertUserNotificationRead = typeof userNotificationReads.$inferInsert;
+
 

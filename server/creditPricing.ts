@@ -6,10 +6,9 @@ export const DAILY_CHECKIN_CREDIT_NANOS = 2 * NANODOLLARS_PER_DOLLAR;
 export const DEFAULT_MAX_OUTPUT_TOKENS_FOR_CREDIT = 1_024;
 export const TOKENFORGE_PLATFORM_CHARGE_MULTIPLIER = 2.0;
 /**
- * Display baseline for "tokens processed": the metric starts at exactly 11,000M (11 Billion)
- * and increments with every token processed on the platform.
+ * Display baseline for "tokens processed": tracks real cumulative tokens processed on the platform.
  */
-export const TOKENFORGE_TOKEN_BASELINE = 11_000_000_000;
+export const TOKENFORGE_TOKEN_BASELINE = 0;
 export const TOKENFORGE_TOKEN_HISTORICAL = 0;
 
 function platformCreditRate(modelId: string, upstreamUsdPerMillion: number) {
@@ -85,7 +84,7 @@ export async function ensureFreshPricingOverrides(tier: PricingTier = "bundle"):
         return fresh;
       })
       .catch((err) => {
-        console.warn(`[TokenForge] Failed to sync ${tier} pricing overrides:`, err?.message ?? String(err));
+        console.warn(`[Qronos AI] Failed to sync ${tier} pricing overrides:`, err?.message ?? String(err));
         return currentOverrides;
       })
       .finally(() => {
@@ -100,6 +99,9 @@ export function getActivePricingOverrides(tier: PricingTier = "bundle"): Record<
   return tier === "payg" ? { ...activePaygPricingOverrides } : { ...activeBundlePricingOverrides };
 }
 
+export const PAYG_DISCOUNT_PERCENT = 60; // 60% off standard rates
+export const PAYG_RATE_MULTIPLIER = 0.40; // 40% of standard rate (60% discount)
+
 export const TOKENFORGE_PAYG_PRICING: Record<CreditPricedModel, {
   inputNanosPerToken: number;
   outputNanosPerToken: number;
@@ -108,9 +110,9 @@ export const TOKENFORGE_PAYG_PRICING: Record<CreditPricedModel, {
   inputUsdPerMillion: number;
   outputUsdPerMillion: number;
 }> = Object.fromEntries(TOKENFORGE_MODEL_CATALOGUE.map(model => {
-  // PAYG default baseline: 1.0x upstream base rate (zero platform markup)
-  const inputRate = Number(model.inputUsdPerMillion.toFixed(6));
-  const outputRate = Number(model.outputUsdPerMillion.toFixed(6));
+  // PAYG model discount: 60% off published rates
+  const inputRate = Number((model.inputUsdPerMillion * PAYG_RATE_MULTIPLIER).toFixed(6));
+  const outputRate = Number((model.outputUsdPerMillion * PAYG_RATE_MULTIPLIER).toFixed(6));
   return [model.id, {
     inputNanosPerToken: Math.round(inputRate * 1_000),
     outputNanosPerToken: Math.round(outputRate * 1_000),

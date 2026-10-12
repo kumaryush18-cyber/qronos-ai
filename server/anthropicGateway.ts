@@ -243,12 +243,12 @@ export function estimateNativeAnthropicInputTokens(input: { system?: unknown; me
 
 export function translateAnthropicRequest(raw: AnthropicRequest, privateGlmToolContinuations: ReadonlyMap<string, GlmPrivateToolContinuation> = new Map()): TokenForgeChatInput {
   if (typeof raw.model !== "string" || !raw.model.trim()) {
-    throw new AnthropicBridgeError(400, "invalid_request_error", "model must be a non-empty TokenForge Messages-supported model identifier.");
+    throw new AnthropicBridgeError(400, "invalid_request_error", "model must be a non-empty Qronos AI Messages-supported model identifier.");
   }
   const model = normalizeModelIdentifier(raw.model);
   const provider = isTokenForgeModelId(model) ? getTokenForgeProviderSlug(model) : null;
   if (provider !== CLUSTER_PROTOCOL_PROVIDER_SLUG && !OPENAI_TRANSLATED_MESSAGES_MODELS.has(model)) {
-    throw new AnthropicBridgeError(400, "invalid_request_error", `The Anthropic Messages endpoint does not support the requested TokenForge model ("${raw.model}").`);
+    throw new AnthropicBridgeError(400, "invalid_request_error", `The Anthropic Messages endpoint does not support the requested Qronos AI model ("${raw.model}").`);
   }
   if (!Array.isArray(raw.messages) || raw.messages.length < 1) {
     throw new AnthropicBridgeError(400, "invalid_request_error", "messages must contain at least one entry.");
@@ -846,19 +846,10 @@ async function handleNativeTokenRouterMessagesRequest(req: Request, res: Respons
   if (!quota) return respondError(res, requestId, 503, "api_error", "Account status is temporarily unavailable. Retry shortly.");
   if (quota.suspended) return respondError(res, requestId, 403, "permission_error", "This account is currently suspended.");
 
-  const keyGroup = ((key as any).keyGroup as "payg" | "bundle" | "token_plan" | "tokens" | "coding_plan") || "bundle";
+  const rawKeyGroup = (key as any).keyGroup;
+  const keyGroup = rawKeyGroup === "bundle" ? "payg" : (rawKeyGroup || "payg");
   const isTokenPlan = keyGroup === "token_plan" || keyGroup === "tokens" || keyGroup === "coding_plan";
-  const pricingTier: PricingTier = keyGroup === "payg" ? "payg" : "bundle";
-  const creditsEnabled = await isUserCreditsEnabled(key.userId);
-  if (keyGroup === "bundle" && !creditsEnabled) {
-    return respondError(
-      res,
-      requestId,
-      403,
-      "permission_error",
-      "Credit bundle system is currently disabled for this account. Please use a Tier 1 (Pay-As-You-Go) or Tier 2 (Token Plan) API key."
-    );
-  }
+  const pricingTier: PricingTier = "payg";
 
   const modelAccess = await getModelAccess(model);
   if (isTokenPlan && !modelAccess.isTokenPlan) {
@@ -919,7 +910,7 @@ async function handleNativeTokenRouterMessagesRequest(req: Request, res: Respons
         ? "Your Token Plan (Coding Tokens) balance is exhausted (0 tokens remaining). Please top up your coding tokens in your dashboard."
         : keyGroup === "payg"
         ? "Your Pay-As-You-Go (PAYG) balance cannot cover this request’s maximum estimated cost. Please top up your PAYG balance in your dashboard."
-        : "Your TokenForge promotional credit balance cannot cover this request’s maximum estimated cost. Please purchase a credit package or recharge in your dashboard."
+        : "Your Qronos AI promotional credit balance cannot cover this request’s maximum estimated cost. Please purchase a credit package or recharge in your dashboard."
     );
   }
 
@@ -1117,9 +1108,9 @@ export function registerAnthropicMessagesGateway(app: Express) {
   app.post("/v1/messages", async (req: Request, res: Response) => {
     const requestId = `tf_msg_${randomUUID().replaceAll("-", "")}`;
     const secret = anthropicApiKey(req);
-    if (!secret) return respondError(res, requestId, 401, "authentication_error", "Send a TokenForge key using the x-api-key or Bearer authorization header.");
+    if (!secret) return respondError(res, requestId, 401, "authentication_error", "Send a Qronos AI key using the x-api-key or Bearer authorization header.");
     const key = await findActiveApiKey(secret);
-    if (!key) return respondError(res, requestId, 401, "authentication_error", "The supplied TokenForge key is missing, invalid, or revoked.");
+    if (!key) return respondError(res, requestId, 401, "authentication_error", "The supplied Qronos AI key is missing, invalid, or revoked.");
 
     const accountRate = checkAccountRateLimit(key.userId);
     if (!accountRate.allowed) {
@@ -1158,20 +1149,10 @@ export function registerAnthropicMessagesGateway(app: Express) {
     };
     if (!(await isModelAvailable(model))) return respondError(res, requestId, 503, "api_error", "The requested model is temporarily unavailable. Retry shortly or choose another available model.");
 
-    const keyGroup = ((key as any).keyGroup as "payg" | "bundle" | "token_plan" | "tokens" | "coding_plan") || "bundle";
+    const rawKeyGroup = (key as any).keyGroup;
+    const keyGroup = rawKeyGroup === "bundle" ? "payg" : (rawKeyGroup || "payg");
     const isTokenPlan = keyGroup === "token_plan" || keyGroup === "tokens" || keyGroup === "coding_plan";
-    const pricingTier: PricingTier = keyGroup === "payg" ? "payg" : "bundle";
-    const creditsEnabled = await isUserCreditsEnabled(key.userId);
-
-    if (keyGroup === "bundle" && !creditsEnabled) {
-      return respondError(
-        res,
-        requestId,
-        403,
-        "permission_error",
-        "Credit bundle system is currently disabled for this account. Please use a Tier 1 (Pay-As-You-Go) or Tier 2 (Token Plan) API key."
-      );
-    }
+    const pricingTier: PricingTier = "payg";
 
     const modelAccess = await getModelAccess(model);
 
@@ -1265,7 +1246,7 @@ export function registerAnthropicMessagesGateway(app: Express) {
           ? "Your Token Plan (Coding Tokens) balance is exhausted (0 tokens remaining). Please top up your coding tokens in your dashboard."
           : keyGroup === "payg"
           ? "Your Pay-As-You-Go (PAYG) balance cannot cover this request’s maximum estimated cost. Please top up your PAYG balance in your dashboard."
-          : "Your TokenForge credit bundle balance cannot cover this request’s maximum estimated cost. Please purchase a credit package or recharge in your dashboard."
+          : "Your Qronos AI credit bundle balance cannot cover this request’s maximum estimated cost. Please purchase a credit package or recharge in your dashboard."
       );
     }
 

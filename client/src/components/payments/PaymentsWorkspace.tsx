@@ -232,7 +232,7 @@ export function PaymentsWorkspace({ adminMode = false }: { adminMode?: boolean }
           </Button>
 
           {!adminMode && (
-            <Link href="/dashboard/pricing">
+            <Link href="/pricing">
               <Button size="sm" className="bg-[#befe6c] text-[#0d1406] hover:bg-[#cbf781] font-semibold">
                 <Sparkles size={14} className="mr-1.5" />
                 Buy Credits
@@ -343,7 +343,7 @@ export function PaymentsWorkspace({ adminMode = false }: { adminMode?: boolean }
             </p>
             {!adminMode && !searchTerm && statusFilter === "ALL" && (
               <div className="mt-4">
-                <Link href="/dashboard/pricing">
+                <Link href="/pricing">
                   <Button size="sm" className="bg-[#befe6c] text-[#0d1406] hover:bg-[#cbf781] font-semibold">
                     Explore Pricing Plans
                   </Button>

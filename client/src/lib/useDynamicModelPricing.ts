@@ -11,8 +11,8 @@ export function formatRatePerMillion(rate: number) {
 
 export function useDynamicModelPricing(tier: "payg" | "bundle" = "payg") {
   const query = trpc.public.modelPricing.useQuery({ tier }, {
-    staleTime: 10_000,
-    refetchInterval: 15_000,
+    staleTime: 60_000,
+    refetchInterval: 120_000,
   });
 
   const pricingMap = useMemo(() => {

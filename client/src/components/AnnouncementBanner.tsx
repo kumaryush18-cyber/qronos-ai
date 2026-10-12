@@ -9,7 +9,7 @@ export function AnnouncementBanner() {
   if (!text) return null;
 
   return (
-    <section className="announcement-banner" aria-label="TokenForge announcement" role="status">
+    <section className="announcement-banner" aria-label="Qronos AI announcement" role="status">
       <div className="announcement-banner__label"><Megaphone size={13} aria-hidden="true" /><span>Forge signal</span></div>
       <div className="announcement-banner__viewport">
         <div className="announcement-banner__track">

@@ -1,8 +1,8 @@
 {
   "id": "/",
-  "name": "TokenForge Admin",
-  "short_name": "TokenForge",
-  "description": "TokenForge Live Request Monitoring & Failure Alerts",
+  "name": "Qronos AI Admin",
+  "short_name": "Qronos AI",
+  "description": "Qronos AI Live Request Monitoring & Failure Alerts",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

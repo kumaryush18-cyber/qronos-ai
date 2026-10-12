@@ -1,6 +1,6 @@
 /**
  * Established consumer and widely used international mailbox providers accepted
- * for first-party TokenForge authentication. Deliberately excludes arbitrary
+ * for first-party Qronos AI authentication. Deliberately excludes arbitrary
  * work and custom domains so account creation remains a curated beta surface.
  */
 export const ESTABLISHED_EMAIL_DOMAINS = [

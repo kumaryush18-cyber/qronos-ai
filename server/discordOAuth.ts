@@ -12,7 +12,7 @@ const DISCORD_TOKEN_URL = "https://discord.com/api/v10/oauth2/token";
 const DISCORD_API_URL = "https://discord.com/api/v10";
 const DISCORD_STATE_COOKIE = "tf_discord_oauth_state";
 const DISCORD_ACCOUNT_COOKIE = "tf_discord_oauth_account";
-const DISCORD_INVITE_URL = "https://discord.gg/8DS5F6sGsY";
+const DISCORD_INVITE_URL = "https://discord.gg/xVDscH5ezj";
 
 type DiscordIdentity = { id: string };
 

@@ -194,7 +194,7 @@ describe("GitHub-only authentication and developer protections", () => {
     vi.mocked(verifyAdminPasscode).mockReturnValue(true);
     const caller = appRouter.createCaller(makeContext().ctx);
 
-    await expect(caller.admin.unlock({ passcode: "8649" })).resolves.toEqual({ unlocked: true, alreadyAdmin: false, sessionVersion: 4 });
+    await expect(caller.admin.unlock({ passcode: "8649" })).resolves.toEqual({ unlocked: true, alreadyAdmin: false, sessionVersion: 4, token: expect.any(String) });
     expect(clearLegacyAdministratorRoles).toHaveBeenCalledOnce();
     expect(getAuthSessionVersion).toHaveBeenCalled();
     expect(getOrCreateAdminSessionPrincipal).toHaveBeenCalledOnce();
@@ -249,9 +249,9 @@ describe("GitHub-only authentication and developer protections", () => {
     const verified = await appRouter.createCaller(makeContext({ ...localUser, discordVerifiedAt: new Date("2026-08-16T00:00:00.000Z") }).ctx).developer.discordVerificationStatus();
     const administrator = await appRouter.createCaller(makeContext({ ...localUser, isAdminSession: true }).ctx).developer.discordVerificationStatus();
 
-    expect(unverified).toEqual({ verified: false, administratorBypass: false, discordInviteUrl: "https://discord.gg/8DS5F6sGsY" });
-    expect(verified).toEqual({ verified: true, administratorBypass: false, discordInviteUrl: "https://discord.gg/8DS5F6sGsY" });
-    expect(administrator).toEqual({ verified: true, administratorBypass: true, discordInviteUrl: "https://discord.gg/8DS5F6sGsY" });
+    expect(unverified).toEqual({ verified: false, administratorBypass: false, discordInviteUrl: "https://discord.gg/xVDscH5ezj" });
+    expect(verified).toEqual({ verified: true, administratorBypass: false, discordInviteUrl: "https://discord.gg/xVDscH5ezj" });
+    expect(administrator).toEqual({ verified: true, administratorBypass: true, discordInviteUrl: "https://discord.gg/xVDscH5ezj" });
     expect(Object.keys(verified)).not.toContain("discordUserId");
   });
 

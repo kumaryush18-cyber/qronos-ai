@@ -676,7 +676,7 @@ export function ClaudeOpus5ProviderBalancerPanel({
                     </div>
                     <p className="mt-1 text-[10px] leading-relaxed text-[#b4b7c8]">
                       {isBaiPriority
-                        ? "b.ai is set as top priority for Claude Opus 5 requests. If it experiences >3 consecutive failures, TokenForge automatically falls back to other providers."
+                        ? "b.ai is set as top priority for Claude Opus 5 requests. If it experiences >3 consecutive failures, Qronos AI automatically falls back to other providers."
                         : "Toggle on to prioritize b.ai for all incoming Claude Opus 5 calls."}
                     </p>
                   </div>
@@ -802,7 +802,7 @@ export function ClaudeOpus5ProviderBalancerPanel({
               <div className="mt-3.5 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-white/10 bg-white/[0.03] p-3">
                 <div className="max-w-xl">
                   <div className="flex items-center gap-2">
-                    <span className="text-xs font-semibold text-[#dedfe7]">Disable TokenForge Identity Injection</span>
+                    <span className="text-xs font-semibold text-[#dedfe7]">Disable Qronos AI Identity Injection</span>
                     <Badge
                       className={`border text-[9px] ${
                         draft.disableIdentityPrompt
@@ -814,7 +814,7 @@ export function ClaudeOpus5ProviderBalancerPanel({
                     </Badge>
                   </div>
                   <p className="mt-1 text-[10px] text-[#858697]">
-                    When enabled, TokenForge omits system identity prompts and context mandates for this provider, preventing models (such as Claude on 9router) from rejecting requests due to deceptive identity instructions.
+                    When enabled, Qronos AI omits system identity prompts and context mandates for this provider, preventing models (such as Claude on 9router) from rejecting requests due to deceptive identity instructions.
                   </p>
                 </div>
                 <Toggle
@@ -848,7 +848,7 @@ export function ClaudeOpus5ProviderBalancerPanel({
                     </Badge>
                   </div>
                   <p className="mt-1 text-[10px] text-[#858697]">
-                    When turned on, TokenForge disables credential cooldown for this provider. Requests will never be rejected in ~100ms due to temporary rate-limit or failover cooldowns and will always be dispatched directly to upstream.
+                    When turned on, Qronos AI disables credential cooldown for this provider. Requests will never be rejected in ~100ms due to temporary rate-limit or failover cooldowns and will always be dispatched directly to upstream.
                   </p>
                 </div>
                 <Toggle
@@ -882,7 +882,7 @@ export function ClaudeOpus5ProviderBalancerPanel({
                     </Badge>
                   </div>
                   <p className="mt-1 text-[10px] text-[#858697]">
-                    When enabled, TokenForge flags this provider as capable of processing multimodal and visual inputs (e.g. OpenRouter, Moonshot, or vision-enabled endpoints). Requests containing image attachments will be automatically routed to this provider.
+                    When enabled, Qronos AI flags this provider as capable of processing multimodal and visual inputs (e.g. OpenRouter, Moonshot, or vision-enabled endpoints). Requests containing image attachments will be automatically routed to this provider.
                   </p>
                 </div>
                 <Toggle
@@ -916,7 +916,7 @@ export function ClaudeOpus5ProviderBalancerPanel({
                     </Badge>
                   </div>
                   <p className="mt-1 text-[10px] text-[#858697]">
-                    When enabled, TokenForge flags this provider as capable of processing documents, PDFs, and file attachments (e.g. Anthropic document blocks or PDF-capable endpoints). Requests containing document attachments will be automatically routed to this provider.
+                    When enabled, Qronos AI flags this provider as capable of processing documents, PDFs, and file attachments (e.g. Anthropic document blocks or PDF-capable endpoints). Requests containing document attachments will be automatically routed to this provider.
                   </p>
                 </div>
                 <Toggle
@@ -950,7 +950,7 @@ export function ClaudeOpus5ProviderBalancerPanel({
                     )}
                   </div>
                   <p className="mt-1 text-[10px] text-[#858697]">
-                    Select a reasoning effort to override all requests routed to this provider (<strong>low</strong>, <strong>high</strong>, <strong>xhigh</strong>, <strong>max</strong>). If set to <strong>Default</strong>, TokenForge accepts whatever Claude Code or the client sends.
+                    Select a reasoning effort to override all requests routed to this provider (<strong>low</strong>, <strong>high</strong>, <strong>xhigh</strong>, <strong>max</strong>). If set to <strong>Default</strong>, Qronos AI accepts whatever Claude Code or the client sends.
                   </p>
                 </div>
                 <div className="w-full sm:w-64">
@@ -1135,7 +1135,7 @@ type ClaudeOpus5QwenModelDraft = {
 export function ClaudeOpus5ModelPoolPanel() {
   const utils = trpc.useUtils();
   const settings = trpc.admin.claudeOpus5ProviderSettings.useQuery(undefined, {
-    refetchInterval: 5_000,
+    refetchInterval: 20_000,
     refetchIntervalInBackground: false,
   });
   const label = "qwen";
@@ -1636,7 +1636,7 @@ export function ClaudeOpus5ModelPoolPanel() {
 export function ClaudeFable5ProviderBalancerPanel({ metrics }: { metrics?: ManagedProviderKeyMetricGroup }) {
   const utils = trpc.useUtils();
   const settings = trpc.admin.claudeFable5ProviderSettings.useQuery(undefined, {
-    refetchInterval: 5_000,
+    refetchInterval: 20_000,
     refetchIntervalInBackground: false,
   });
   const [drafts, setDrafts] = useState<ClaudeOpus5ProviderDraft[]>([]);
@@ -1733,7 +1733,7 @@ export function ClaudeFable5ProviderBalancerPanel({ metrics }: { metrics?: Manag
 export function Sonnet46ProviderBalancerPanel({ metrics }: { metrics?: ManagedProviderKeyMetricGroup }) {
   const utils = trpc.useUtils();
   const settings = trpc.admin.sonnet46ProviderSettings.useQuery(undefined, {
-    refetchInterval: 5_000,
+    refetchInterval: 20_000,
     refetchIntervalInBackground: false,
   });
   const [drafts, setDrafts] = useState<ClaudeOpus5ProviderDraft[]>([]);
@@ -1827,7 +1827,7 @@ export function Sonnet46ProviderBalancerPanel({ metrics }: { metrics?: ManagedPr
 export function Qwen38MaxProviderBalancerPanel({ metrics }: { metrics?: ManagedProviderKeyMetricGroup }) {
   const utils = trpc.useUtils();
   const settings = trpc.admin.qwen38MaxProviderSettings.useQuery(undefined, {
-    refetchInterval: 5_000,
+    refetchInterval: 20_000,
     refetchIntervalInBackground: false,
   });
   const [drafts, setDrafts] = useState<ClaudeOpus5ProviderDraft[]>([]);
@@ -1924,7 +1924,7 @@ export function Qwen38MaxProviderBalancerPanel({ metrics }: { metrics?: ManagedP
 export function Gpt6AstraProviderBalancerPanel({ metrics }: { metrics?: ManagedProviderKeyMetricGroup }) {
   const utils = trpc.useUtils();
   const settings = trpc.admin.gpt6AstraProviderSettings.useQuery(undefined, {
-    refetchInterval: 5_000,
+    refetchInterval: 20_000,
     refetchIntervalInBackground: false,
   });
   const [drafts, setDrafts] = useState<ClaudeOpus5ProviderDraft[]>([]);
@@ -2021,7 +2021,7 @@ export function Gpt6AstraProviderBalancerPanel({ metrics }: { metrics?: ManagedP
 export function KimiK3ProviderBalancerPanel({ metrics }: { metrics?: ManagedProviderKeyMetricGroup }) {
   const utils = trpc.useUtils();
   const settings = trpc.admin.kimiK3ProviderSettings.useQuery(undefined, {
-    refetchInterval: 5_000,
+    refetchInterval: 20_000,
     refetchIntervalInBackground: false,
   });
   const [drafts, setDrafts] = useState<ClaudeOpus5ProviderDraft[]>([]);
@@ -2118,7 +2118,7 @@ export function KimiK3ProviderBalancerPanel({ metrics }: { metrics?: ManagedProv
 export function DeepseekV4ProProviderBalancerPanel({ metrics }: { metrics?: ManagedProviderKeyMetricGroup }) {
   const utils = trpc.useUtils();
   const settings = trpc.admin.deepseekV4ProProviderSettings.useQuery(undefined, {
-    refetchInterval: 5_000,
+    refetchInterval: 20_000,
     refetchIntervalInBackground: false,
   });
   const [drafts, setDrafts] = useState<ClaudeOpus5ProviderDraft[]>([]);
@@ -2446,7 +2446,7 @@ export function BailuWebshareProxyUrlImporter() {
       <SectionHeader
         icon={<ShieldAlert size={17} />}
         title="Add Bailu Direct proxy by URL"
-        detail="Paste one complete Webshare Direct proxy URL. TokenForge parses it only in the protected server procedure and stores only encrypted connection fields."
+        detail="Paste one complete Webshare Direct proxy URL. Qronos AI parses it only in the protected server procedure and stores only encrypted connection fields."
       />
       <div className="mt-4 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
         <label className="text-[10px] font-semibold text-[#dedfe7]">
@@ -2596,7 +2596,7 @@ export function BailuWebshareProxySlotHealth({ settings }: { settings?: BailuWeb
 export function BailuWebshareProxyPool() {
   const utils = trpc.useUtils();
   const settings = trpc.admin.bailuWebshareProxyPoolSettings.useQuery(undefined, {
-    refetchInterval: 5_000,
+    refetchInterval: 20_000,
     refetchIntervalInBackground: false,
   });
   const [enabled, setEnabled] = useState(false);
@@ -2664,7 +2664,7 @@ export function BailuWebshareProxyPool() {
 export function BaiProviderCircuitPanel() {
   const utils = trpc.useUtils();
   const settings = trpc.admin.claudeOpus5ProviderSettings.useQuery(undefined, {
-    refetchInterval: 5_000,
+    refetchInterval: 20_000,
     refetchIntervalInBackground: false,
   });
   const setPriority = trpc.admin.setClaudeOpus5BaiPriority.useMutation({
@@ -2730,7 +2730,7 @@ export function BaiProviderCircuitPanel() {
       </div>
       <p className="mt-4 border-t border-white/8 pt-4 text-[10px] leading-5 text-[#858697]">
         {isPriority
-          ? "Priority is ON: First request and most traffic route directly to b.ai. If b.ai encounters >3 consecutive failures, TokenForge automatically falls back to secondary providers until b.ai recovers."
+          ? "Priority is ON: First request and most traffic route directly to b.ai. If b.ai encounters >3 consecutive failures, Qronos AI automatically falls back to secondary providers until b.ai recovers."
           : "Priority is OFF: Traffic rotates evenly across all configured and enabled Claude Opus 5 providers. Circuit breaker pause is disabled."}
       </p>
     </section>
@@ -2740,7 +2740,7 @@ export function BaiProviderCircuitPanel() {
 export function RenderNimProxySwarmPanel(props: any) {
   void props;
   const failureLogs = trpc.admin.claudeOpus5FailureLogs.useQuery(undefined, {
-    refetchInterval: 5_000,
+    refetchInterval: 20_000,
     refetchIntervalInBackground: false,
   });
   return (
@@ -2941,7 +2941,7 @@ export function ClaudeOpus5ProviderBalancerPanelWrapper({
 }) {
   const utils = trpc.useUtils();
   const settings = trpc.admin.claudeOpus5ProviderSettings.useQuery(undefined, {
-    refetchInterval: 5_000,
+    refetchInterval: 20_000,
     refetchIntervalInBackground: false,
   });
   const [drafts, setDrafts] = useState<ClaudeOpus5ProviderDraft[]>([]);
@@ -3063,7 +3063,7 @@ export function Glm53ProviderSettingsPanel({
 }) {
   const utils = trpc.useUtils();
   const settings = trpc.admin.glm53ProviderSettings.useQuery(undefined, {
-    refetchInterval: 5_000,
+    refetchInterval: 20_000,
     refetchIntervalInBackground: false,
   });
   const [drafts, setDrafts] = useState<ClaudeOpus5ProviderDraft[]>([]);

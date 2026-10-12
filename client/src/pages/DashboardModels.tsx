@@ -21,7 +21,7 @@ const TIER_ORDER: Record<string, number> = {
 export function DashboardModels({ modelId }: { modelId?: string }) {
   const { user } = useAuth();
   const userTier = (user as any)?.tier ?? "free";
-  const modelAvailability = trpc.developer.modelAvailability.useQuery(undefined, { refetchInterval: 5_000, refetchIntervalInBackground: true });
+  const modelAvailability = trpc.developer.modelAvailability.useQuery(undefined, { refetchInterval: 30_000, refetchIntervalInBackground: false });
   
   const modelMetaMap = useMemo(() => {
     return new Map(
@@ -39,7 +39,7 @@ export function DashboardModels({ modelId }: { modelId?: string }) {
   }, [modelAvailability.data]);
 
   const model = TOKENFORGE_MODELS.find(entry => entry.id === modelId);
-  if (modelId && !model) return <section className="dashboard-models-page"><Link href="/dashboard/models" className="dashboard-model-back"><ChevronLeft size={15} /> Back to models</Link><div className="dashboard-model-not-found"><Cpu size={22} /><h1>Model not found</h1><p>Choose an active text-chat model from the verified TokenForge catalogue.</p></div></section>;
+  if (modelId && !model) return <section className="dashboard-models-page"><Link href="/dashboard/models" className="dashboard-model-back"><ChevronLeft size={15} /> Back to models</Link><div className="dashboard-model-not-found"><Cpu size={22} /><h1>Model not found</h1><p>Choose an active text-chat model from the verified Qronos AI catalogue.</p></div></section>;
   if (model) return <ModelDetail model={model} meta={modelMetaMap.get(model.id)} userTier={userTier} />;
   return <ModelList modelMetaMap={modelMetaMap} userTier={userTier} />;
 }
@@ -74,7 +74,7 @@ function ModelList({ modelMetaMap, userTier }: { modelMetaMap: Map<string, { ava
         <div>
           <p>VERIFIED TEXT CATALOGUE</p>
           <h1>Models, kept clear.</h1>
-          <span>Every configured route has an Anthropic-compatible Messages surface (<code>/v1/messages</code>) and a published TokenForge credit rate.</span>
+          <span>Every configured route has an Anthropic-compatible Messages surface (<code>/v1/messages</code>) and a published Qronos AI credit rate.</span>
         </div>
         <Link href="/dashboard/playground" className="dashboard-models-primary"><Play size={14} /> Open Playground</Link>
       </header>
@@ -266,7 +266,7 @@ function ModelDetail({ model, meta, userTier }: { model: CatalogueModel; meta?: 
             )}
           </div>
           <code>{model.id}</code>
-          <p>{available === false ? "This model has been temporarily disabled by TokenForge administrators. Playground and API requests will return a temporary-unavailability response until it is enabled again." : model.description}</p>
+          <p>{available === false ? "This model has been temporarily disabled by Qronos AI administrators. Playground and API requests will return a temporary-unavailability response until it is enabled again." : model.description}</p>
         </div>
       </header>
 
@@ -286,7 +286,7 @@ function ModelDetail({ model, meta, userTier }: { model: CatalogueModel; meta?: 
       <section className="dashboard-model-detail__grid">
         <article>
           <div className="dashboard-model-detail__icon"><CircleDollarSign size={17} /></div>
-          <p>{rates.isCustom ? "TokenForge credit rate · Custom direct rate (0% markup)" : model.id === "gpt-6-astra" ? "TokenForge credit rate · 1:1 direct provider rate (0% markup)" : "TokenForge credit rate · 2.0× platform charge included"}</p>
+          <p>{rates.isCustom ? "Qronos AI credit rate · Custom direct rate (0% markup)" : model.id === "gpt-6-astra" ? "Qronos AI credit rate · 1:1 direct provider rate (0% markup)" : "Qronos AI credit rate · 2.0× platform charge included"}</p>
           <h2>Transparent usage pricing</h2>
           <dl>
             <div><dt>Input</dt><dd>{rates.inputFormatted} <small>per 1M tokens</small></dd></div>
@@ -360,9 +360,9 @@ function Glm53ModelDetail({
   }, null, 2);
 
   const snippets: Record<Glm53Snippet, string> = {
-    curl: `curl ${baseUrl} \\\n  -H "x-api-key: $TOKENFORGE_API_KEY" \\\n  -H "anthropic-version: 2023-06-01" \\\n  -H "Content-Type: application/json" \\\n  -d '${payload}'`,
-    javascript: `import Anthropic from "@anthropic-ai/sdk";\n\nconst client = new Anthropic({\n  apiKey: process.env.TOKENFORGE_API_KEY,\n  baseURL: "${PUBLIC_ORIGIN}",\n});\n\nconst message = await client.messages.create({\n  model: "${model.id}",\n  max_tokens: 1024,\n  messages: [{ role: "user", content: ${JSON.stringify(activeExample.prompt)} }],\n});\n\nconsole.log(message.content[0]?.text);`,
-    python: `import anthropic\n\nclient = anthropic.Anthropic(\n    api_key=os.environ["TOKENFORGE_API_KEY"],\n    base_url="${PUBLIC_ORIGIN}",\n)\n\nmessage = client.messages.create(\n    model="${model.id}",\n    max_tokens=1024,\n    messages=[{"role": "user", "content": ${JSON.stringify(activeExample.prompt)}}],\n)\nprint(message.content[0].text)`,
+    curl: `curl ${baseUrl} \\\n  -H "x-api-key: $QRONOS_API_KEY" \\\n  -H "anthropic-version: 2023-06-01" \\\n  -H "Content-Type: application/json" \\\n  -d '${payload}'`,
+    javascript: `import Anthropic from "@anthropic-ai/sdk";\n\nconst client = new Anthropic({\n  apiKey: process.env.QRONOS_API_KEY,\n  baseURL: "${PUBLIC_ORIGIN}",\n});\n\nconst message = await client.messages.create({\n  model: "${model.id}",\n  max_tokens: 1024,\n  messages: [{ role: "user", content: ${JSON.stringify(activeExample.prompt)} }],\n});\n\nconsole.log(message.content[0]?.text);`,
+    python: `import anthropic\n\nclient = anthropic.Anthropic(\n    api_key=os.environ["QRONOS_API_KEY"],\n    base_url="${PUBLIC_ORIGIN}",\n)\n\nmessage = client.messages.create(\n    model="${model.id}",\n    max_tokens=1024,\n    messages=[{"role": "user", "content": ${JSON.stringify(activeExample.prompt)}}],\n)\nprint(message.content[0].text)`,
   };
 
   const copy = async (value: string, key: string) => {
@@ -401,7 +401,7 @@ function Glm53ModelDetail({
             )}
           </div>
           <code>{model.id}</code>
-          <p>{available === false ? "This model is temporarily disabled by TokenForge administrators. API and Playground requests will return a temporary-unavailability response until it is enabled again." : "A configurable TokenRouter-backed reasoning model for structured analysis, code review, and technical drafting through TokenForge’s Anthropic-compatible Messages API."}</p>
+          <p>{available === false ? "This model is temporarily disabled by Qronos AI administrators. API and Playground requests will return a temporary-unavailability response until it is enabled again." : "A configurable TokenRouter-backed reasoning model for structured analysis, code review, and technical drafting through Qronos AI’s Anthropic-compatible Messages API."}</p>
         </div>
       </header>
 
@@ -420,18 +420,18 @@ function Glm53ModelDetail({
 
       <section className="glm53-detail__overview">
         <article>
-          <p>{rates.isCustom ? "TokenForge credit rate · Custom direct rate (0% markup)" : "TokenForge credit rate"}</p>
+          <p>{rates.isCustom ? "Qronos AI credit rate · Custom direct rate (0% markup)" : "Qronos AI credit rate"}</p>
           <h2>Configured-route pricing</h2>
           <dl>
             <div><dt>Input</dt><dd>{rates.inputFormatted} <small>per 1M tokens</small></dd></div>
             <div><dt>Output</dt><dd>{rates.outputFormatted} <small>per 1M tokens</small></dd></div>
           </dl>
-          <small>{rates.isCustom ? "Direct administrator price applied without platform charge." : "Includes TokenForge’s standard platform charge."}</small>
+          <small>{rates.isCustom ? "Direct administrator price applied without platform charge." : "Includes Qronos AI’s standard platform charge."}</small>
         </article>
         <article>
           <p>Request surface</p>
           <h2>Anthropic Messages API</h2>
-          <span>Use <code>{model.id}</code> at the TokenForge <code>POST /v1/messages</code> endpoint with standard Anthropic SDK or headers.</span>
+          <span>Use <code>{model.id}</code> at the Qronos AI <code>POST /v1/messages</code> endpoint with standard Anthropic SDK or headers.</span>
         </article>
       </section>
 
@@ -466,7 +466,7 @@ function Glm53ModelDetail({
           <div>
             <p>CODE SNIPPETS</p>
             <h2 id="glm53-snippets-title">Call GLM 5.3 from your stack.</h2>
-            <span>Connect via the Anthropic Messages endpoint using standard Anthropic headers. Keep your TokenForge API key secure.</span>
+            <span>Connect via the Anthropic Messages endpoint using standard Anthropic headers. Keep your Qronos AI API key secure.</span>
           </div>
         </div>
         <div className="glm53-detail__snippet-tabs" role="tablist" aria-label="GLM 5.3 code examples">

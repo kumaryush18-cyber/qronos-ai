@@ -427,7 +427,7 @@ export function registerDodoPaymentsGateway(app: Express) {
       });
 
       // Prepare return URL
-      const origin = req.get("origin") || process.env.TOKENFORGE_PUBLIC_ORIGIN || "https://tokenforge.ai.studio";
+      const origin = req.get("origin") || process.env.QRONOS_PUBLIC_ORIGIN || "https://qronos.ai";
       const resolvedReturnUrl = return_url || `${origin}/dashboard?tab=wallet&payment=dodo_success`;
 
       // Call checkout_sessions.create

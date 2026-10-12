@@ -1,24 +1,28 @@
 import { PublicNav } from "@/components/PublicNav";
 import { PublicFooter } from "@/pages/Models";
+import { StarButton } from "@/components/StarButton";
 import {
   ShieldCheck,
   FileText,
   RotateCcw,
   CheckCircle2,
-  Mail,
-  HelpCircle,
-  ExternalLink,
+  Lock,
   MessageCircle,
+  HelpCircle,
+  Clock,
+  ArrowRight
 } from "lucide-react";
 import { useLocation, Link } from "wouter";
+import "./infergate-docs-legal.css";
 
-export type LegalVariant = "terms" | "privacy" | "refund" | "acceptable-use";
+export type LegalVariant = "terms" | "privacy" | "refund" | "acceptable-use" | "security";
 
 interface LegalSection {
   heading: string;
   body: string;
   bullets?: string[];
   callout?: string;
+  calloutType?: "default" | "emerald" | "amber";
 }
 
 interface LegalPolicy {
@@ -33,306 +37,304 @@ interface LegalPolicy {
 const legalContent: Record<LegalVariant, LegalPolicy> = {
   terms: {
     label: "Terms of Service",
-    title: "Terms and conditions for TokenForge API Gateway.",
+    title: "Terms and Conditions for Qronos AI LLM Gateway",
     subtitle:
-      "Effective September 2026. These Terms of Service constitute a legally binding agreement governing your access to and use of the TokenForge developer platform, API routing infrastructure, load balancing services, and software subscription plans.",
-    effectiveDate: "September 2026 (Version 2.5)",
+      "Effective October 2026 (Version 3.0). These Terms of Service constitute a legally binding agreement between you and Qronos AI Systems governing access to the Qronos AI developer platform, API routing infrastructure, load-balancing services, and compute capacity allowances.",
+    effectiveDate: "October 2026 (Version 3.0)",
     icon: FileText,
     sections: [
       {
-        heading: "1. Acceptance of Terms and Eligibility",
-        body: "By registering an account, generating API credentials, purchasing developer subscription capacity, or sending requests to TokenForge endpoints, you expressly agree to be bound by these Terms of Service, our Privacy Policy, Acceptable Use Policy, and Refund Policy. If you are entering into these Terms on behalf of an organization or enterprise, you represent and warrant that you possess full legal authority to bind that entity.",
+        heading: "1. Acceptance of Terms & Legal Authority",
+        body: "By creating an account, generating API secret keys, topping up usage balances, or transmitting requests to Qronos AI gateway endpoints (/v1/messages or /v1/chat/completions), you expressly agree to be bound by these Terms of Service, our Privacy Policy, Refund Policy, and Acceptable Use Policy. If you access Qronos AI on behalf of a company or enterprise, you warrant that you possess full legal authority to bind that entity.",
         bullets: [
-          "You must be at least 18 years of age or the age of legal majority in your jurisdiction to use TokenForge developer services.",
-          "You must not be located in a jurisdiction subject to comprehensive international trade sanctions or designated on government restricted-party lists.",
-          "You agree to provide accurate, complete, and current account information during registration.",
+          "You must be at least 18 years of age or the age of legal majority in your jurisdiction to hold an active developer account.",
+          "You must not be located in a jurisdiction subject to comprehensive international sanctions or designated on government restricted-party lists.",
+          "You agree to provide authentic and current account details during registration.",
         ],
       },
       {
-        heading: "2. Description of TokenForge Software Services",
-        body: "TokenForge provides developer infrastructure software, including an intelligent multi-model API router, latency optimization middleware, circuit breakers, and a unified Anthropic-compatible REST API interface (POST /v1/messages). TokenForge enables software developers and teams to route model requests with automated failover, real-time latency telemetry, and unified usage observability.",
+        heading: "2. Description of Qronos AI Services",
+        body: "Qronos AI operates high-performance developer infrastructure software providing intelligent multi-model routing, bidirectional protocol normalization (Anthropic Messages API <-> OpenAI Chat Completions), automated 429 circuit breaking, and sub-millisecond telemetry. Qronos AI operates strictly as an independent software middleware and reverse proxy layer.",
         bullets: [
-          "TokenForge operates as an independent software middleware and API management layer.",
-          "Compatibility & Third-Party Disclaimer: TokenForge is an independent developer tooling platform. All model trademarks and brand names (such as Anthropic, OpenAI, Meta, DeepSeek, Qwen) belong to their respective owners and are referenced solely to identify compatibility.",
-          "Model Fidelity Assurance: TokenForge routes requests strictly according to your configured preferences; we never silently substitute, downgrade, or alter your chosen model specifications without your explicit instruction.",
-          "Digital Software Fulfillment: Access to developer dashboards, API secret keys, and usage capacity is provisioned electronically and instantly upon completed authentication or checkout.",
+          "Model Fidelity Assurance: Qronos AI routes requests strictly according to your selected model identifier; we never silently substitute, downgrade, or alter model specifications without your explicit configuration.",
+          "Compatibility & Third-Party Disclaimer: Qronos AI is an independent developer platform. All model trademarks (including Anthropic, OpenAI, DeepSeek, Qwen, Z.AI, Moonshot) belong to their respective owners and are referenced solely to denote technical protocol compatibility.",
+          "Digital Fulfillment: Access to developer dashboards, API secret keys, and usage capacity is provisioned electronically and immediately upon completed checkout or authentication.",
         ],
       },
       {
-        heading: "3. Account Security and API Key Custody",
-        body: "You are solely responsible for maintaining the confidentiality of your authentication credentials, session tokens, and API secret keys. Any request signed with an active API key generated in your workspace is conclusively deemed to have been authorized by you.",
+        heading: "3. API Key Custody & Account Security",
+        body: "You bear sole responsibility for safeguarding your API keys, session tokens, and workspace credentials. Any request signed with an active API key generated in your workspace is conclusively deemed to have been authorized by your account.",
         bullets: [
-          "API keys are sensitive developer credentials. Never commit secret keys to public code repositories, client-side web applications, or unencrypted storage.",
-          "TokenForge displays secret keys only once upon generation; our backend stores exclusively non-reversible cryptographic hashes (SHA-256).",
-          "You must immediately notify TokenForge support via our official support channels if you discover or suspect unauthorized use of your credentials.",
+          "API keys are sensitive credentials. Never commit plaintext keys to public repositories, client-side web code, or unencrypted storage.",
+          "One-Time Key Reveal: Qronos AI displays plaintext API keys exactly once upon creation. Our database retains only salted, non-reversible cryptographic hashes (HMAC-SHA256).",
+          "You must immediately revoke compromised keys from the Developer Dashboard and notify our team if unauthorized activity is detected.",
         ],
       },
       {
-        heading: "4. Developer Plans, Pricing, and Billing",
-        body: "TokenForge offers developer usage plans and compute capacity allowances. As API requests are processed through our gateway, usage is metered according to the exact input and output token counts reported by the underlying model endpoints, plus standard routing and middleware handling fees disclosed transparently on our pricing page.",
+        heading: "4. Billing, Capacity & Nanodollar Accounting",
+        body: "Qronos AI provisions compute capacity through pay-as-you-go balances and developer packages. Requests routed through our gateway are metered according to the exact input and output token counts reported by underlying inference endpoints, priced in nanodollars ($10⁻⁹ USD) to prevent rounding discrepancies.",
         bullets: [
-          "Developer usage capacity and promotional balances are digital goods designed exclusively for consumption within the TokenForge API routing environment.",
-          "Supported payment rails include major credit/debit cards, Domestic UPI rails (INR), and decentralized cryptocurrency settlements (Solana Pay / USDC).",
-          "Merchant of Record & Tax Compliance: Credit and debit card transactions are processed in accordance with global tax regulations (VAT, GST, sales tax) and PCI-DSS Level 1 security standards.",
-          "Taxes are calculated and applied at checkout in accordance with local statutory requirements based on your verified billing jurisdiction.",
+          "Two-Phase Reservation: Estimated maximum request cost is temporarily reserved before upstream dispatch and settled precisely against returned tokens post-completion. Interrupted or failed requests release 100% of the reserved amount.",
+          "Accepted Payment Rails: Major international credit/debit cards, domestic UPI (INR), and cryptocurrency settlement (Solana Pay / USDC).",
+          "Merchant of Record & Tax Compliance: Card transactions are processed in accordance with global merchant of record standards, statutory tax obligations (VAT, GST, sales tax), and PCI-DSS Level 1 specifications.",
         ],
       },
       {
-        heading: "5. Intellectual Property and Content Ownership",
-        body: "TokenForge does not claim any ownership rights over your proprietary inputs, prompts, application data, or generated outputs.",
+        heading: "5. Intellectual Property & Zero Model Training Guarantee",
+        body: "Qronos AI claims zero ownership over your proprietary prompts, application data, code, or model completions.",
         bullets: [
-          "Customer Data: You retain all right, title, and interest in and to any text, code, schema, or media you submit through the API (Prompts) and any completions returned by the models (Outputs).",
-          "Zero Model Training Guarantee: TokenForge strictly DOES NOT use your prompts, completions, system instructions, or application payloads to train, fine-tune, or improve any machine learning models.",
-          "Platform Rights: TokenForge and its licensors retain all rights, title, and interest in and to the TokenForge software platform, routing algorithms, API protocols, documentation, and underlying infrastructure.",
+          "Customer Ownership: You retain all right, title, and intellectual property interest in your submitted prompts and resulting model outputs.",
+          "Absolute Zero-Training Guarantee: Qronos AI STRICTLY DOES NOT use your prompts, system instructions, tool outputs, or completions to train, fine-tune, or optimize machine learning models.",
+          "Platform Rights: Qronos AI Systems retains all rights, title, and interest in the Qronos AI platform, proxy routing engine, APIs, and documentation.",
         ],
+        callout: "Qronos AI enforces an immutable zero-training guarantee across all enterprise routes. Your prompts are routed ephemerally in memory over TLS 1.3 and are never logged or sold for AI model training.",
+        calloutType: "emerald",
       },
       {
-        heading: "6. Rate Limits, Quotas, and Fair Usage",
-        body: "To guarantee equitable throughput and protect platform reliability, TokenForge enforces tier-based rate limits and concurrency controls. Any attempts to circumvent, falsify, or attack these rate-limiting mechanisms are strictly prohibited.",
+        heading: "6. Rate Limits & Fair Usage",
+        body: "Qronos AI does not impose restrictive daily request limits on verified developer accounts. However, to preserve platform integrity and protect upstream cluster capacity, Qronos AI enforces sliding-window rate limiters. Deliberate attempts to bypass rate limiters, launch DDoS attacks, or exploit billing endpoints are strictly prohibited.",
       },
       {
-        heading: "7. Disclaimers and Service Warranties",
-        body: "TokenForge is provided on an 'AS IS' and 'AS AVAILABLE' basis. To the maximum extent permitted by law, TokenForge and its affiliates, suppliers, and payment partners disclaim all warranties, whether express, implied, statutory, or otherwise, including implied warranties of merchantability, fitness for a particular purpose, and non-infringement.",
+        heading: "7. Disclaimers of Warranties",
+        body: "Qronos AI is provided on an 'AS IS' and 'AS AVAILABLE' basis. To the maximum extent permitted by applicable law, Qronos AI Systems and its affiliates disclaim all warranties, express, implied, statutory, or otherwise, including implied warranties of merchantability, fitness for a particular purpose, and non-infringement.",
         bullets: [
-          "Artificial intelligence models are probabilistic; TokenForge does not warrant the accuracy, completeness, or suitability of outputs generated by underlying model endpoints.",
-          "Upstream model providers may occasionally experience latency fluctuations or maintenance windows beyond our direct control.",
+          "Artificial intelligence outputs are probabilistic in nature; Qronos AI does not guarantee the factual accuracy or suitability of outputs generated by underlying model providers.",
+          "Upstream model providers may experience maintenance windows or latency variations beyond Qronos AI's direct operational control.",
         ],
       },
       {
         heading: "8. Limitation of Liability",
-        body: "To the maximum extent permitted by applicable law, in no event shall TokenForge, its directors, employees, or payment partners be liable for any indirect, punitive, incidental, special, consequential, or exemplary damages, including loss of profits, goodwill, data, or business interruption.",
-        callout:
-          "In all circumstances, TokenForge's total aggregate liability arising out of or related to these terms shall not exceed the total fees paid by you to TokenForge in the twelve (12) months immediately preceding the event giving rise to liability.",
+        body: "To the maximum extent permitted by applicable law, in no event shall Qronos AI Systems, its directors, officers, employees, or partners be liable for any indirect, incidental, consequential, special, or punitive damages, including loss of profits, data, goodwill, or business interruption.",
+        callout: "In all circumstances, Qronos AI's total aggregate liability arising out of or related to these terms shall not exceed the total fees paid by you to Qronos AI in the twelve (12) months immediately preceding the event giving rise to liability.",
+        calloutType: "amber",
       },
       {
-        heading: "9. Termination and Suspension",
-        body: "TokenForge reserves the right to suspend or terminate your account, revoke API keys, and freeze usage balances immediately if: (a) you breach any provision of these Terms or the Acceptable Use Policy; (b) your account exhibits fraudulent activity, chargeback abuse, or malicious cyberattacks; or (c) required by applicable law, court order, or regulatory mandate.",
+        heading: "9. Termination & Suspension",
+        body: "Qronos AI reserves the right to suspend or terminate accounts, revoke API keys, and freeze usage balances immediately if: (a) you violate these Terms or the Acceptable Use Policy; (b) your account engages in fraudulent payment activity or chargeback abuse; or (c) required by applicable law, regulatory order, or law enforcement mandate.",
       },
       {
-        heading: "10. Governing Law, Jurisdiction, and Dispute Resolution",
-        body: "These Terms shall be governed by and construed in accordance with applicable laws, without regard to conflict of law principles. The parties agree that any disputes must be resolved on an individual basis, and you waive any right to participate in a class-action lawsuit.",
+        heading: "10. Governing Law & Dispute Resolution",
+        body: "These Terms shall be governed by and construed in accordance with applicable laws without regard to conflict of law principles. Any dispute arising under these Terms shall be resolved through binding individual arbitration, and you waive any right to participate in class-action proceedings.",
       },
       {
-        heading: "11. Modifications to Terms",
-        body: "We may modify these Terms periodically to reflect evolving legal standards, technical improvements, or regulatory updates. We will notify users of material modifications by updating the 'Effective Date' at the top of this page. Continued use of TokenForge after updates constitutes acceptance.",
-      },
-      {
-        heading: "12. Contact and Legal Notices",
-        body: "For questions regarding these Terms, compliance audits, or formal legal notices, please reach out via our official Discord developer support channel at https://discord.gg/8DS5F6sGsY or contact our billing desk.",
+        heading: "11. Contact & Inquiries",
+        body: "For inquiries regarding these Terms, enterprise SLAs, or formal legal notices, please reach out via our official Discord developer channel or contact our billing desk directly.",
       },
     ],
   },
 
   privacy: {
     label: "Privacy Policy",
-    title: "Privacy notice and data protection commitment.",
+    title: "Privacy Notice and Data Protection Policy",
     subtitle:
-      "Effective September 2026. This Privacy Policy details how TokenForge collects, processes, protects, and retains your personal information, API telemetry, and billing metadata in compliance with GDPR, CCPA/CPRA, and global data privacy standards.",
-    effectiveDate: "September 2026 (Version 2.5)",
+      "Effective October 2026 (Version 3.0). This Privacy Policy explains how Qronos AI collects, processes, and protects your developer metadata in strict compliance with GDPR, CCPA/CPRA, and international data privacy regulations.",
+    effectiveDate: "October 2026 (Version 3.0)",
     icon: ShieldCheck,
     sections: [
       {
-        heading: "1. Scope and Controller Information",
-        body: "TokenForge operates the developer web dashboard and the TokenForge AI Gateway API. We act as the Data Controller with respect to your account identity, authentication tokens, and billing records, and as a Data Processor with respect to API payloads routed to underlying model providers on your instruction.",
+        heading: "1. Scope & Data Controller Information",
+        body: "Qronos AI Systems operates the Qronos AI API Gateway and developer management portal. We act as Data Controller regarding your account credentials, billing metadata, and telemetry logs, and as Data Processor regarding transient API request payloads routed to upstream model providers on your command.",
       },
       {
-        heading: "2. Information We Collect",
-        body: "We adhere strictly to data minimization principles and collect only the data essential to authenticate users, enforce rate limits, prevent fraud, and process transactions.",
+        heading: "2. Data We Collect (Data Minimization)",
+        body: "Qronos AI adheres strictly to data minimization standards, collecting only metadata necessary to authenticate requests, enforce rate limits, prevent fraud, and execute token billing:",
         bullets: [
-          "Account Identity Data: When signing in via GitHub OAuth or Discord OAuth, we collect your verified OAuth ID, username, public profile name, and primary email address.",
-          "API Key Metadata: Non-reversible cryptographic hashes (SHA-256) of your API keys, creation timestamps, custom key labels, and last-used timestamps.",
-          "Payment & Transaction Metadata: Order identifiers, transaction timestamps, payment rail (Card, UPI, or Solana), purchase tier, capacity allocation amount, and masked payment tokens. Note: TokenForge NEVER stores raw credit card numbers or bank PINs.",
-          "Operational Telemetry & Usage Logs: HTTP request method, endpoint path, requested model identifier, prompt and completion token counts, latency (ms), HTTP response status code, and hashed IP addresses used for anti-abuse rate limiting.",
+          "Account Identity: OAuth identifiers (GitHub, Discord, Google), primary verified email address, and username.",
+          "API Key Fingerprints: Non-reversible salted cryptographic hashes (HMAC-SHA256) of your API keys, key creation dates, and last-used timestamps.",
+          "Transaction Records: Order identifiers, transaction timestamps, payment rail (Card, UPI, or Solana), and masked tokens. Note: Qronos AI NEVER stores raw credit card numbers or banking PINs.",
+          "Operational Telemetry: HTTP method, requested model identifier, prompt and completion token counts, latency (ms), status codes, and hashed IP addresses for rate limiting.",
         ],
       },
       {
-        heading: "3. Zero-Training Guarantee for AI Payloads",
-        body: "Our absolute core privacy commitment to developers: TokenForge DOES NOT use your prompts, completions, system instructions, or embeddings to train, fine-tune, or optimize machine learning models.",
-        callout:
-          "All API prompts and completions are routed ephemerally to verified enterprise inference endpoints over encrypted TLS 1.3 connections. We do not persist durable prompt logs on our database.",
+        heading: "3. Ephemeral Routing & Zero Persistent Prompt Logging",
+        body: "Our absolute core commitment to developers: Qronos AI DOES NOT log or persist your prompt text, tool inputs, or completion outputs in any permanent database or analytical warehouse.",
+        callout: "All API payloads are processed in volatile memory and routed over encrypted TLS 1.3 connections. As soon as the final streaming chunk is delivered to your client, the memory buffer is immediately reclaimed by the garbage collector.",
+        calloutType: "emerald",
       },
       {
         heading: "4. Legal Bases for Processing (GDPR Compliance)",
-        body: "If you reside in the European Economic Area (EEA), the United Kingdom, or Switzerland, we process your personal data under the following legal grounds under Regulation (EU) 2016/679 (GDPR):",
+        body: "Under Regulation (EU) 2016/679 (GDPR), we process your metadata on the following legal bases:",
         bullets: [
-          "Performance of a Contract (Art. 6(1)(b)): Processing required to deliver our API gateway service, maintain your account, and allocate compute capacity.",
-          "Legitimate Interests (Art. 6(1)(f)): Securing our infrastructure, preventing fraud, detecting malicious attacks, and auditing system reliability.",
-          "Legal Compliance (Art. 6(1)(c)): Retaining transaction records to satisfy statutory tax, accounting, and anti-money-laundering requirements.",
+          "Performance of a Contract (Art. 6(1)(b)): Required to provision your API gateway capacity and route inference requests.",
+          "Legitimate Interests (Art. 6(1)(f)): Securing our infrastructure against malicious attacks, preventing fraud, and ensuring 99.99% system uptime.",
+          "Legal Obligations (Art. 6(1)(c)): Retaining financial transaction logs to satisfy statutory accounting, tax, and anti-money laundering requirements.",
         ],
       },
       {
-        heading: "5. Third-Party Processors and Service Providers",
-        body: "We partner with trusted, industry-standard third-party sub-processors who adhere to stringent security agreements and data privacy frameworks:",
+        heading: "5. Third-Party Sub-Processors",
+        body: "We partner with trusted, SOC 2 / ISO 27001 certified sub-processors adhering to rigorous data protection agreements:",
         bullets: [
-          "Payment Processors: PCI-DSS Level 1 compliant merchant payment networks and certified domestic banking switches.",
-          "Hosting & Cloud Infrastructure: Google Cloud Platform (Cloud Run, Secret Manager, Cloud SQL with SOC 2 Type II certifications).",
-          "Model Inference Providers: Enterprise cloud inference endpoints for Claude, DeepSeek, Qwen, and GLM models with dedicated data protection covenants.",
+          "Payment Processors: PCI-DSS Level 1 compliant merchant processors (Dodo Payments, Cashfree, and decentralized Solana RPC networks).",
+          "Cloud Infrastructure: Enterprise cloud hosting providers with end-to-end hardware encryption and SOC 2 Type II certifications.",
+          "Upstream Model Publishers: Direct enterprise endpoints (Anthropic, OpenAI, DeepSeek, Qwen) bound by strict non-training and data confidentiality covenants.",
         ],
       },
       {
-        heading: "6. Data Retention and Deletion",
-        body: "We retain account identity records for the duration of your active relationship with TokenForge. Financial ledger entries and invoice records are retained for statutory tax compliance periods (typically 7 years). Short-term operational telemetry logs are automatically scrubbed or aggregated after 30 days.",
+        heading: "6. Data Retention & Erasure",
+        body: "Account identity records are retained for the duration of your active account relationship. Financial invoices are retained for the statutory tax period (typically 7 years). Short-term operational telemetry metrics are automatically scrubbed or aggregated after 30 days.",
       },
       {
         heading: "7. Your Data Protection Rights",
-        body: "Depending on your jurisdiction (such as GDPR in Europe or CCPA/CPRA in California), you possess specific enforceable legal rights regarding your personal information:",
+        body: "Under GDPR, CCPA/CPRA, and global privacy frameworks, you have the right to:",
         bullets: [
-          "Right of Access: You may request a copy of the personal information we hold about you.",
-          "Right to Rectification: You may request correction of inaccurate or incomplete personal records.",
-          "Right to Erasure ('Right to be Forgotten'): You may request deletion of your account and personal data within 30 days, subject to statutory tax retention exemptions.",
-          "Right to Restrict or Object: You may object to certain processing operations.",
-          "Non-Discrimination: We will never discriminate against you for exercising your privacy rights.",
-          "To exercise any of these rights, contact our compliance desk via our official Discord at https://discord.gg/8DS5F6sGsY.",
+          "Request access to your stored personal metadata.",
+          "Request rectification of inaccurate account records.",
+          "Request permanent deletion of your account and associated credentials ('Right to be Forgotten') within 30 days.",
+          "Export your transaction and usage history in machine-readable JSON format.",
+          "We will never discriminate against you for exercising your data rights.",
         ],
       },
       {
-        heading: "8. Data Security and Encryption",
-        body: "We implement robust organizational, technical, and physical safeguards designed to prevent unauthorized access, loss, or destruction of personal data:",
-        bullets: [
-          "End-to-End Encryption in Transit: All incoming and outbound traffic is encrypted via TLS 1.3.",
-          "Encryption at Rest: Database volumes, secrets, and ledger states are encrypted using AES-256.",
-          "Credential Protection: API keys are salted and hashed; raw keys cannot be recovered by TokenForge staff.",
-        ],
-      },
-      {
-        heading: "9. Cookies and Local Storage",
-        body: "TokenForge does not use invasive cross-site advertising cookies. We use only strictly necessary session cookies and local storage tokens required for user authentication, CSRF defense, and interface theme persistence.",
-      },
-      {
-        heading: "10. Data Protection and Inquiries",
-        body: "If you have questions, concerns, or requests regarding this Privacy Policy or our data protection practices, please contact our support desk via our official Discord at https://discord.gg/8DS5F6sGsY.",
+        heading: "8. Security Safeguards & Encryption",
+        body: "All external network communications use TLS 1.3 encryption. Upstream provider credentials and state vaults are encrypted at rest using AES-256-GCM authenticated encryption with random IVs.",
       },
     ],
   },
 
   refund: {
     label: "Refund Policy",
-    title: "Transparent refund, cancellation & delivery policy.",
+    title: "Transparent Refund, Cancellation & Delivery Policy",
     subtitle:
-      "Effective September 2026. TokenForge provides a clear, fair, and reliable refund policy designed in strict alignment with consumer protection standards and global merchant compliance guidelines.",
-    effectiveDate: "September 2026 (Version 2.5)",
+      "Effective October 2026 (Version 3.0). Qronos AI provides a clear, fair, and reliable refund policy designed in strict alignment with international consumer protection standards and Merchant of Record guidelines.",
+    effectiveDate: "October 2026 (Version 3.0)",
     icon: RotateCcw,
     sections: [
       {
         heading: "1. Our Commitment to Developer Trust",
-        body: "At TokenForge, we want developers and engineering teams to build with confidence. We maintain an open, fair, and accessible refund process for all our customers, whether paying via credit/debit card, domestic UPI, or cryptocurrency. We believe in transparent billing without hidden traps.",
+        body: "At Qronos AI, we want developers and engineering teams to build with confidence. We maintain an open, fair, and straightforward refund policy across all supported payment rails—including international credit cards, domestic UPI (INR), and cryptocurrency (Solana Pay / USDC).",
       },
       {
         heading: "2. Instant Digital Delivery & 30-Day Unused Refund Window",
-        body: "API usage capacity is a digital software product delivered electronically and immediately to your account upon payment confirmation. In full alignment with global Merchant of Record standards and consumer protection best practices, TokenForge provides a 30-day refund window from the date of purchase for any unconsumed usage capacity balance.",
-        callout:
-          "Capacity is delivered instantly upon checkout and is non-refundable once consumed. If you purchase a developer package or balance top-up and have unconsumed balance remaining, you may request a 100% refund of your unused capacity balance within thirty (30) calendar days of transaction completion by reaching out on our official Discord at https://discord.gg/8DS5F6sGsY.",
+        body: "API usage capacity is an electronic digital product delivered instantly to your account upon transaction confirmation. In alignment with global Merchant of Record compliance guidelines, Qronos AI provides a 30-day refund window from the date of purchase for any unconsumed usage capacity balance.",
+        callout: "Capacity is delivered instantly upon checkout. If you purchase a developer package or top up your balance and have unconsumed credit remaining, you may request a 100% refund of your unused capacity balance within thirty (30) calendar days of transaction completion.",
+        calloutType: "emerald",
       },
       {
         heading: "3. Qualifying Scenarios for Refunds",
         body: "You are entitled to a full or pro-rated refund under any of the following circumstances:",
         bullets: [
-          "Unused Balance Returns: You purchased an API package or balance top-up within the last 30 days and have unused quota remaining on your account.",
-          "Technical Outages or Service Failure: Documented platform outages or prolonged upstream routing failures that prevented TokenForge from fulfilling your API requests within reasonable service expectations.",
-          "Duplicate or Accidental Charges: Multiple charges generated due to network latency, payment gateway timeouts, or accidental duplicate submissions.",
-          "Discrepancies in Capacity Allocation: Any technical fault where the purchased developer tier was not properly credited to your account balance.",
+          "Unused Balance Returns: You purchased an API package or balance top-up within the last 30 days and have unused quota remaining in your account.",
+          "Service Outages: Verified prolonged platform downtime or persistent routing failures that prevented Qronos AI from fulfilling your API requests within reasonable SLA expectations.",
+          "Duplicate Charges: Multiple charges generated due to network latency, gateway timeouts, or accidental duplicate submissions.",
+          "Allocation Discrepancies: Any technical fault where purchased capacity was not properly credited to your account balance.",
         ],
       },
       {
         heading: "4. Non-Refundable Scenarios",
         body: "Refunds cannot be issued under the following conditions:",
         bullets: [
-          "Consumed Compute: Capacity is a digital product delivered instantly and is strictly non-refundable once consumed for completed model inference requests (where tokens were successfully computed and returned).",
+          "Consumed Compute: Capacity is delivered electronically and is non-refundable once consumed for completed model inference requests (where tokens were successfully computed and returned).",
           "Acceptable Use Violations: Accounts suspended or terminated due to verified violations of our Acceptable Use Policy (such as abusive attacks, malware generation, automated scraping, or illegal activities).",
           "Expired Eligibility Window: Refund requests submitted more than thirty (30) calendar days after the original transaction date.",
-          "Third-Party Gas/Network Fees: For cryptocurrency payments via Solana, on-chain transaction network fees (~$0.00025) paid to network validators are inherently non-recoverable.",
+          "On-Chain Network Gas Fees: For cryptocurrency payments via Solana, network transaction fees (~$0.00025) paid to network validators are inherently non-recoverable.",
         ],
       },
       {
-        heading: "5. Step-by-Step Refund Request Procedure",
-        body: "Initiating a refund request is straightforward and hassle-free:",
+        heading: "5. Step-by-Step Refund Procedure",
+        body: "Submitting a refund request is simple and transparent:",
         bullets: [
-          "Step 1: Contact our support desk by joining our official Discord at https://discord.gg/8DS5F6sGsY or submit a ticket from the Tickets section in your Developer Dashboard.",
-          "Step 2: Provide your account email, the Order ID (e.g., 'TF_...' or card payment reference), the transaction date, and a brief description of the reason for your refund request.",
-          "Step 3: Our compliance and billing desk reviews all refund submissions within 24 to 48 hours (maximum 1–3 business days).",
-          "Step 4: Once approved, the refund is immediately triggered to your original payment method.",
+          "Step 1: Contact our billing desk via our official Discord support channel.",
+          "Step 2: Provide your account email, Order ID (e.g., 'TF_...' or card payment reference), transaction date, and the reason for your refund request.",
+          "Step 3: Our billing desk reviews and approves qualifying refund submissions within 24 to 48 hours (maximum 1–3 business days).",
+          "Step 4: Once approved, the refund is immediately triggered back to your original payment method.",
         ],
       },
       {
-        heading: "6. Processing Timeframes and Payouts",
-        body: "Once our desk approves a refund, the timeframe for the funds to reappear in your account depends on the payment rail utilized:",
+        heading: "6. Processing Timeframes by Payment Rail",
+        body: "Once approved by our billing desk, the timeframe for funds to reflect in your account depends on the payment rail utilized:",
         bullets: [
-          "Credit & Debit Cards: Processed through certified merchant payment gateways. Funds typically reflect on your bank or credit card statement within 5 to 10 business days, depending on your card issuer's clearing cycle.",
+          "Credit & Debit Cards: Processed via certified merchant gateways. Funds typically reflect on your card statement within 5 to 10 business days depending on your bank's clearing cycle.",
           "Domestic UPI (INR): Processed directly back to the originating bank VPA or bank account via IMPS/NEFT within 24 to 48 business hours.",
-          "Solana Pay (USDC): Re-deposited as USDC directly to the originating Solana wallet address within 1 business day.",
+          "Solana Pay (USDC): Re-deposited as USDC directly to your originating Solana wallet address within 1 business day.",
         ],
       },
       {
-        heading: "7. Cardholder Inquiries and Dispute Resolution",
-        body: "We strongly urge you to reach out to TokenForge Support on Discord (https://discord.gg/8DS5F6sGsY) directly before initiating a formal bank dispute. Our support team can resolve issues, verify transactions, and issue refunds significantly faster than third-party dispute arbitrations.",
+        heading: "7. Subscription & Cancellation Policy",
+        body: "Qronos AI operates on an on-demand, prepaid pay-as-you-go model. We DO NOT enforce locked recurring monthly subscription contracts. You only pay when you choose to top up your balance. As there are no forced recurring fees, you may cease using Qronos AI at any time without incurring cancellation penalties.",
       },
       {
-        heading: "8. Cancellation and Subscription Policy",
-        body: "TokenForge operates on a flexible on-demand and prepaid developer package model. We do NOT enforce locked monthly recurring subscription traps. You only pay when you choose to top up your balance. As there are no forced recurring subscription fees, you may cease using TokenForge at any time without incurring cancellation penalties.",
-      },
-      {
-        heading: "9. Billing & Contact Support Information",
-        body: "If you have any questions regarding your invoice, need assistance with a payment receipt, or wish to track an existing refund request, our team is standing by to help:",
-        bullets: [
-          "Official Discord Support Channel: https://discord.gg/8DS5F6sGsY",
-          "Contact & Ticket Desk: Available on Discord for 1-on-1 assistance",
-          "Community & Status Announcements: Official TokenForge Discord Community (https://discord.gg/8DS5F6sGsY)",
-          "Expected Response Time: Prompt turnaround (typically within 24 hours).",
-        ],
+        heading: "8. Dispute Resolution Notice",
+        body: "We strongly recommend contacting Qronos AI Support directly before filing a formal bank dispute or chargeback. Our billing desk can verify orders and issue direct refunds significantly faster than third-party dispute arbitrations.",
       },
     ],
   },
 
   "acceptable-use": {
     label: "Acceptable Use Policy",
-    title: "Standards for responsible platform use.",
+    title: "Standards for Responsible Platform Use",
     subtitle:
-      "Effective September 2026. This Acceptable Use Policy outlines prohibited activities, security guidelines, and safety principles that govern every TokenForge account, API call, and application built on our platform.",
-    effectiveDate: "September 2026 (Version 2.5)",
+      "Effective October 2026 (Version 3.0). This Acceptable Use Policy outlines prohibited activities, safety standards, and operational guidelines governing every Qronos AI account and API integration.",
+    effectiveDate: "October 2026 (Version 3.0)",
     icon: CheckCircle2,
     sections: [
       {
         heading: "1. Core Philosophy",
-        body: "TokenForge empowers developers and engineering teams to build ambitious software using cutting-edge artificial intelligence infrastructure. We expect all developers to employ our APIs responsibly, ethically, and in full accordance with applicable international laws.",
+        body: "Qronos AI empowers developers to build autonomous agents, software tools, and intelligent applications using cutting-edge AI infrastructure. We expect all developers to employ our APIs responsibly, safely, and in compliance with international laws.",
       },
       {
-        heading: "2. Strictly Prohibited Misuse",
-        body: "You must not use TokenForge, its APIs, or model outputs for any of the following prohibited purposes:",
+        heading: "2. Strictly Prohibited Activities",
+        body: "You must not utilize Qronos AI APIs, model routes, or infrastructure for:",
         bullets: [
-          "Illegal Activities: Generating, facilitating, or promoting illegal acts, fraud, money laundering, human trafficking, or intellectual property theft.",
-          "Malicious Cyber Activity: Developing malware, ransomware, exploits, phishing schemes, automated denial-of-service tools, or unauthorized vulnerability scanners.",
-          "CSAM & Exploitation: Creating, generating, or facilitating Child Sexual Abuse Material (CSAM) or any form of child exploitation (zero-tolerance policy; violations are reported immediately to law enforcement).",
-          "Harassment, Defamation, & Hate Speech: Generating abusive, harassing, defamatory, or threatening content directed at individuals or protected groups.",
-          "Weapons & Physical Harm: Designing weapons, chemical agents, biological hazards, explosives, or military munitions.",
-          "Deceptive Impersonation: Deploying deceptive synthetic media or chatbots intended to mislead consumers by masquerading as specific real individuals or financial institutions.",
+          "Malicious Cyber Activity: Developing malware, ransomware, exploit payloads, phishing frameworks, automated credential stuffing, or DDoS tools.",
+          "CSAM & Exploitation: Generating or facilitating Child Sexual Abuse Material (zero tolerance; violators are immediately terminated and reported to law enforcement).",
+          "Illegal Operations: Money laundering, unauthorized financial fraud, human trafficking, or intellectual property infringement.",
+          "Harassment & Hate Speech: Generating abusive, threatening, or defamatory content targeted at individuals or protected groups.",
+          "Weapons & Physical Harm: Designing chemical, biological, nuclear weapons, explosives, or military munitions.",
+          "Deceptive Impersonation: Deploying synthetic bots designed to deceive consumers by impersonating real individuals, courts, or financial institutions.",
         ],
       },
       {
-        heading: "3. High-Risk Domains Requiring Human Oversight",
-        body: "TokenForge APIs must not be utilized for fully autonomous high-risk applications where algorithmic errors could cause severe physical injury, financial ruin, or denial of fundamental human rights without qualified human-in-the-loop review (e.g., medical diagnostics, automated credit scoring, legal sentencing).",
-      },
-      {
-        heading: "4. System Integrity and Infrastructure Protection",
-        body: "You must protect the stability and performance of the TokenForge infrastructure. You agree not to:",
+        heading: "3. Infrastructure & Network Integrity",
+        body: "You must safeguard the performance and availability of the Qronos AI network. You agree not to:",
         bullets: [
-          "Probe, scan, or test the vulnerability of our network, APIs, or database systems without prior written authorization.",
-          "Bypass, defeat, or manipulate rate limits, quota enforcement, or security throttling systems.",
-          "Scrape, harvest, or bulk-extract TokenForge dashboard telemetry or system performance data.",
-          "Redistribute raw TokenForge master administrative keys to unauthorized third parties.",
+          "Probe, scan, or fuzz the vulnerability of our API endpoints without explicit written authorization.",
+          "Circumvent rate limiting, token compaction, or credit deduction algorithms.",
+          "Scrape or bulk-extract Qronos AI dashboard telemetry or operational data.",
+          "Share master administrative credentials with unauthorized third parties.",
         ],
       },
       {
-        heading: "5. Monitoring, Auditing, and Enforcement",
-        body: "While TokenForge does not inspect prompt contents for machine-learning training, our automated anomaly detection and safety filters monitor operational metadata, traffic volumes, and error patterns to detect abuse.",
+        heading: "4. Enforcement & Reporting",
+        body: "Qronos AI employs automated anomaly detection to identify volumetric abuse and infrastructure attacks. Material violations will result in immediate API key revocation and permanent account suspension. Suspected violations may be reported directly to our trust and safety team.",
+      },
+    ],
+  },
+
+  security: {
+    label: "Security & Governance",
+    title: "Enterprise Security & Infrastructure Governance",
+    subtitle:
+      "Effective October 2026. A detailed breakdown of Qronos AI's defense-in-depth architecture, cryptographic credential vaults, rate-limiting layers, and operational resilience standards.",
+    effectiveDate: "October 2026 (Version 3.0)",
+    icon: Lock,
+    sections: [
+      {
+        heading: "1. Cryptographic Credential Vaults (AES-256-GCM)",
+        body: "All sensitive upstream provider credentials, dynamic runtime configurations, and multi-turn tool continuation state are encrypted at rest using AES-256-GCM authenticated encryption. Encryption keys are derived via SHA-256 context-separated key schedules, with 12-byte random IVs and 16-byte authentication tags protecting against tampering.",
+      },
+      {
+        heading: "2. Zero Plaintext API Key Storage",
+        body: "Client API keys (qr_...) are generated with 256 bits of cryptographically secure random entropy. Plaintext keys are displayed once to the developer and never stored in our persistent database. Incoming requests are authenticated against HMAC-SHA256 digests evaluated with timingSafeEqual to prevent side-channel timing attacks.",
+      },
+      {
+        heading: "3. Multi-Layer Rate Limiting Defense",
+        body: "Qronos AI enforces a 6-tier defense-in-depth rate limiting structure:",
         bullets: [
-          "Warning & Throttling: Minor or unintentional rate limit exceedances may result in temporary request throttling.",
-          "Key Revocation & Account Suspension: Material violations of this policy will result in immediate API key revocation and permanent account termination.",
-          "Law Enforcement Cooperation: TokenForge cooperates fully with lawful requests from law enforcement agencies regarding criminal misconduct.",
+          "Global IP Rate Limiter: 2,400 req/min blanket umbrella protection.",
+          "Inference Gateway Limiter: 60 req/min per IP on /v1 routes.",
+          "Account Sliding Window: 60 req/min per authenticated developer ID, preventing VPN/proxy rotation bypasses.",
+          "Payment & Order Limiter: 10 req/min on checkout endpoints.",
+          "tRPC Dashboard Limiter: 1,200 req/min on administrative APIs.",
+          "Binance Spot Oracle Limiter: 30 req/min cache protection for Solana pricing.",
         ],
       },
       {
-        heading: "6. Reporting Violations",
-        body: "If you discover or suspect that an application powered by TokenForge is violating this Acceptable Use Policy, please report it immediately to our moderation team via our official Discord at https://discord.gg/8DS5F6sGsY. Our trust and safety team investigates all reports promptly.",
+        heading: "4. Network & Transport Security",
+        body: "All external communications enforce TLS 1.3 encryption. Reverse proxy layers validate authoritative Host headers and reject null-origin CORS requests. Sensitive cookies use HTTP-only, Secure, and SameSite=Lax flags.",
+      },
+      {
+        heading: "5. Vulnerability Disclosure",
+        body: "If you discover a security vulnerability in the Qronos AI platform, please report it responsibly to our security team. We investigate all disclosures promptly and provide bounty rewards for qualifying verified findings.",
       },
     ],
   },
@@ -345,6 +347,7 @@ function parseLegalVariant(pathname: string): LegalVariant {
   if (segment === "privacy" || segment === "privacy-policy") return "privacy";
   if (segment === "refund" || segment === "refunds" || segment === "refund-policy" || segment === "cancellation") return "refund";
   if (segment === "acceptable-use" || segment === "acceptable_use" || segment === "aup") return "acceptable-use";
+  if (segment === "security" || segment === "trust" || segment === "governance") return "security";
   return "terms";
 }
 
@@ -355,105 +358,119 @@ export default function Legal() {
   const ActiveIcon = content.icon;
 
   return (
-    <div className="public-page tf-public-surface legal-page">
+    <div className="min-h-screen bg-[#08090d] text-white flex flex-col font-sans selection:bg-white/20 selection:text-white relative overflow-x-hidden">
+      {/* Background Ambience (No Spiral / No Grid) */}
+      <div className="infergate-doc-glow" />
+
       <PublicNav />
-      <main className="legal-page">
-        {/* Hero Section */}
-        <div className="legal-hero">
-          <div className="legal-icon">
-            <ActiveIcon size={24} />
+
+      <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-12 sm:py-20 relative z-10 flex-1 w-full">
+        {/* Header Hero */}
+        <div className="text-center max-w-3xl mx-auto mb-14 space-y-5">
+          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/[0.04] border border-white/10 text-xs font-mono text-zinc-300 backdrop-blur-md">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+            <span>QRONOS AI · COMPLIANCE & GOVERNANCE</span>
           </div>
-          <p className="text-xs uppercase tracking-widest text-emerald-400 font-semibold mb-2">
-            {content.label}
-          </p>
-          <h1 className="text-3xl md:text-5xl font-extrabold text-white tracking-tight mb-4">
+
+          <h1 className="text-3xl sm:text-5xl lg:text-6xl font-light text-white tracking-tight leading-[1.05]">
             {content.title}
           </h1>
-          <span className="text-sm md:text-base text-slate-400 max-w-2xl mx-auto block leading-relaxed">
+
+          <p className="text-sm sm:text-base text-zinc-400 leading-relaxed max-w-2xl mx-auto">
             {content.subtitle}
-          </span>
-          <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
-            <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-mono font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-              {content.effectiveDate}
+          </p>
+
+          <div className="pt-2 flex flex-wrap items-center justify-center gap-2 text-xs font-mono">
+            <span className="px-3 py-1 rounded-full bg-white/[0.04] text-zinc-300 border border-white/10 flex items-center gap-1.5">
+              <Clock size={12} />
+              <span>{content.effectiveDate}</span>
             </span>
-            <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-mono font-medium bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
-              Dodo Payments MoR & PCI-DSS Compliant
+            <span className="px-3 py-1 rounded-full bg-white/[0.04] text-zinc-300 border border-white/10">
+              PCI-DSS & MoR Compliant
             </span>
-            <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-mono font-medium bg-white/5 text-slate-300 border border-white/10">
+            <span className="px-3 py-1 rounded-full bg-white/[0.04] text-zinc-300 border border-white/10">
               Zero Model Training Policy
             </span>
           </div>
+
+          <div className="pt-4 flex items-center justify-center gap-3">
+            <Link href="/signup">
+              <StarButton backgroundColor="#000000" className="rounded-full border border-slate-200/50 px-6 py-2.5 text-xs font-mono">
+                <span>GET API KEY</span>
+                <span className="ml-1 tracking-tighter font-mono font-bold text-xs">»</span>
+              </StarButton>
+            </Link>
+          </div>
         </div>
 
-        {/* Legal Grid Content */}
-        <div className="legal-grid">
-          {/* Aside Navigation */}
-          <aside>
-            <div className="text-[10px] uppercase font-bold text-slate-500 tracking-wider mb-2 px-3.5 hidden sm:block">
-              Legal Documents
-            </div>
-            <Link
-              href="/legal/terms"
-              className={variant === "terms" ? "active" : ""}
-            >
-              Terms of Service
-            </Link>
-            <Link
-              href="/legal/privacy"
-              className={variant === "privacy" ? "active" : ""}
-            >
-              Privacy Policy
-            </Link>
-            <Link
-              href="/legal/refund"
-              className={variant === "refund" ? "active" : ""}
-            >
-              Refund Policy
-            </Link>
-            <Link
-              href="/legal/acceptable-use"
-              className={variant === "acceptable-use" ? "active" : ""}
-            >
-              Acceptable Use
-            </Link>
-
-            <div className="mt-8 pt-6 border-t border-white/10 hidden sm:block">
-              <div className="text-[11px] font-semibold text-slate-300 mb-1">
-                Direct Support
+        {/* Content Layout */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
+          {/* Navigation Sidebar */}
+          <aside className="lg:col-span-3">
+            <div className="sticky top-24 space-y-4">
+              <div className="text-[11px] font-mono uppercase tracking-wider text-zinc-500 font-semibold px-2">
+                Legal & Governance
               </div>
-              <p className="text-[11px] text-slate-400 leading-relaxed mb-3">
-                Need help or have compliance inquiries?
-              </p>
-              <a
-                href="https://discord.gg/8DS5F6sGsY"
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center gap-1.5 text-xs text-emerald-400 hover:text-emerald-300 font-medium"
-              >
-                <MessageCircle size={13} /> Discord Support
-              </a>
+              <div className="space-y-1">
+                {[
+                  { id: "terms", href: "/legal/terms", label: "Terms of Service" },
+                  { id: "privacy", href: "/legal/privacy", label: "Privacy Policy" },
+                  { id: "refund", href: "/legal/refund", label: "Refund Policy" },
+                  { id: "acceptable-use", href: "/legal/acceptable-use", label: "Acceptable Use" },
+                  { id: "security", href: "/legal/security", label: "Security & Governance" },
+                ].map((item) => (
+                  <Link
+                    key={item.id}
+                    href={item.href}
+                    className={`block px-3.5 py-2.5 rounded-xl text-xs font-mono transition-all ${
+                      variant === item.id
+                        ? "bg-white/[0.08] text-white border border-white/20 font-semibold shadow-sm"
+                        : "text-zinc-400 hover:text-white hover:bg-white/[0.03]"
+                    }`}
+                  >
+                    {item.label}
+                  </Link>
+                ))}
+              </div>
+
+              {/* Direct Support Card */}
+              <div className="p-4 rounded-2xl bg-neutral-900/90 border border-white/10 text-xs font-mono space-y-2.5 mt-6">
+                <div className="font-semibold text-white">Compliance Desk</div>
+                <p className="text-[11px] text-zinc-400 leading-relaxed">
+                  Need assistance with an invoice, corporate agreement, or security audit?
+                </p>
+                <a
+                  href="https://discord.gg/xVDscH5ezj"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1.5 text-xs text-white hover:text-zinc-300 font-medium pt-1"
+                >
+                  <MessageCircle size={13} />
+                  <span>Discord Support Desk →</span>
+                </a>
+              </div>
             </div>
           </aside>
 
-          {/* Article Sections */}
-          <article>
+          {/* Policy Sections */}
+          <article className="lg:col-span-9 space-y-8">
             {content.sections.map((section, idx) => (
-              <section key={section.heading} className="space-y-3">
-                <h2 className="text-xl md:text-2xl font-bold text-white tracking-tight">
+              <section
+                key={section.heading}
+                className="p-6 sm:p-8 rounded-2xl bg-[#090c10] border border-white/[0.08] space-y-4 shadow-xl"
+              >
+                <h2 className="text-xl sm:text-2xl font-bold text-white tracking-tight">
                   {section.heading}
                 </h2>
-                <p className="text-sm text-slate-300 leading-relaxed">
+                <p className="text-sm text-zinc-300 leading-relaxed font-sans">
                   {section.body}
                 </p>
 
                 {section.bullets && section.bullets.length > 0 && (
-                  <ul className="mt-3 space-y-2 pl-2">
+                  <ul className="mt-3 space-y-2 pt-1">
                     {section.bullets.map((bullet, bIdx) => (
-                      <li
-                        key={bIdx}
-                        className="flex items-start gap-2.5 text-sm text-slate-400 leading-relaxed"
-                      >
-                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 mt-2 flex-shrink-0" />
+                      <li key={bIdx} className="flex items-start gap-2.5 text-xs sm:text-sm text-zinc-400 leading-relaxed font-sans">
+                        <span className="w-1.5 h-1.5 rounded-full bg-zinc-400 mt-2 flex-shrink-0" />
                         <span>{bullet}</span>
                       </li>
                     ))}
@@ -461,46 +478,17 @@ export default function Legal() {
                 )}
 
                 {section.callout && (
-                  <div className="mt-4 p-4 rounded-xl border border-emerald-500/20 bg-emerald-950/20 text-emerald-200 text-xs md:text-sm leading-relaxed">
-                    <strong>Important Note: </strong>
+                  <div className="mt-4 p-4 rounded-xl border border-white/10 bg-white/[0.02] text-xs sm:text-sm leading-relaxed text-zinc-300 font-sans">
+                    <strong className="text-white">Important Note: </strong>
                     {section.callout}
                   </div>
                 )}
               </section>
             ))}
-
-            {/* Support Help Banner */}
-            <div className="mt-14 p-6 rounded-2xl border border-white/10 bg-[#0d120e] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-              <div>
-                <h3 className="text-white font-semibold text-sm flex items-center gap-2">
-                  <HelpCircle size={16} className="text-emerald-400" />
-                  Have questions regarding our compliance or billing?
-                </h3>
-                <p className="text-slate-400 text-xs mt-1">
-                  Our compliance desk reviews all refund, privacy, and account
-                  inquiries within 24–48 hours.
-                </p>
-              </div>
-              <div className="flex items-center gap-3">
-                <a
-                  href="https://discord.gg/8DS5F6sGsY"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="px-4 py-2 rounded-lg bg-emerald-400 text-black font-semibold text-xs hover:bg-emerald-300 transition-colors inline-flex items-center gap-1.5"
-                >
-                  <MessageCircle size={13} /> Contact Support (Discord)
-                </a>
-                <Link
-                  href="/pricing"
-                  className="px-3.5 py-2 rounded-lg border border-white/10 text-slate-300 hover:text-white text-xs font-medium transition-colors"
-                >
-                  View Pricing
-                </Link>
-              </div>
-            </div>
           </article>
         </div>
       </main>
+
       <PublicFooter />
     </div>
   );

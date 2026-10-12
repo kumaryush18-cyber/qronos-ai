@@ -1,4 +1,4 @@
-import { COOKIE_NAME, ONE_YEAR_MS, PUBLIC_ORIGIN } from "@shared/const";
+import { COOKIE_NAME, DEFAULT_SESSION_MAX_AGE_MS, PUBLIC_ORIGIN } from "@shared/const";
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { parse as parseCookieHeader } from "cookie";
 import type { Express, Request, Response } from "express";
@@ -14,7 +14,7 @@ const GOOGLE_USERINFO_URL = "https://www.googleapis.com/oauth2/v3/userinfo";
 const GOOGLE_STATE_COOKIE = "tf_google_oauth_state";
 const GOOGLE_VERIFIER_COOKIE = "tf_google_oauth_verifier";
 const GOOGLE_REFERRAL_COOKIE = "tf_google_oauth_ref";
-const LOCAL_SESSION_MAX_AGE_MS = ONE_YEAR_MS;
+const LOCAL_SESSION_MAX_AGE_MS = DEFAULT_SESSION_MAX_AGE_MS;
 
 type GoogleUserInfo = {
   sub: string;
@@ -59,7 +59,7 @@ export function appOrigin(req: Pick<Request, "protocol" | "hostname" | "headers"
     }
   }
 
-  const configuredOrigin = process.env.TOKENFORGE_PUBLIC_ORIGIN?.trim();
+  const configuredOrigin = process.env.QRONOS_PUBLIC_ORIGIN?.trim() || process.env.APP_URL?.trim();
   if (configuredOrigin) {
     try {
       const origin = new URL(configuredOrigin);
@@ -165,7 +165,7 @@ async function getGoogleIdentity(accessToken: string) {
   if (!response.ok) throw new Error("Google profile lookup failed");
   const profile = (await response.json()) as GoogleUserInfo;
   if (!profile.sub || !profile.email) {
-    throw new Error("Google did not provide the verified identity details required by TokenForge");
+    throw new Error("Google did not provide the verified identity details required by Qronos AI");
   }
   return {
     providerUserId: String(profile.sub),
@@ -232,7 +232,7 @@ export function registerGoogleOAuthRoutes(app: Express) {
       const sessionVersion = await getAuthSessionVersion();
       const sessionToken = await sdk.createSessionToken(result.user.openId, {
         expiresInMs: LOCAL_SESSION_MAX_AGE_MS,
-        name: result.user.name ?? "TokenForge developer",
+        name: result.user.name ?? "Qronos AI developer",
         sessionVersion,
       });
 

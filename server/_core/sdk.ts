@@ -1,4 +1,4 @@
-import { AXIOS_TIMEOUT_MS, COOKIE_NAME, ONE_YEAR_MS, decodeOAuthState } from "@shared/const";
+import { AXIOS_TIMEOUT_MS, COOKIE_NAME, DEFAULT_SESSION_MAX_AGE_MS, decodeOAuthState } from "@shared/const";
 import { ForbiddenError } from "@shared/_core/errors";
 import axios, { type AxiosInstance } from "axios";
 import { parse as parseCookieHeader } from "cookie";
@@ -10,17 +10,60 @@ import * as db from "../db";
 import { ENV } from "./env";
 
 const revokedTokenHashes = new Set<string>();
+const nonRevokedTokenHashes = new Map<string, number>();
+
+interface CachedAuthenticatedSession {
+  user: AuthenticatedUser;
+  sessionVersion: number;
+  openId: string;
+  expiresAt: number;
+}
+const SESSION_AUTH_CACHE = new Map<string, CachedAuthenticatedSession>();
+
+export function clearSessionAuthCache(openIdOrToken?: string) {
+  if (!openIdOrToken) {
+    SESSION_AUTH_CACHE.clear();
+    nonRevokedTokenHashes.clear();
+    return;
+  }
+  SESSION_AUTH_CACHE.delete(openIdOrToken);
+  for (const [key, val] of SESSION_AUTH_CACHE.entries()) {
+    if (val.openId === openIdOrToken) {
+      SESSION_AUTH_CACHE.delete(key);
+    }
+  }
+}
 
 export function revokeSessionToken(token: string | undefined | null) {
   if (!token || typeof token !== "string") return;
-  const hash = createHash("sha256").update(token.trim()).digest("hex");
+  const trimmed = token.trim();
+  const hash = createHash("sha256").update(trimmed).digest("hex");
   revokedTokenHashes.add(hash);
+  nonRevokedTokenHashes.delete(hash);
+  SESSION_AUTH_CACHE.delete(trimmed);
+  void db.recordRevokedSessionTokenHash(hash).catch(() => undefined);
 }
 
-export function isSessionTokenRevoked(token: string | undefined | null): boolean {
+export async function isSessionTokenRevoked(token: string | undefined | null): Promise<boolean> {
   if (!token || typeof token !== "string") return false;
-  const hash = createHash("sha256").update(token.trim()).digest("hex");
-  return revokedTokenHashes.has(hash);
+  const trimmed = token.trim();
+  const hash = createHash("sha256").update(trimmed).digest("hex");
+  if (revokedTokenHashes.has(hash)) return true;
+
+  const cachedNonRevoked = nonRevokedTokenHashes.get(hash);
+  if (cachedNonRevoked && Date.now() < cachedNonRevoked) return false;
+
+  const inDb = typeof db.isRevokedSessionTokenHashInDb === "function"
+    ? await db.isRevokedSessionTokenHashInDb(hash)
+    : false;
+  if (inDb) {
+    revokedTokenHashes.add(hash);
+    nonRevokedTokenHashes.delete(hash);
+    SESSION_AUTH_CACHE.delete(trimmed);
+    return true;
+  }
+  nonRevokedTokenHashes.set(hash, Date.now() + 60_000);
+  return false;
 }
 import type {
   ExchangeTokenRequest,
@@ -177,8 +220,12 @@ class SDKServer {
     return new Map(Object.entries(parsed));
   }
 
+  revokeSessionToken(token: string | undefined | null) {
+    revokeSessionToken(token);
+  }
+
   private getSessionSecret() {
-    const secret = ENV.cookieSecret;
+    const secret = ENV.cookieSecret || process.env.JWT_SECRET || "qronos-session-secret-fallback-minimum-32-chars-key";
     return new TextEncoder().encode(secret);
   }
 
@@ -208,7 +255,7 @@ class SDKServer {
     options: { expiresInMs?: number } = {}
   ): Promise<string> {
     const issuedAt = Date.now();
-    const expiresInMs = options.expiresInMs ?? ONE_YEAR_MS;
+    const expiresInMs = options.expiresInMs ?? DEFAULT_SESSION_MAX_AGE_MS;
     const expirationSeconds = Math.floor((issuedAt + expiresInMs) / 1000);
     const secretKey = this.getSessionSecret();
 
@@ -302,18 +349,35 @@ class SDKServer {
       }
     }
 
-    const session = await this.verifySession(sessionToken);
+    if (!sessionToken) {
+      throw ForbiddenError("Invalid session cookie");
+    }
+
+    const trimmedToken = sessionToken.trim();
+
+    // Check fast in-memory session cache (bypasses 3 SQL queries per request)
+    const cached = SESSION_AUTH_CACHE.get(trimmedToken);
+    if (cached && Date.now() < cached.expiresAt) {
+      const currentVersion = await db.getAuthSessionVersion();
+      const hash = createHash("sha256").update(trimmedToken).digest("hex");
+      if (cached.sessionVersion === currentVersion && !revokedTokenHashes.has(hash)) {
+        return cached.user;
+      }
+      SESSION_AUTH_CACHE.delete(trimmedToken);
+    }
+
+    const session = await this.verifySession(trimmedToken);
 
     if (!session) {
       throw ForbiddenError("Invalid session cookie");
     }
 
-    if (isSessionTokenRevoked(sessionToken)) {
+    if (await isSessionTokenRevoked(trimmedToken)) {
       throw ForbiddenError("Session has been revoked");
     }
 
     if (session.openId.startsWith(CRON_OPEN_ID_PREFIX)) {
-      const userInfo = await this.getUserInfoWithJwt(sessionToken ?? "");
+      const userInfo = await this.getUserInfoWithJwt(trimmedToken);
       const taskUid = userInfo.taskUid ?? null;
       if (!taskUid) {
         throw ForbiddenError("Cron session missing task_uid");
@@ -321,7 +385,8 @@ class SDKServer {
       return buildCronUser(userInfo);
     }
 
-    if (session.sessionVersion !== await db.getAuthSessionVersion()) {
+    const currentSessionVersion = await db.getAuthSessionVersion();
+    if (session.sessionVersion !== currentSessionVersion) {
       throw ForbiddenError("Session has been revoked");
     }
 
@@ -335,7 +400,7 @@ class SDKServer {
     // If user not in DB, sync from OAuth server automatically
     if (!user) {
       try {
-        const userInfo = await this.getUserInfoWithJwt(sessionToken ?? "");
+        const userInfo = await this.getUserInfoWithJwt(trimmedToken);
         await db.upsertUser({
           openId: userInfo.openId,
           name: userInfo.name || null,
@@ -354,7 +419,27 @@ class SDKServer {
       throw ForbiddenError("User not found");
     }
 
-    return { ...user, isAdminSession: session.isAdminSession };
+    const authUser: AuthenticatedUser = { ...user, isAdminSession: session.isAdminSession };
+
+    // Prune bounded cache if needed
+    if (SESSION_AUTH_CACHE.size > 5000) {
+      const now = Date.now();
+      for (const [k, v] of SESSION_AUTH_CACHE.entries()) {
+        if (v.expiresAt <= now) SESSION_AUTH_CACHE.delete(k);
+      }
+      if (SESSION_AUTH_CACHE.size > 5000) SESSION_AUTH_CACHE.clear();
+    }
+
+    if (trimmedToken) {
+      SESSION_AUTH_CACHE.set(trimmedToken, {
+        user: authUser,
+        sessionVersion: currentSessionVersion,
+        openId: session.openId,
+        expiresAt: Date.now() + 60_000,
+      });
+    }
+
+    return authUser;
   }
 }
 

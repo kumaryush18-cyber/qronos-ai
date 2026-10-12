@@ -1,112 +1,61 @@
 import React from "react";
+import { cn } from "@/lib/utils";
 
 interface PearlAvatarProps extends React.HTMLAttributes<HTMLDivElement> {
   letter?: string;
   size?: number;
   className?: string;
+  duration?: number;
 }
 
 export const PearlAvatar: React.FC<PearlAvatarProps> = ({
-  letter = "A",
-  size = 38,
+  letter = "Q",
+  size = 32,
+  duration = 3,
   className = "",
   ...props
 }) => {
+  const fontSize = Math.max(10, Math.floor(size * 0.42));
+
   return (
-    <>
-      <style>{`
-        .pearl-avatar {
-          --white: #ffe7ff;
-          --bg: #09090b;
-          position: relative;
-          border-radius: 50%;
-          background-color: var(--bg);
-          box-shadow:
-            inset 0 0.2rem 0.5rem rgba(255, 255, 255, 0.4),
-            inset 0 -0.1rem 0.25rem rgba(0, 0, 0, 0.8),
-            inset 0 -0.25rem 0.6rem rgba(255, 255, 255, 0.35),
-            0 8px 16px rgba(0, 0, 0, 0.5),
-            0 2px 4px rgba(0, 0, 0, 0.7);
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          overflow: hidden;
-          transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-          user-select: none;
-          flex-shrink: 0;
-        }
-        .pearl-avatar::before {
-          content: "";
-          position: absolute;
-          left: -10%;
-          right: -10%;
-          bottom: 25%;
-          top: -100%;
-          border-radius: 50%;
-          background-color: rgba(255, 255, 255, 0.16);
-          pointer-events: none;
-          transition: all 0.25s ease;
-        }
-        .pearl-avatar::after {
-          content: "";
-          position: absolute;
-          left: 10%;
-          right: 10%;
-          top: 8%;
-          bottom: 40%;
-          border-radius: 50px 50px 0 0;
-          box-shadow: inset 0 6px 6px -6px rgba(255, 255, 255, 0.9);
-          background: linear-gradient(
-            180deg,
-            rgba(255, 255, 255, 0.35) 0%,
-            rgba(0, 0, 0, 0) 55%,
-            rgba(0, 0, 0, 0) 100%
-          );
-          pointer-events: none;
-          transition: all 0.25s ease;
-        }
-        .pearl-avatar .pearl-avatar-letter {
-          position: relative;
-          z-index: 1;
-          font-weight: 700;
-          font-size: 14px;
-          letter-spacing: -0.02em;
-          color: #ffffff;
-          text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8), 0 0 10px rgba(255, 255, 255, 0.4);
-          transform: translateY(1px);
-          font-family: inherit;
-        }
-        .pearl-avatar:hover {
-          box-shadow:
-            inset 0 0.25rem 0.6rem rgba(255, 255, 255, 0.55),
-            inset 0 -0.1rem 0.25rem rgba(0, 0, 0, 0.8),
-            inset 0 -0.3rem 0.7rem rgba(255, 255, 255, 0.45),
-            0 10px 20px rgba(0, 0, 0, 0.6),
-            0 3px 6px rgba(0, 0, 0, 0.8);
-          transform: translateY(-1px);
-        }
-        .pearl-avatar:hover::before {
-          transform: translateY(-4%);
-        }
-        .pearl-avatar:hover::after {
-          opacity: 0.7;
-        }
-        .pearl-avatar:active {
-          transform: translateY(1px);
-          box-shadow:
-            inset 0 0.2rem 0.4rem rgba(255, 255, 255, 0.5),
-            inset 0 -0.1rem 0.3rem rgba(0, 0, 0, 0.9),
-            inset 0 -0.25rem 0.5rem rgba(255, 255, 255, 0.3),
-            0 4px 8px rgba(0, 0, 0, 0.5);
-        }
-      `}</style>
+    <div
+      style={{
+        width: `${size}px`,
+        height: `${size}px`,
+      }}
+      className={cn(
+        "relative rounded-full p-[1px] overflow-hidden group select-none shrink-0 inline-flex items-center justify-center transition-transform duration-200 hover:scale-105",
+        className
+      )}
+      {...props}
+    >
+      {/* Razor-Thin Revolving Star Light Beam along circular border rim */}
       <div
-        className={`pearl-avatar ${className}`}
-        style={{ width: size, height: size }}
-        {...props}
+        aria-hidden="true"
+        className="absolute inset-[-60%] pointer-events-none animate-spin"
+        style={{
+          animationDuration: `${duration}s`,
+          animationTimingFunction: "linear",
+          background:
+            "conic-gradient(from 0deg, transparent 0deg, transparent 270deg, rgba(255,255,255,0.2) 315deg, rgba(255,255,255,0.75) 345deg, #ffffff 360deg)",
+        }}
+      />
+
+      {/* Subtle radial center glow on hover */}
+      <div
+        aria-hidden="true"
+        className="absolute inset-0 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none bg-white/10 blur-xs"
+      />
+
+      {/* Inner Avatar Surface */}
+      <div
+        className="relative z-10 w-full h-full rounded-full bg-[#0c0d12] border border-white/10 flex items-center justify-center font-mono font-bold text-white shadow-inner"
+        style={{ fontSize: `${fontSize}px` }}
       >
-        <span className="pearl-avatar-letter">{letter}</span>
+        <span>{letter}</span>
       </div>
-    </>
+    </div>
   );
 };
+
+export default PearlAvatar;

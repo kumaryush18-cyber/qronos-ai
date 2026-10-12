@@ -17,7 +17,6 @@ import {
   creditGiveaways,
   creditGiveawayNotifications,
   creditLedger,
-  creditTickets,
   dailyCheckins,
   dailyUsage,
   deletedIdentityTombstones,
@@ -42,6 +41,8 @@ import {
   specialReferralClaims,
   userInteractionLogs,
   imageSemanticDescriptions,
+  systemNotifications,
+  userNotificationReads,
 } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 import { hashPassword, isPermanentEmailAddress, normalizeEmail, nextFailedLoginState, normalizeEmailAllowlistEntries, retryAfterSeconds, verifyPassword } from "./localAuth";
@@ -63,7 +64,7 @@ let _db: ReturnType<typeof drizzle> | null = null;
 let _pool: mysql.Pool | null = null;
 let _dbHealthy = false;
 let _lastDbHealthCheckTime = 0;
-const DB_HEALTH_CHECK_COOLDOWN_MS = 30_000;
+const DB_HEALTH_CHECK_COOLDOWN_MS = 5_000;
 
 export const fallbackPlatformSettings = new Map<string, { value: string; updatedAt: Date; updatedByUserId: number | null }>([
   ["auth_session_version", { value: "1", updatedAt: new Date(), updatedByUserId: null }],
@@ -123,7 +124,7 @@ const AFFILIATE_CODE_LENGTH = 4;
 
 export class DeletedAccountIdentityError extends Error {
   constructor() {
-    super("This TokenForge account was permanently deleted");
+    super("This Qronos AI account was permanently deleted");
     this.name = "DeletedAccountIdentityError";
   }
 }
@@ -131,7 +132,7 @@ export class DeletedAccountIdentityError extends Error {
 /** A nonblocking, non-reversible marker shown once after an administrator cleans up an unverified Discord account. */
 export class DiscordUnverifiedAccountDeletedError extends Error {
   constructor() {
-    super("Your previous account was not verified by Discord, so it was deleted by an administrator. You can create a new TokenForge account with this email.");
+    super("Your previous account was not verified by Discord, so it was deleted by an administrator. You can create a new Qronos AI account with this email.");
     this.name = "DiscordUnverifiedAccountDeletedError";
   }
 }
@@ -157,8 +158,7 @@ export function utcUsageDate(value = new Date()) {
 }
 
 function hashDeletedIdentity(kind: string, identifier: string) {
-  const pepper = process.env.JWT_SECRET;
-  if (!pepper) throw new Error("JWT_SECRET is required for TokenForge account deletion safeguards");
+  const pepper = process.env.JWT_SECRET || "qronos-deleted-id-pepper-fallback";
   return createHmac("sha256", pepper).update(`deleted:${kind}:${identifier}`).digest("hex");
 }
 
@@ -176,20 +176,37 @@ export async function assertIdentityIsNotDeleted(kind: "email" | "github" | "ope
   if (await isDeletedIdentity(kind, identifier)) throw new DeletedAccountIdentityError();
 }
 
+let _cachedSessionVersion: { version: number; expiresAt: number } | null = null;
+const SESSION_VERSION_CACHE_TTL_MS = 60_000;
+
+export function clearSessionVersionCache() {
+  _cachedSessionVersion = null;
+}
+
 export async function getAuthSessionVersion() {
+  const now = Date.now();
+  if (_cachedSessionVersion && now < _cachedSessionVersion.expiresAt) {
+    return _cachedSessionVersion.version;
+  }
   try {
     const db = await getDb();
     if (!db) {
       const val = Number.parseInt(fallbackPlatformSettings.get(SESSION_VERSION_SETTING_KEY)?.value ?? "1", 10);
-      return Number.isSafeInteger(val) && val >= 0 ? val : 1;
+      const version = Number.isSafeInteger(val) && val >= 0 ? val : 1;
+      _cachedSessionVersion = { version, expiresAt: now + SESSION_VERSION_CACHE_TTL_MS };
+      return version;
     }
     const record = (await db.select({ value: platformSettings.value }).from(platformSettings).where(eq(platformSettings.settingKey, SESSION_VERSION_SETTING_KEY)).limit(1))[0];
     const value = Number.parseInt(record?.value ?? "1", 10);
-    return Number.isSafeInteger(value) && value >= 0 ? value : 1;
+    const version = Number.isSafeInteger(value) && value >= 0 ? value : 1;
+    _cachedSessionVersion = { version, expiresAt: now + SESSION_VERSION_CACHE_TTL_MS };
+    return version;
   } catch (error: any) {
     markDatabaseUnhealthy(error?.message ?? String(error));
     const val = Number.parseInt(fallbackPlatformSettings.get(SESSION_VERSION_SETTING_KEY)?.value ?? "1", 10);
-    return Number.isSafeInteger(val) && val >= 0 ? val : 1;
+    const version = Number.isSafeInteger(val) && val >= 0 ? val : 1;
+    _cachedSessionVersion = { version, expiresAt: now + SESSION_VERSION_CACHE_TTL_MS };
+    return version;
   }
 }
 
@@ -932,11 +949,39 @@ async function clearDiscordUnverifiedCleanupNotice(emailInput: string) {
 
 /** Advances the global session version so every previously issued browser session becomes invalid. */
 export async function revokeAllTokenForgeSessions() {
+  clearSessionVersionCache();
   const db = await getDb();
-  if (!db) throw new Error("TokenForge database is unavailable");
+  if (!db) throw new Error("Qronos AI database is unavailable");
   await db.insert(platformSettings).values({ settingKey: SESSION_VERSION_SETTING_KEY, value: "1" })
     .onDuplicateKeyUpdate({ set: { value: sql`cast(${platformSettings.value} as unsigned) + 1`, updatedAt: new Date(), updatedByUserId: null } });
   return getAuthSessionVersion();
+}
+
+export async function recordRevokedSessionTokenHash(hash: string): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  try {
+    await db.insert(deletedIdentityTombstones).values({
+      kind: "revoked_session",
+      identifierHash: hash,
+    }).onDuplicateKeyUpdate({ set: { deletedAt: new Date() } });
+  } catch {
+    // Non-blocking
+  }
+}
+
+export async function isRevokedSessionTokenHashInDb(hash: string): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  try {
+    const rows = await db.select({ id: deletedIdentityTombstones.id })
+      .from(deletedIdentityTombstones)
+      .where(and(eq(deletedIdentityTombstones.kind, "revoked_session"), eq(deletedIdentityTombstones.identifierHash, hash)))
+      .limit(1);
+    return Boolean(rows[0]);
+  } catch {
+    return false;
+  }
 }
 
 function utcCalendarKey(value = new Date()) {
@@ -948,31 +993,34 @@ export async function ensureCreditAccount(userId: number) {
   if (!db) return null;
   const existing = (await db.select().from(creditAccounts).where(eq(creditAccounts.userId, userId)).limit(1))[0];
   if (existing) return existing;
+
+  // Verify user exists in `users` before inserting credit account (foreign key constraint)
+  const userRow = (await db.select({ id: users.id }).from(users).where(eq(users.id, userId)).limit(1))[0];
+  if (!userRow) {
+    if (userId === FALLBACK_ADMIN_SESSION_PRINCIPAL.id) {
+      await getOrCreateAdminSessionPrincipal();
+    } else {
+      return null;
+    }
+  }
+
   try {
     return await db.transaction(async tx => {
       const again = (await tx.select().from(creditAccounts).where(eq(creditAccounts.userId, userId)).limit(1))[0];
       if (again) return again;
       await tx.insert(creditAccounts).values({
         userId,
-        balanceNanos: INTRODUCTORY_CREDIT_NANOS,
-        paygBalanceNanos: 5_000_000_000,
-        codingPlanTokens: 0,
+        balanceNanos: 0,
+        paygBalanceNanos: 0,
+        codingPlanTokens: 10_000_000,
       });
       await tx.insert(creditLedger).values({
         userId,
         kind: "introductory_grant",
-        amountNanos: INTRODUCTORY_CREDIT_NANOS,
-        balanceAfterNanos: INTRODUCTORY_CREDIT_NANOS,
-        referenceId: INTRODUCTORY_CREDIT_REFERENCE,
-        note: "Welcome promotional credit",
-      });
-      await tx.insert(creditLedger).values({
-        userId,
-        kind: "manual_adjustment",
-        amountNanos: 5_000_000_000,
-        balanceAfterNanos: 5_000_000_000,
-        referenceId: `welcome-payg:${userId}`,
-        note: "$5.00 Pay-As-You-Go starting compute grant",
+        amountNanos: 0,
+        balanceAfterNanos: 10_000_000,
+        referenceId: `welcome-tokens:${userId}`,
+        note: "Welcome grant: 10,000,000 free tokens for autonomous coding and inference",
       });
       return (await tx.select().from(creditAccounts).where(eq(creditAccounts.userId, userId)).limit(1))[0] ?? null;
     });
@@ -995,7 +1043,7 @@ export type PreProvisionedAccountSummary = {
 /** Creates an administrator-owned email reservation without storing an OAuth subject or credential. */
 export async function preProvisionAccountEmail(input: { email: string; provisionedByUserId: number }) {
   const db = await getDb();
-  if (!db) throw new Error("TokenForge database is unavailable");
+  if (!db) throw new Error("Qronos AI database is unavailable");
   const email = normalizeEmail(input.email);
   const emailPolicy = await getEmailAllowlistConfig();
   if (!email || !isPermanentEmailAddress(email, emailPolicy?.entries)) {
@@ -1029,7 +1077,7 @@ export async function preProvisionAccountEmail(input: { email: string; provision
     return { kind: "already_pre_provisioned" as const, reservation: existingReservation };
   }
 
-  const name = email.split("@")[0] || "TokenForge developer";
+  const name = email.split("@")[0] || "Qronos AI developer";
   const openId = `tf_auth_${randomBytes(16).toString("hex")}`;
   const now = new Date();
 
@@ -1192,9 +1240,19 @@ function newReferralCode() {
 /** Creates a compact affiliate code once per account; the code does not reveal account identity. */
 export async function getOrCreateReferralCode(userId: number) {
   const db = await getDb();
-  if (!db) throw new Error("TokenForge database is unavailable");
+  if (!db) return { id: 0, userId, code: "qr01", createdAt: new Date() };
   const existing = (await db.select().from(referralCodes).where(eq(referralCodes.userId, userId)).limit(1))[0];
   if (existing) return existing;
+
+  // Verify user exists in `users` before inserting referral code (foreign key constraint)
+  const userRow = (await db.select({ id: users.id }).from(users).where(eq(users.id, userId)).limit(1))[0];
+  if (!userRow) {
+    if (userId === FALLBACK_ADMIN_SESSION_PRINCIPAL.id) {
+      await getOrCreateAdminSessionPrincipal();
+    } else {
+      return { id: 0, userId, code: "qr01", createdAt: new Date() };
+    }
+  }
 
   for (let attempt = 0; attempt < 8; attempt += 1) {
     try {
@@ -1202,12 +1260,12 @@ export async function getOrCreateReferralCode(userId: number) {
       const created = (await db.select().from(referralCodes).where(eq(referralCodes.userId, userId)).limit(1))[0];
       if (created) return created;
     } catch (error: any) {
-      if (error?.code !== "ER_DUP_ENTRY") throw error;
+      if (error?.code !== "ER_DUP_ENTRY") return { id: 0, userId, code: "qr01", createdAt: new Date() };
       const concurrent = (await db.select().from(referralCodes).where(eq(referralCodes.userId, userId)).limit(1))[0];
       if (concurrent) return concurrent;
     }
   }
-  throw new Error("TokenForge could not create a referral link");
+  return { id: 0, userId, code: "qr01", createdAt: new Date() };
 }
 
 /**
@@ -1218,7 +1276,7 @@ export async function awardReferralForNewUser(referredUserId: number, rawReferra
   const referralCode = normalizeReferralCode(rawReferralCode);
   if (!referralCode) return { awarded: false as const, reason: "no_valid_code" as const };
   const db = await getDb();
-  if (!db) throw new Error("TokenForge database is unavailable");
+  if (!db) throw new Error("Qronos AI database is unavailable");
   const invitation = (await db.select().from(referralCodes).where(eq(referralCodes.code, referralCode)).limit(1))[0];
   if (!invitation || invitation.userId === referredUserId) return { awarded: false as const, reason: "ineligible" as const };
 
@@ -1271,32 +1329,48 @@ export async function awardReferralForNewUser(referredUserId: number, rawReferra
 
 export async function getReferralOverview(userId: number) {
   const db = await getDb();
-  if (!db) return null;
+  if (!db) {
+    return {
+      code: "qr01",
+      referrals: [],
+      totalRewardNanos: 0,
+      receivedRewardNanos: 0,
+    };
+  }
   const code = await getOrCreateReferralCode(userId);
-  const [attributions, received] = await Promise.all([
-    db.select({ id: referralAttributions.id, createdAt: referralAttributions.createdAt, rewardNanos: referralAttributions.rewardNanos, memberName: users.name })
-      .from(referralAttributions)
-      .innerJoin(users, eq(referralAttributions.referredUserId, users.id))
-      .where(eq(referralAttributions.referrerUserId, userId))
-      .orderBy(desc(referralAttributions.createdAt)),
-    db.select({ rewardNanos: referralAttributions.rewardNanos, createdAt: referralAttributions.createdAt })
-      .from(referralAttributions)
-      .where(eq(referralAttributions.referredUserId, userId))
-      .limit(1),
-  ]);
-  return {
-    code: code.code,
-    referrals: attributions.map(item => ({ id: item.id, name: item.memberName || "New TokenForge member", createdAt: item.createdAt, rewardNanos: item.rewardNanos })),
-    totalRewardNanos: attributions.reduce((total, item) => total + item.rewardNanos, 0),
-    receivedRewardNanos: received[0]?.rewardNanos ?? 0,
-  };
+  try {
+    const [attributions, received] = await Promise.all([
+      db.select({ id: referralAttributions.id, createdAt: referralAttributions.createdAt, rewardNanos: referralAttributions.rewardNanos, memberName: users.name })
+        .from(referralAttributions)
+        .innerJoin(users, eq(referralAttributions.referredUserId, users.id))
+        .where(eq(referralAttributions.referrerUserId, userId))
+        .orderBy(desc(referralAttributions.createdAt)),
+      db.select({ rewardNanos: referralAttributions.rewardNanos, createdAt: referralAttributions.createdAt })
+        .from(referralAttributions)
+        .where(eq(referralAttributions.referredUserId, userId))
+        .limit(1),
+    ]);
+    return {
+      code: code?.code || "qr01",
+      referrals: attributions.map(item => ({ id: item.id, name: item.memberName || "Verified Developer", createdAt: item.createdAt, rewardNanos: item.rewardNanos })),
+      totalRewardNanos: attributions.reduce((total, item) => total + item.rewardNanos, 0),
+      receivedRewardNanos: received[0]?.rewardNanos ?? 0,
+    };
+  } catch (err) {
+    return {
+      code: code?.code || "qr01",
+      referrals: [],
+      totalRewardNanos: 0,
+      receivedRewardNanos: 0,
+    };
+  }
 }
 
 /** Reserves a campaign slot during account creation; the unique slot number enforces the 150-user cap. */
 export async function reserveSpecialReferralCampaignSlot(userId: number, rawReferralCode?: string | null) {
   if (!isSpecialReferralCampaignCode(rawReferralCode)) return { reserved: false as const, reason: "not_special_link" as const };
   const db = await getDb();
-  if (!db) throw new Error("TokenForge database is unavailable");
+  if (!db) throw new Error("Qronos AI database is unavailable");
   const existing = (await db.select().from(specialReferralClaims).where(eq(specialReferralClaims.userId, userId)).limit(1))[0];
   if (existing) return { reserved: true as const, slotNumber: existing.slotNumber, alreadyReserved: true as const };
   for (let attempt = 0; attempt < 8; attempt += 1) {
@@ -1320,7 +1394,7 @@ export async function reserveSpecialReferralCampaignSlot(userId: number, rawRefe
 /** Awards the campaign balance exactly once after Discord verification; duplicate ledger keys keep retries safe. */
 export async function settleSpecialReferralBonus(userId: number) {
   const db = await getDb();
-  if (!db) throw new Error("TokenForge database is unavailable");
+  if (!db) throw new Error("Qronos AI database is unavailable");
   const now = new Date();
   try {
     return await db.transaction(async tx => {
@@ -1352,7 +1426,7 @@ export async function getSpecialReferralGiftStatus(userId: number) {
 /** Records visual acknowledgement only; the bonus is settled at Discord verification, not by the UI. */
 export async function acknowledgeSpecialReferralGift(userId: number) {
   const db = await getDb();
-  if (!db) throw new Error("TokenForge database is unavailable");
+  if (!db) throw new Error("Qronos AI database is unavailable");
   const claim = (await db.select().from(specialReferralClaims).where(eq(specialReferralClaims.userId, userId)).limit(1))[0];
   if (!claim?.awardedAt) return null;
   if (!claim.giftViewedAt) await db.update(specialReferralClaims).set({ giftViewedAt: new Date() }).where(eq(specialReferralClaims.id, claim.id));
@@ -1385,6 +1459,46 @@ export async function getSpecialReferralCampaignAdminOverview() {
     accounts: accounts.map(account => ({ ...account, specialReferral: true })),
   };
 }
+
+type CreditLedgerInsert = typeof creditLedger.$inferInsert;
+let _pendingCreditLedgerEvents: CreditLedgerInsert[] = [];
+let _flushCreditLedgerTimer: NodeJS.Timeout | null = null;
+let _isFlushingCreditLedger = false;
+
+export async function flushCreditLedgerBuffer(): Promise<void> {
+  if (_isFlushingCreditLedger) return;
+  const entries = _pendingCreditLedgerEvents;
+  if (entries.length === 0) return;
+
+  _pendingCreditLedgerEvents = [];
+  _isFlushingCreditLedger = true;
+
+  try {
+    const db = await getDb();
+    if (!db) return;
+    await db.insert(creditLedger).values(entries).catch(err => {
+      console.warn("[flushCreditLedgerBuffer] Error batch inserting creditLedger:", err);
+    });
+  } finally {
+    _isFlushingCreditLedger = false;
+  }
+}
+
+export function queueCreditLedgerEntry(entry: CreditLedgerInsert) {
+  _pendingCreditLedgerEvents.push(entry);
+  if (_pendingCreditLedgerEvents.length >= 25) {
+    void flushCreditLedgerBuffer();
+    return;
+  }
+  if (!_flushCreditLedgerTimer) {
+    _flushCreditLedgerTimer = setTimeout(() => {
+      _flushCreditLedgerTimer = null;
+      void flushCreditLedgerBuffer();
+    }, 2000);
+  }
+}
+
+const _activeReservations = new Map<string, { isPayg: boolean; reservedNanos: number; createdAt: number }>();
 
 export async function reserveCredit(
   userId: number,
@@ -1442,7 +1556,8 @@ export async function reserveCredit(
       }
       const latest = (await tx.select().from(creditAccounts).where(eq(creditAccounts.userId, userId)).limit(1))[0];
       const paygAfter = Number(latest?.paygBalanceNanos ?? 0);
-      await tx.insert(creditLedger).values({
+      _activeReservations.set(requestId, { isPayg: true, reservedNanos: amount, createdAt: Date.now() });
+      queueCreditLedgerEntry({
         userId,
         kind: "usage_debit",
         amountNanos: -amount,
@@ -1475,7 +1590,8 @@ export async function reserveCredit(
       }
       const latest = (await tx.select().from(creditAccounts).where(eq(creditAccounts.userId, userId)).limit(1))[0];
       const balanceNanos = latest?.balanceNanos ?? 0;
-      await tx.insert(creditLedger).values({
+      _activeReservations.set(requestId, { isPayg: false, reservedNanos: amount, createdAt: Date.now() });
+      queueCreditLedgerEntry({
         userId,
         kind: "usage_debit",
         amountNanos: -amount,
@@ -1496,7 +1612,8 @@ export async function reserveCredit(
       if (result[0].affectedRows) {
         const latest = (await tx.select().from(creditAccounts).where(eq(creditAccounts.userId, userId)).limit(1))[0];
         const paygAfter = Number(latest?.paygBalanceNanos ?? 0);
-        await tx.insert(creditLedger).values({
+        _activeReservations.set(requestId, { isPayg: true, reservedNanos: amount, createdAt: Date.now() });
+        queueCreditLedgerEntry({
           userId,
           kind: "usage_debit",
           amountNanos: -amount,
@@ -1520,7 +1637,8 @@ export async function reserveCredit(
         if (stdResult[0].affectedRows) {
           const latest = (await tx.select().from(creditAccounts).where(eq(creditAccounts.userId, userId)).limit(1))[0];
           const balanceNanos = latest?.balanceNanos ?? 0;
-          await tx.insert(creditLedger).values({
+          _activeReservations.set(requestId, { isPayg: false, reservedNanos: amount, createdAt: Date.now() });
+          queueCreditLedgerEntry({
             userId,
             kind: "usage_debit",
             amountNanos: -amount,
@@ -1551,7 +1669,8 @@ export async function reserveCredit(
     }
     const latest = (await tx.select().from(creditAccounts).where(eq(creditAccounts.userId, userId)).limit(1))[0];
     const balanceNanos = latest?.balanceNanos ?? 0;
-    await tx.insert(creditLedger).values({
+    _activeReservations.set(requestId, { isPayg: false, reservedNanos: amount, createdAt: Date.now() });
+    queueCreditLedgerEntry({
       userId,
       kind: "usage_debit",
       amountNanos: -amount,
@@ -1599,6 +1718,17 @@ export async function settleReservedCredit(
   const usedTokens = Math.max(0, Math.trunc(input.usedTokens ?? 0));
   const isTokenPlanKey = input.keyGroup === "token_plan" || input.keyGroup === "tokens" || input.keyGroup === "coding_plan";
 
+  const activeRes = _activeReservations.get(input.requestId);
+  if (activeRes) {
+    _activeReservations.delete(input.requestId);
+  }
+  if (_activeReservations.size > 2000) {
+    const cutoff = Date.now() - 300_000;
+    for (const [k, v] of _activeReservations.entries()) {
+      if (v.createdAt < cutoff) _activeReservations.delete(k);
+    }
+  }
+
   try {
     return await db.transaction(async tx => {
       // 1. If this is a Token Plan API key (or playground token plan), deduct from codingPlanTokens
@@ -1615,7 +1745,7 @@ export async function settleReservedCredit(
           const updatedAccount = (await tx.select().from(creditAccounts).where(eq(creditAccounts.userId, input.userId)).limit(1))[0];
           const remainingCodingTokens = Number((updatedAccount as any)?.codingPlanTokens ?? 0);
 
-          await tx.insert(creditLedger).values({
+          queueCreditLedgerEntry({
             userId: input.userId,
             kind: "usage_debit",
             amountNanos: 0,
@@ -1627,7 +1757,10 @@ export async function settleReservedCredit(
           // If all tokens were covered by coding plan, refund any reserved dollar credits
           if (tokensDeducted >= usedTokens) {
             if (reserved > 0) {
-              const wasPayg = (await tx.select().from(creditLedger).where(and(eq(creditLedger.userId, input.userId), eq(creditLedger.referenceId, `reservation_payg:${input.requestId}`))).limit(1))[0];
+              const wasPayg = activeRes
+                ? activeRes.isPayg
+                : Boolean(_pendingCreditLedgerEvents.find(e => e.referenceId === `reservation_payg:${input.requestId}`)) ||
+                  Boolean((await tx.select().from(creditLedger).where(and(eq(creditLedger.userId, input.userId), eq(creditLedger.referenceId, `reservation_payg:${input.requestId}`))).limit(1))[0]);
               if (wasPayg) {
                 await tx.update(creditAccounts).set({ paygBalanceNanos: sql`${creditAccounts.paygBalanceNanos} + ${reserved}` }).where(eq(creditAccounts.userId, input.userId));
               } else {
@@ -1658,14 +1791,18 @@ export async function settleReservedCredit(
       }
 
       // Check if original reservation was PAYG
-      const wasPaygReservation = (await tx.select().from(creditLedger).where(and(eq(creditLedger.userId, input.userId), eq(creditLedger.referenceId, `reservation_payg:${input.requestId}`))).limit(1))[0];
+      const wasPaygReservation = activeRes
+        ? activeRes.isPayg
+        : Boolean(_pendingCreditLedgerEvents.find(e => e.referenceId === `reservation_payg:${input.requestId}`)) ||
+          Boolean((await tx.select().from(creditLedger).where(and(eq(creditLedger.userId, input.userId), eq(creditLedger.referenceId, `reservation_payg:${input.requestId}`))).limit(1))[0]);
+
       if (wasPaygReservation) {
         if (refund > 0) {
           await tx.update(creditAccounts).set({ paygBalanceNanos: sql`${creditAccounts.paygBalanceNanos} + ${refund}` }).where(eq(creditAccounts.userId, input.userId));
         }
         const account = (await tx.select().from(creditAccounts).where(eq(creditAccounts.userId, input.userId)).limit(1))[0];
         const paygRem = Number(account?.paygBalanceNanos ?? 0);
-        await tx.insert(creditLedger).values({
+        queueCreditLedgerEntry({
           userId: input.userId,
           kind: "manual_adjustment",
           amountNanos: refund,
@@ -1684,7 +1821,7 @@ export async function settleReservedCredit(
       await tx.update(creditAccounts).set({ balanceNanos: sql`${creditAccounts.balanceNanos} + ${refund}` }).where(eq(creditAccounts.userId, input.userId));
       const account = (await tx.select().from(creditAccounts).where(eq(creditAccounts.userId, input.userId)).limit(1))[0];
       const balanceNanos = account?.balanceNanos ?? 0;
-      await tx.insert(creditLedger).values({
+      queueCreditLedgerEntry({
         userId: input.userId,
         kind: "manual_adjustment",
         amountNanos: refund,
@@ -1756,19 +1893,19 @@ export async function creditAccountFromSolanaPay(input: {
       });
       return { balanceNanos, paygBalanceNanos, codingPlanTokens };
     } else if (input.isPayg) {
-      const creditGrantNanos = amountNanos * 2;
+      const creditGrantNanos = amountNanos;
       await tx.update(creditAccounts).set({ paygBalanceNanos: sql`${creditAccounts.paygBalanceNanos} + ${creditGrantNanos}` }).where(eq(creditAccounts.userId, input.userId));
       const account = (await tx.select().from(creditAccounts).where(eq(creditAccounts.userId, input.userId)).limit(1))[0];
       const balanceNanos = account?.balanceNanos ?? 0;
       const paygBalanceNanos = Number(account?.paygBalanceNanos ?? creditGrantNanos);
       const codingPlanTokens = Number((account as any)?.codingPlanTokens ?? 0);
       await tx.insert(creditLedger).values({
-        userId: input.userId,
+        userId,
         kind: "manual_adjustment",
         amountNanos: creditGrantNanos,
         balanceAfterNanos: paygBalanceNanos,
         referenceId: `solana_payg:${input.orderId}`,
-        note: `PAYG USD Deposit (${input.assetLabel ?? "USD"}) +100% Bonus (2x Credit Grant). tx: ${input.signature.slice(0, 8)}...`,
+        note: `PAYG USD Deposit (${input.assetLabel ?? "USD"}) with 60% Model Discount. tx: ${input.signature.slice(0, 8)}...`,
       });
       return { balanceNanos, paygBalanceNanos, codingPlanTokens };
     } else {
@@ -1841,7 +1978,7 @@ export async function creditAccountFromUPIPay(input: {
         });
         return { balanceNanos, paygBalanceNanos, codingPlanTokens };
       } else if (input.isPayg) {
-        const creditGrantNanos = amountNanos * 2;
+        const creditGrantNanos = amountNanos;
         await tx.update(creditAccounts).set({ paygBalanceNanos: sql`${creditAccounts.paygBalanceNanos} + ${creditGrantNanos}` }).where(eq(creditAccounts.userId, input.userId));
         const account = (await tx.select().from(creditAccounts).where(eq(creditAccounts.userId, input.userId)).limit(1))[0];
         const balanceNanos = account?.balanceNanos ?? 0;
@@ -1853,7 +1990,7 @@ export async function creditAccountFromUPIPay(input: {
           amountNanos: creditGrantNanos,
           balanceAfterNanos: paygBalanceNanos,
           referenceId: `upi_payg:${input.orderId}`,
-          note: `PAYG USD Deposit (${input.assetLabel ?? "UPI INR"}) +100% Bonus (2x Credit Grant). UTR: ${input.utr}`,
+          note: `PAYG USD Deposit (${input.assetLabel ?? "UPI INR"}) with 60% Model Discount. UTR: ${input.utr}`,
         });
         return { balanceNanos, paygBalanceNanos, codingPlanTokens };
       } else {
@@ -1906,7 +2043,7 @@ export async function creditAccountFromDodoPay(input: {
     return await db.transaction(async tx => {
       await tx.insert(creditAccounts).values({ userId: input.userId, balanceNanos: 0, paygBalanceNanos: 0 }).onDuplicateKeyUpdate({ set: { userId: input.userId } });
       if (input.isPayg) {
-        const creditGrantNanos = amountNanos * 2;
+        const creditGrantNanos = amountNanos;
         await tx.update(creditAccounts).set({ paygBalanceNanos: sql`${creditAccounts.paygBalanceNanos} + ${creditGrantNanos}` }).where(eq(creditAccounts.userId, input.userId));
         const account = (await tx.select().from(creditAccounts).where(eq(creditAccounts.userId, input.userId)).limit(1))[0];
         const balanceNanos = account?.balanceNanos ?? 0;
@@ -1917,7 +2054,7 @@ export async function creditAccountFromDodoPay(input: {
           amountNanos: creditGrantNanos,
           balanceAfterNanos: paygBalanceNanos,
           referenceId: `dodo_payg:${input.paymentId || input.orderId}`,
-          note: `PAYG USD Deposit (${input.assetLabel ?? (input.planName || "Card Deposit")}) +100% Bonus (2x Credit Grant). payment_id: ${input.paymentId}`,
+          note: `PAYG USD Deposit (${input.assetLabel ?? (input.planName || "Card Deposit")}) with 60% Model Discount. payment_id: ${input.paymentId}`,
         });
         return { balanceNanos, paygBalanceNanos };
       } else {
@@ -1968,7 +2105,7 @@ export async function getCreditProfile(userId: number, now = new Date()) {
 
 export async function claimDailyCheckin(userId: number, now = new Date()) {
   const db = await getDb();
-  if (!db) throw new Error("TokenForge database is unavailable");
+  if (!db) throw new Error("Qronos AI database is unavailable");
   await ensureCreditAccount(userId);
   const checkinDate = utcUsageDate(now);
   const referenceId = `checkin:${utcCalendarKey(now)}`;
@@ -2004,21 +2141,22 @@ export async function claimDailyCheckin(userId: number, now = new Date()) {
 }
 
 export function hashApiKey(plainTextKey: string) {
-  const pepper = process.env.JWT_SECRET;
-  if (!pepper) throw new Error("JWT_SECRET is required to hash TokenForge API keys");
+  const pepper = process.env.JWT_SECRET || "qronos-api-key-pepper-fallback";
   return createHmac("sha256", pepper).update(plainTextKey).digest("hex");
 }
 
 function newPlaintextKey() {
-  return `tf_live_${randomBytes(32).toString("base64url")}`;
+  return `qr_${randomBytes(32).toString("base64url")}`;
 }
 
 export function publicApiKey(key: ApiKeyRecord) {
+  const rawGroup = (key as any).keyGroup;
+  const normalizedGroup = rawGroup === "bundle" ? "payg" : (rawGroup || "payg");
   return {
     id: key.id,
     label: key.label,
     prefix: key.keyPrefix,
-    keyGroup: ((key as any).keyGroup as "payg" | "bundle" | "token_plan" | "tokens" | "coding_plan") || "bundle",
+    keyGroup: normalizedGroup as "payg" | "bundle" | "token_plan" | "tokens" | "coding_plan",
     status: key.status,
     createdAt: key.createdAt,
     lastUsedAt: key.lastUsedAt,
@@ -2026,8 +2164,10 @@ export function publicApiKey(key: ApiKeyRecord) {
   };
 }
 
-// Direct database URL configuration
-const DIRECT_DATABASE_URL = ENV.databaseUrl || "mysql://426Z9KBUqRumUkQ.root:GdEOEZstbT2tQmJy@gateway01.ap-southeast-1.prod.aws.tidbcloud.com:4000/test";
+// Database URL configuration (strictly from environment variables)
+const DIRECT_DATABASE_URL = ENV.databaseUrl || process.env.CUSTOM_DATABASE_URL || process.env.DATABASE_URL;
+
+let _startupMigrationsRan = false;
 
 // Lazily create and health-check the drizzle instance so local tooling can run without a DB,
 // and so quota-exhausted or restricted clusters gracefully fall back.
@@ -2053,7 +2193,13 @@ export async function getDb(): Promise<ReturnType<typeof drizzle> | null> {
         user: decodeURIComponent(parsed.username),
         password: decodeURIComponent(parsed.password),
         database: parsed.pathname.replace(/^\//, "").split("?")[0],
-        connectTimeout: 4000,
+        connectTimeout: 5000,
+        waitForConnections: true,
+        connectionLimit: 10,
+        maxIdle: 8,
+        idleTimeout: 300000, // 5 minutes (reduced connection churn & avoids cold reconnects)
+        enableKeepAlive: true,
+        keepAliveInitialDelay: 10000,
       };
       if (/tidbcloud\.com|aivencloud\.com/i.test(parsed.hostname)) config.ssl = { rejectUnauthorized: true };
       _pool = mysql.createPool(config as Parameters<typeof mysql.createPool>[0]);
@@ -2073,17 +2219,28 @@ export async function getDb(): Promise<ReturnType<typeof drizzle> | null> {
     try {
       await _pool.query("SELECT 1");
       _dbHealthy = true;
-      void ensureUserTierColumn(_pool);
-      void ensureModelConfigsMinTierColumn(_pool);
-      void ensureApiKeysKeyGroupColumn(_pool);
-      void ensureModelConfigsAccessColumns(_pool);
-      void ensureUserCreditsEnabledColumn(_pool);
-      void ensureCreditAccountsColumns(_pool);
-      void ensureUsageEventsRequestIdIndex(_pool);
+      if (!_startupMigrationsRan) {
+        _startupMigrationsRan = true;
+        void ensureUserTierColumn(_pool);
+        void ensureModelConfigsMinTierColumn(_pool);
+        void ensureApiKeysKeyGroupColumn(_pool);
+        void ensureModelConfigsAccessColumns(_pool);
+        void ensureUserCreditsEnabledColumn(_pool);
+        void ensureCreditAccountsColumns(_pool);
+        void ensureUsageEventsRequestIdIndex(_pool);
+        void ensureNotificationTables(_pool);
+      }
     } catch (error: any) {
       const msg = error?.message ?? String(error);
       const isQuotaOrRestricted = error?.errno === 1105 || /quota|restricted|limit/i.test(msg);
       markDatabaseUnhealthy(isQuotaOrRestricted ? "Cluster usage quota exhausted / access restricted" : msg);
+
+      // If connection was dropped/closed by remote server, reset pool so next request reopens fresh connection
+      if (error?.code === "PROTOCOL_CONNECTION_LOST" || /connection lost|closed the connection|ETIMEDOUT|ECONNRESET/i.test(msg)) {
+        try { _pool?.end(); } catch {}
+        _pool = null;
+        _db = null;
+      }
       return null;
     }
   }
@@ -2129,15 +2286,48 @@ async function ensureApiKeysKeyGroupColumn(pool: mysql.Pool) {
   _apiKeysKeyGroupEnsured = true;
   try {
     await pool.query(
-      "ALTER TABLE api_keys ADD COLUMN keyGroup VARCHAR(32) NOT NULL DEFAULT 'bundle'"
+      "ALTER TABLE api_keys ADD COLUMN keyGroup VARCHAR(32) NOT NULL DEFAULT 'payg'"
     );
   } catch (err: any) {
     // ER_DUP_FIELDNAME (1060) is expected if column already exists
   }
   try {
-    // Ensure all existing API keys default to tier 2 credit bundles group so coding sessions continue uninterrupted
-    await pool.query("UPDATE api_keys SET keyGroup = 'bundle' WHERE keyGroup IS NULL OR keyGroup = ''");
+    await pool.query("UPDATE api_keys SET keyGroup = 'payg' WHERE keyGroup IS NULL OR keyGroup = '' OR keyGroup = 'bundle'");
   } catch {}
+}
+
+let _notificationTablesEnsured = false;
+async function ensureNotificationTables(pool: mysql.Pool) {
+  if (_notificationTablesEnsured) return;
+  _notificationTablesEnsured = true;
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS system_notifications (
+        id BIGINT AUTO_INCREMENT PRIMARY KEY,
+        title VARCHAR(255) NOT NULL,
+        message TEXT NOT NULL,
+        type VARCHAR(32) NOT NULL DEFAULT 'announcement',
+        target_audience VARCHAR(32) NOT NULL DEFAULT 'ALL',
+        target_emails TEXT NULL,
+        created_by_user_id INT NOT NULL,
+        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_sys_notif_aud (target_audience),
+        INDEX idx_sys_notif_created (created_at)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    `);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS user_notification_reads (
+        id BIGINT AUTO_INCREMENT PRIMARY KEY,
+        notification_id BIGINT NOT NULL,
+        user_id INT NOT NULL,
+        read_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_unr_user (user_id),
+        UNIQUE KEY unq_unr_user_notif (user_id, notification_id)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    `);
+  } catch (err) {
+    console.warn("[Database] Error ensuring notification tables:", err);
+  }
 }
 
 let _modelConfigsAccessColumnsEnsured = false;
@@ -2576,7 +2766,7 @@ export async function getUserByEmail(emailInput: string) {
 
 export async function verifyAndAuthenticateEmail(emailInput: string, referralCode?: string) {
   const db = await getDb();
-  if (!db) throw new Error("TokenForge database is unavailable");
+  if (!db) throw new Error("Qronos AI database is unavailable");
   const email = normalizeEmail(emailInput);
   if (!email) throw new Error("Invalid email address");
 
@@ -2596,7 +2786,7 @@ export async function verifyAndAuthenticateEmail(emailInput: string, referralCod
   }
 
   // 3. User was authorized by admin: initialize account and activate reservation
-  const name = email.split("@")[0] || "TokenForge developer";
+  const name = email.split("@")[0] || "Qronos AI developer";
   const openId = `tf_email_${randomBytes(12).toString("hex")}`;
   const inserted = await db.insert(users).values({
     openId,
@@ -2625,60 +2815,6 @@ export async function verifyAndAuthenticateEmail(emailInput: string, referralCod
 
 export const getOrCreateUserByEmail = verifyAndAuthenticateEmail;
 
-export async function authenticateOrRegisterWithEmailOtp(emailInput: string, referralCode?: string) {
-  const db = await getDb();
-  if (!db) throw new Error("TokenForge database is unavailable");
-  const email = normalizeEmail(emailInput);
-  if (!email) throw new Error("Invalid email address");
-
-  // Remove any legacy tombstone for this email so verified OTP users can always sign in or re-register
-  try {
-    const emailHash = hashDeletedIdentity("email", email);
-    await db.delete(deletedIdentityTombstones).where(
-      and(
-        eq(deletedIdentityTombstones.kind, "email"),
-        eq(deletedIdentityTombstones.identifierHash, emailHash)
-      )
-    );
-  } catch {
-    // ignore tombstone cleanup failure
-  }
-
-  // 1. If user already exists, sign them in
-  const existing = await getUserByEmail(email);
-  if (existing) {
-    await markUserSignedIn(existing.id);
-    return { user: existing, isNewUser: false };
-  }
-
-  // 2. Initialize new user account with default $50 credit + referral bonuses
-  const name = email.split("@")[0] || "TokenForge developer";
-  const openId = `tf_otp_${randomBytes(16).toString("hex")}`;
-  const inserted = await db.insert(users).values({
-    openId,
-    email,
-    name,
-    loginMethod: "email_otp",
-    lastSignedIn: new Date(),
-  });
-  const userId = Number(inserted[0].insertId);
-
-  const preProvisionedActivation = await activatePreProvisionedAccount(userId, email);
-  await Promise.all([
-    ensureAccountControl(userId),
-    preProvisionedActivation ? Promise.resolve() : ensureCreditAccount(userId),
-    getOrCreateReferralCode(userId),
-  ]);
-  if (referralCode) {
-    await awardReferralForNewUser(userId, referralCode);
-    await reserveSpecialReferralCampaignSlot(userId, referralCode);
-  }
-
-  const createdUser = await getUserByEmail(email);
-  if (!createdUser) throw new Error("Failed to initialize user account");
-  return { user: createdUser, isNewUser: true };
-}
-
 export async function markUserSignedIn(userId: number) {
   const db = await getDb();
   if (!db) return;
@@ -2696,7 +2832,7 @@ export const ADMIN_SESSION_PRINCIPAL_OPEN_ID = "tf_internal_admin_control_plane"
 export const FALLBACK_ADMIN_SESSION_PRINCIPAL: UserWithDiscordVerification = {
   id: 1,
   openId: ADMIN_SESSION_PRINCIPAL_OPEN_ID,
-  name: "TokenForge Administrator",
+  name: "Qronos Administrator",
   email: DEFAULT_ADMIN_EMAIL,
   loginMethod: "admin_passcode",
   role: "admin",
@@ -2714,7 +2850,7 @@ export async function getOrCreateAdminSessionPrincipal() {
   }
   await upsertUser({
     openId: ADMIN_SESSION_PRINCIPAL_OPEN_ID,
-    name: "TokenForge Administrator",
+    name: "Qronos Administrator",
     email: DEFAULT_ADMIN_EMAIL,
     loginMethod: "admin_passcode",
     role: "admin",
@@ -2728,7 +2864,7 @@ export async function getOrCreateAdminSessionPrincipal() {
 
 export async function createPasswordUser(input: { email: string; password: string; name?: string; referralCode?: string }) {
   const db = await getDb();
-  if (!db) throw new Error("TokenForge database is unavailable");
+  if (!db) throw new Error("Qronos AI database is unavailable");
   const email = normalizeEmail(input.email);
   if (await isDeletedIdentity("email", email)) return null;
   const existing = await db.select({ id: users.id }).from(users).where(eq(users.email, email)).limit(1);
@@ -2741,7 +2877,7 @@ export async function createPasswordUser(input: { email: string; password: strin
       const inserted = await tx.insert(users).values({
         openId,
         email,
-        name: input.name?.trim() || email.split("@")[0] || "TokenForge developer",
+        name: input.name?.trim() || email.split("@")[0] || "Qronos AI developer",
         loginMethod: "password",
         lastSignedIn: new Date(),
       });
@@ -2762,7 +2898,7 @@ export async function createPasswordUser(input: { email: string; password: strin
 
 export async function authenticatePasswordUser(emailInput: string, password: string) {
   const db = await getDb();
-  if (!db) throw new Error("TokenForge database is unavailable");
+  if (!db) throw new Error("Qronos AI database is unavailable");
   const email = normalizeEmail(emailInput);
   const rows = await db
     .select({ user: users, passwordHash: passwordCredentials.passwordHash })
@@ -2782,8 +2918,7 @@ export async function authenticatePasswordUser(emailInput: string, password: str
 }
 
 function hashLoginIdentifier(email: string) {
-  const pepper = process.env.JWT_SECRET;
-  if (!pepper) throw new Error("JWT_SECRET is required for TokenForge authentication throttling");
+  const pepper = process.env.JWT_SECRET || "qronos-auth-throttle-pepper-fallback";
   return createHmac("sha256", pepper).update(`login:${normalizeEmail(email)}`).digest("hex");
 }
 
@@ -2874,7 +3009,7 @@ export async function getEmailAllowlistConfig(): Promise<EmailAllowlistConfig | 
 
 export async function setEmailAllowlistConfig(entries: readonly string[], updatedByUserId: number): Promise<EmailAllowlistConfig> {
   const db = await getDb();
-  if (!db) throw new Error("TokenForge database is unavailable");
+  if (!db) throw new Error("Qronos AI database is unavailable");
   const normalizedEntries = normalizeEmailAllowlistEntries(entries);
   bustCache("email_allowlist");
   await db.insert(platformSettings).values({
@@ -2920,7 +3055,7 @@ export async function loadOrcaRouterCredentialSlotCiphertexts() {
 /** Replaces the complete managed pool atomically after server-side validation has succeeded. */
 export async function replaceOrcaRouterCredentialPool(credentials: readonly string[], updatedByUserId: number) {
   const db = await getDb();
-  if (!db) throw new Error("TokenForge database is unavailable");
+  if (!db) throw new Error("Qronos AI database is unavailable");
   const encrypted = credentials.map((credential, slot) => ({ slot, ...encryptOrcaRouterCredential(credential) }));
   const validatedAt = new Date();
   await db.transaction(async tx => {
@@ -3088,7 +3223,7 @@ export async function loadAndCacheModelPricingOverrides(): Promise<void> {
       return;
     } catch (error: any) {
       if (attempt === maxRetries) {
-        console.error("[TokenForge] Failed to load model pricing overrides on startup after retries:", error);
+        console.error("[Qronos AI] Failed to load model pricing overrides on startup after retries:", error);
       } else {
         await new Promise((resolve) => setTimeout(resolve, attempt * 1_000));
       }
@@ -3309,7 +3444,7 @@ export async function getClaudeFable5NvidiaProviderSettings() {
 
 export async function updateClaudeFable5NvidiaProviderSettings(input: { providers: Array<{ id: string; label: string; enabled?: boolean; baseUrl: string; model: string; apiKeys: string[]; apiKeyEnabled?: boolean[]; removeSlots?: number[]; maxInputTokens?: number | null; maxOutputTokens?: number | null; disableIdentityPrompt?: boolean; pinnedUserEmails?: string[]; bypassCooldown?: boolean; supportsVision?: boolean; supportsDocuments?: boolean; reasoningEffort?: "low" | "medium" | "high" | "xhigh" | "max" | null }> } | { baseUrl?: string; model?: string; apiKeys?: string[]; apiKeyEnabled?: boolean[]; removeSlots?: number[]; maxInputTokens?: number | null; maxOutputTokens?: number | null; disableIdentityPrompt?: boolean; pinnedUserEmails?: string[]; bypassCooldown?: boolean; supportsVision?: boolean; supportsDocuments?: boolean; reasoningEffort?: "low" | "medium" | "high" | "xhigh" | "max" | null }, updatedByUserId: number) {
   const db = await getDb();
-  if (!db) throw new Error("TokenForge database is unavailable");
+  if (!db) throw new Error("Qronos AI database is unavailable");
   const current = await getClaudeFable5NvidiaRuntimeConfig();
   const currentById = new Map(current.providers.map(provider => [provider.id, provider]));
   const legacyPrimary = current.providers[0] ?? { id: "primary", label: "Primary provider", enabled: true, baseUrl: "", model: "", apiKeys: [] };
@@ -3450,7 +3585,7 @@ export async function getQwen38MaxProviderSettings() {
 
 export async function updateQwen38MaxProviderSettings(input: { providers: Array<{ id: string; label: string; enabled?: boolean; baseUrl: string; model: string; apiKeys: string[]; apiKeyEnabled?: boolean[]; removeSlots?: number[]; maxInputTokens?: number | null; disableIdentityPrompt?: boolean; pinnedUserEmails?: string[]; bypassCooldown?: boolean; supportsVision?: boolean; supportsDocuments?: boolean; reasoningEffort?: "low" | "medium" | "high" | "xhigh" | "max" | null }> }, updatedByUserId: number) {
   const db = await getDb();
-  if (!db) throw new Error("TokenForge database is unavailable");
+  if (!db) throw new Error("Qronos AI database is unavailable");
   const current = await getQwen38MaxRuntimeConfig();
   const currentById = new Map(current.providers.map(provider => [provider.id, provider]));
   const nextProviders = input.providers.map((submitted, index) => {
@@ -3585,7 +3720,7 @@ export async function getGpt6AstraProviderSettings() {
 
 export async function updateGpt6AstraProviderSettings(input: { providers: Array<{ id: string; label: string; enabled?: boolean; baseUrl: string; model: string; apiKeys: string[]; apiKeyEnabled?: boolean[]; removeSlots?: number[]; maxInputTokens?: number | null; disableIdentityPrompt?: boolean; pinnedUserEmails?: string[]; bypassCooldown?: boolean; supportsVision?: boolean; supportsDocuments?: boolean; reasoningEffort?: "low" | "medium" | "high" | "xhigh" | "max" | null }> }, updatedByUserId: number) {
   const db = await getDb();
-  if (!db) throw new Error("TokenForge database is unavailable");
+  if (!db) throw new Error("Qronos AI database is unavailable");
   const current = await getGpt6AstraRuntimeConfig();
   const currentById = new Map(current.providers.map(provider => [provider.id, provider]));
   const nextProviders = input.providers.map((submitted, index) => {
@@ -3722,7 +3857,7 @@ export async function getKimiK3ProviderSettings() {
 
 export async function updateKimiK3ProviderSettings(input: { providers: Array<{ id: string; label: string; enabled?: boolean; baseUrl: string; model: string; apiKeys: string[]; apiKeyEnabled?: boolean[]; removeSlots?: number[]; maxInputTokens?: number | null; disableIdentityPrompt?: boolean; pinnedUserEmails?: string[]; bypassCooldown?: boolean; supportsVision?: boolean; supportsDocuments?: boolean; reasoningEffort?: "low" | "medium" | "high" | "xhigh" | "max" | null }> }, updatedByUserId: number) {
   const db = await getDb();
-  if (!db) throw new Error("TokenForge database is unavailable");
+  if (!db) throw new Error("Qronos AI database is unavailable");
   const current = await getKimiK3RuntimeConfig();
   const currentById = new Map(current.providers.map(provider => [provider.id, provider]));
   const nextProviders = input.providers.map((submitted, index) => {
@@ -3999,7 +4134,7 @@ export async function releaseBailuWebshareProxySlot(proxyId: string, outcome: Ba
 
 export async function updateBailuWebshareProxyPoolSettings(input: { enabled?: boolean; proxies: Array<{ id: string; label?: string; host?: string; port?: number; username?: string; password?: string; proxyUrl?: string; enabled?: boolean }> }, updatedByUserId: number) {
   const db = await getDb();
-  if (!db) throw new Error("TokenForge database is unavailable");
+  if (!db) throw new Error("Qronos AI database is unavailable");
   const current = await getBailuWebshareProxyPoolRuntimeConfig();
   const existingById = new Map(current.proxies.map(proxy => [proxy.id, proxy]));
   const proxies = normalizeBailuWebshareProxyPool(input.proxies.map((submitted, index) => {
@@ -4174,7 +4309,7 @@ export async function getRenderNimProxySwarmSettings() {
 
 export async function updateRenderNimProxySwarmSettings(input: { enabled?: boolean; model: string; endpoints: RenderNimProxyEndpoint[] }, updatedByUserId: number) {
   const db = await getDb();
-  if (!db) throw new Error("TokenForge database is unavailable");
+  if (!db) throw new Error("Qronos AI database is unavailable");
   const endpoints = normalizeRenderNimProxyEndpoints(input.endpoints, []);
   const model = input.model.trim();
   if (!model || !endpoints.length) throw new Error("A Render proxy model ID and at least one HTTPS endpoint are required");
@@ -4256,6 +4391,8 @@ export type ManagedProviderFailureLogInput = {
 
 export type ManagedProviderFailureLogModel = string;
 
+const _recentFailureLogDedup = new Map<string, number>();
+
 /**
  * Stores a raw credential-redacted managed-model upstream failure attempt.
  * The record intentionally excludes request content, user identity, headers, and API-key material.
@@ -4265,9 +4402,6 @@ export async function recordModelFailureLog(
   modelIdOrInput: string | (ManagedProviderFailureLogInput & { model?: string }),
   maybeInput?: ManagedProviderFailureLogInput
 ) {
-  const db = await getDb();
-  if (!db) return;
-
   let modelId: string;
   let input: ManagedProviderFailureLogInput;
   if (typeof modelIdOrInput === "string") {
@@ -4281,6 +4415,24 @@ export async function recordModelFailureLog(
   const httpStatus = Number.isInteger(input?.httpStatus) && input.httpStatus! >= 100 && input.httpStatus! <= 599
     ? input.httpStatus!
     : null;
+
+  // Rate-limit identical failure logs: deduplicate within 5 seconds to prevent write storms on TiDB
+  const dedupKey = `${modelId}:${input?.sourceId ?? ""}:${input?.failureKind ?? ""}:${httpStatus ?? ""}`;
+  const now = Date.now();
+  const lastLogged = _recentFailureLogDedup.get(dedupKey);
+  if (lastLogged && now - lastLogged < 5000) {
+    return;
+  }
+  _recentFailureLogDedup.set(dedupKey, now);
+  if (_recentFailureLogDedup.size > 500) {
+    for (const [k, ts] of _recentFailureLogDedup.entries()) {
+      if (now - ts >= 10000) _recentFailureLogDedup.delete(k);
+    }
+  }
+
+  const db = await getDb();
+  if (!db) return;
+
   try {
     await db.insert(claudeOpus5FailureLogs).values({
       modelId: modelId.trim().slice(0, 64) || "unknown",
@@ -4375,6 +4527,14 @@ export async function pruneExpiredManagedProviderFailureLogs(now = new Date()) {
   if (!db) return { cutoff, deleted: false };
   await db.delete(claudeOpus5FailureLogs).where(lt(claudeOpus5FailureLogs.occurredAt, cutoff));
   return { cutoff, deleted: true };
+}
+
+// Auto-prune old failure logs every 6 hours so ephemeral rows do not accumulate
+if (typeof setInterval !== "undefined") {
+  const _failurePruneInterval = setInterval(() => {
+    void pruneExpiredManagedProviderFailureLogs().catch(() => undefined);
+  }, 6 * 60 * 60 * 1000);
+  if (_failurePruneInterval.unref) _failurePruneInterval.unref();
 }
 
 /** The administrator history is bounded by record count while preserving each credential-redacted raw response body. */
@@ -4748,7 +4908,7 @@ export async function getClaudeOpus5ProviderSettings() {
 
 export async function updateClaudeOpus5ProviderSettings(input: { providers: Array<{ id: string; label: string; enabled?: boolean; baseUrl: string; model: string; apiKeys: string[]; apiKeyEnabled?: boolean[]; removeSlots?: number[]; modelPool?: Array<{ id: string; model: string; enabled?: boolean; quotaTokens?: number }>; maxOutputTokens?: number | null; maxInputTokens?: number | null; disableIdentityPrompt?: boolean; pinnedUserEmails?: string[]; bypassCooldown?: boolean; supportsVision?: boolean; supportsDocuments?: boolean; reasoningEffort?: "low" | "medium" | "high" | "xhigh" | "max" | null }>; baiPriority?: boolean }, updatedByUserId: number) {
   const db = await getDb();
-  if (!db) throw new Error("TokenForge database is unavailable");
+  if (!db) throw new Error("Qronos AI database is unavailable");
   const current = await getClaudeOpus5RuntimeConfig();
   const currentById = new Map(current.providers.map(provider => [provider.id, provider]));
   const nextProviders: ClaudeOpus5ProviderRuntime[] = input.providers.map((submitted, index) => {
@@ -4837,7 +4997,7 @@ export async function updateClaudeOpus5ProviderSettings(input: { providers: Arra
 
 export async function setClaudeOpus5BaiPriority(enabled: boolean, updatedByUserId: number) {
   const db = await getDb();
-  if (!db) throw new Error("TokenForge database is unavailable");
+  if (!db) throw new Error("Qronos AI database is unavailable");
   const current = await getClaudeOpus5RuntimeConfig();
   const next: ClaudeOpus5RuntimePayload = { ...current, baiPriority: enabled };
   const encrypted = encryptProviderRuntimeConfig(next);
@@ -4855,7 +5015,7 @@ export async function setClaudeOpus5BaiPriority(enabled: boolean, updatedByUserI
 
 export async function deleteClaudeOpus5QwenModel(input: { providerId: string; modelEntryId: string }, updatedByUserId: number) {
   const db = await getDb();
-  if (!db) throw new Error("TokenForge database is unavailable");
+  if (!db) throw new Error("Qronos AI database is unavailable");
   const current = await getClaudeOpus5RuntimeConfig();
   const next = removeClaudeOpus5QwenModelFromRuntime(current, input.providerId, input.modelEntryId);
   const encrypted = encryptProviderRuntimeConfig(next);
@@ -4882,7 +5042,7 @@ export async function deleteClaudeOpus5QwenModel(input: { providerId: string; mo
 
 export async function deleteClaudeOpus5QwenApiKey(input: { providerId: string; slot: number }, updatedByUserId: number) {
   const db = await getDb();
-  if (!db) throw new Error("TokenForge database is unavailable");
+  if (!db) throw new Error("Qronos AI database is unavailable");
   const current = await getClaudeOpus5RuntimeConfig();
   const { runtime, removedApiKey } = removeClaudeOpus5QwenApiKeyFromRuntime(current, input.providerId, input.slot);
   const encrypted = encryptProviderRuntimeConfig(runtime);
@@ -5009,7 +5169,7 @@ export async function getGlm53ProviderSettings() {
 
 export async function updateGlm53ProviderSettings(input: { providers: Array<{ id: string; label: string; enabled?: boolean; baseUrl: string; model: string; apiKeys: string[]; apiKeyEnabled?: boolean[]; removeSlots?: number[]; maxInputTokens?: number | null; maxOutputTokens?: number | null; disableIdentityPrompt?: boolean; pinnedUserEmails?: string[]; bypassCooldown?: boolean; supportsVision?: boolean; supportsDocuments?: boolean; reasoningEffort?: "low" | "medium" | "high" | "xhigh" | "max" | null }> } | { baseUrl?: string; model?: string; apiKeys?: string[]; apiKeyEnabled?: boolean[]; removeSlots?: number[]; maxInputTokens?: number | null; maxOutputTokens?: number | null; disableIdentityPrompt?: boolean; pinnedUserEmails?: string[]; bypassCooldown?: boolean; supportsVision?: boolean; supportsDocuments?: boolean; reasoningEffort?: "low" | "medium" | "high" | "xhigh" | "max" | null }, updatedByUserId: number) {
   const db = await getDb();
-  if (!db) throw new Error("TokenForge database is unavailable");
+  if (!db) throw new Error("Qronos AI database is unavailable");
   const current = await getGlm53RuntimeConfig();
   const currentById = new Map(current.providers.map(provider => [provider.id, provider]));
   const legacyPrimary = current.providers[0] ?? { id: "primary", label: "Primary provider", enabled: true, baseUrl: "", model: "", apiKeys: [] };
@@ -5187,7 +5347,7 @@ type DeepseekV4ProLegacyUpdate = { baseUrl?: string; model?: string; apiKeys?: s
 
 export async function updateDeepseekV4ProProviderSettings(input: { providers: DeepseekV4ProProviderUpdate[] } | DeepseekV4ProLegacyUpdate, updatedByUserId: number) {
   const db = await getDb();
-  if (!db) throw new Error("TokenForge database is unavailable");
+  if (!db) throw new Error("Qronos AI database is unavailable");
   const current = await getDeepseekV4ProRuntimeConfig();
   const currentById = new Map(current.providers.map(provider => [provider.id, provider]));
   const legacyPrimary = current.providers[0] ?? { id: "primary", label: "Primary provider", enabled: true, baseUrl: "", model: "", apiKeys: [] };
@@ -5345,7 +5505,7 @@ export async function getSonnet46ProviderSettings() {
 
 export async function updateSonnet46ProviderSettings(input: { providers: Sonnet46ProviderUpdate[] }, updatedByUserId: number) {
   const db = await getDb();
-  if (!db) throw new Error("TokenForge database is unavailable");
+  if (!db) throw new Error("Qronos AI database is unavailable");
   const current = await getSonnet46RuntimeConfig();
   const currentById = new Map(current.providers.map(provider => [provider.id, provider]));
   const nextProviders = input.providers.map((submitted, index) => {
@@ -5777,7 +5937,7 @@ export async function demoteUserToStandardRole(userId: number) {
 export async function clearLegacyAdministratorRoles() {
   const db = await getDb();
   if (!db) return false;
-  const result = await db.update(users).set({ role: "user" }).where(eq(users.role, "admin"));
+  const result = await db.update(users).set({ role: "user" }).where(and(eq(users.role, "admin"), ne(users.openId, ADMIN_SESSION_PRINCIPAL_OPEN_ID)));
   return result[0].affectedRows >= 0;
 }
 
@@ -5809,7 +5969,7 @@ export async function ensureAccountControl(userId: number) {
  */
 export async function bindDiscordIdentity(userId: number, discordUserId: string) {
   const db = await getDb();
-  if (!db) throw new Error("TokenForge database is unavailable");
+  if (!db) throw new Error("Qronos AI database is unavailable");
   if (!discordUserId.trim()) throw new Error("Discord identity is required");
   const provider = "discord";
   const prior = (await db.select({ userId: oauthIdentities.userId }).from(oauthIdentities)
@@ -5878,10 +6038,13 @@ export async function resetDiscordVerification(userId: number) {
 export async function createApiKey(
   userId: number,
   label: string,
-  keyGroup: "payg" | "bundle" | "token_plan" | "tokens" | "coding_plan" = "token_plan"
+  keyGroup: "payg" | "bundle" | "token_plan" | "tokens" | "coding_plan" = "payg"
 ) {
   const db = await getDb();
-  if (!db) throw new Error("TokenForge database is unavailable");
+  if (!db) throw new Error("Qronos AI database is unavailable");
+
+  // Normalize bundle group to payg
+  const normalizedKeyGroup = keyGroup === "bundle" ? "payg" : (keyGroup || "payg");
 
   // Enforce max 10 active API keys per account
   const activeKeys = await db
@@ -5896,7 +6059,7 @@ export async function createApiKey(
   const secret = newPlaintextKey();
   const keyPrefix = `${secret.slice(0, 15)}…`;
   const keyHash = hashApiKey(secret);
-  await db.insert(apiKeys).values({ userId, label, keyPrefix, keyHash, keyGroup });
+  await db.insert(apiKeys).values({ userId, label, keyPrefix, keyHash, keyGroup: normalizedKeyGroup });
   const created = await db.select().from(apiKeys).where(eq(apiKeys.keyHash, keyHash)).limit(1);
   if (!created[0]) throw new Error("API key creation did not persist");
   return { key: secret, record: publicApiKey(created[0]) };
@@ -5949,11 +6112,12 @@ export async function rotateApiKey(
   keyGroup?: "payg" | "bundle" | "token_plan" | "tokens" | "coding_plan"
 ) {
   const db = await getDb();
-  let existingGroup: "payg" | "bundle" | "token_plan" | "tokens" | "coding_plan" = keyGroup ?? "token_plan";
+  let existingGroup: "payg" | "bundle" | "token_plan" | "tokens" | "coding_plan" = keyGroup === "bundle" ? "payg" : (keyGroup ?? "payg");
   if (db && !keyGroup) {
     const existing = (await db.select().from(apiKeys).where(and(eq(apiKeys.id, apiKeyId), eq(apiKeys.userId, userId))).limit(1))[0];
     if (existing) {
-      existingGroup = ((existing as any).keyGroup as "payg" | "bundle" | "token_plan" | "tokens" | "coding_plan") || "token_plan";
+      const raw = (existing as any).keyGroup;
+      existingGroup = raw === "bundle" ? "payg" : (raw || "payg");
     }
   }
   const wasRevoked = await revokeApiKey(userId, apiKeyId);
@@ -6726,7 +6890,7 @@ export type GoogleIdentityInput = { providerUserId: string; email: string; name:
 /** Resolves Google by immutable provider subject (sub), securely linking any existing account or creating a fresh one. */
 export async function resolveGoogleIdentity(input: GoogleIdentityInput) {
   const db = await getDb();
-  if (!db) throw new Error("TokenForge database is unavailable");
+  if (!db) throw new Error("Qronos AI database is unavailable");
   const provider = "google";
   await assertIdentityIsNotDeleted("google", input.providerUserId);
   await assertIdentityIsNotDeleted("email", input.email);
@@ -6789,7 +6953,7 @@ export async function resolveGoogleIdentity(input: GoogleIdentityInput) {
     await awardReferralForNewUser(userId, input.referralCode);
     await reserveSpecialReferralCampaignSlot(userId, input.referralCode);
     const user = (await db.select().from(users).where(eq(users.id, userId)).limit(1))[0];
-    if (!user) throw new Error("TokenForge could not load the new Google account");
+    if (!user) throw new Error("Qronos AI could not load the new Google account");
     return { kind: "resolved" as const, user };
   } catch (error: any) {
     if (error?.code !== "ER_DUP_ENTRY") throw error;
@@ -6805,7 +6969,7 @@ export async function resolveGoogleIdentity(input: GoogleIdentityInput) {
 /** Resolves GitHub by immutable provider subject, securely linking a legacy local account only after GitHub returns the same verified email. */
 export async function resolveGitHubIdentity(input: GitHubIdentityInput) {
   const db = await getDb();
-  if (!db) throw new Error("TokenForge database is unavailable");
+  if (!db) throw new Error("Qronos AI database is unavailable");
   const provider = "github";
   await assertIdentityIsNotDeleted("github", input.providerUserId);
   await assertIdentityIsNotDeleted("email", input.email);
@@ -6860,7 +7024,7 @@ export async function resolveGitHubIdentity(input: GitHubIdentityInput) {
     await awardReferralForNewUser(userId, input.referralCode);
     await reserveSpecialReferralCampaignSlot(userId, input.referralCode);
     const user = (await db.select().from(users).where(eq(users.id, userId)).limit(1))[0];
-    if (!user) throw new Error("TokenForge could not load the new GitHub account");
+    if (!user) throw new Error("Qronos AI could not load the new GitHub account");
     return { kind: "resolved" as const, user };
   } catch (error: any) {
     if (error?.code !== "ER_DUP_ENTRY") throw error;
@@ -6935,7 +7099,7 @@ export async function getAdminOverview() {
     db.select({ totalTokens: sql<number>`coalesce(sum(${dailyUsage.totalTokens}), 0)`, totalRequests: sql<number>`coalesce(sum(${dailyUsage.requestCount}), 0)` }).from(dailyUsage),
     db.select({ provider: emailProvider, accountCount: sql<number>`count(id)` }).from(users).where(sql`${users.email} is not null and ${users.email} like '%@%'`).groupBy(emailProvider).orderBy(desc(sql`count(id)`), emailProvider),
     allAccountModelUsagePromise,
-    db.select({ count: sql<number>`count(*)` }).from(users).where(ne(users.openId, ADMIN_SESSION_PRINCIPAL_OPEN_ID)),
+    db.select({ count: sql<number>`count(*)` }).from(users),
     getAllModelCompactScalingConfigs(),
   ]);
   const compactScalingMap = (compactScalingMapRows ?? {}) as Record<string, ModelCompactScalingConfig>;
@@ -6961,7 +7125,7 @@ export async function getAdminOverview() {
 /** Deletes a user and every account-owned TokenForge record, retaining only non-reversible hashed identity tombstones. */
 export async function deleteAccountPermanently(userId: number, database?: AccountDeletionDatabase | null) {
   const db = database ?? await getDb();
-  if (!db) throw new Error("TokenForge database is unavailable");
+  if (!db) throw new Error("Qronos AI database is unavailable");
   return db.transaction(async tx => {
     const user = (await tx.select().from(users).where(eq(users.id, userId)).limit(1))[0];
     if (!user) return false;
@@ -6997,7 +7161,7 @@ export async function countDiscordUnverifiedAccounts() {
  */
 export async function deleteDiscordUnverifiedAccounts() {
   const db = await getDb();
-  if (!db) throw new Error("TokenForge database is unavailable");
+  if (!db) throw new Error("Qronos AI database is unavailable");
   return db.transaction(async tx => {
     const accounts = await tx.select({ id: users.id, email: users.email }).from(users)
       .leftJoin(accountControls, eq(users.id, accountControls.userId))
@@ -7488,7 +7652,7 @@ export async function countDiscordVerifiedAccounts() {
  */
 export async function grantDiscordVerifiedAccountGiveaway(input: { actorUserId: number; amountNanos: number; expectedRecipientCount: number; announcementNote?: string }) {
   const db = await getDb();
-  if (!db) throw new Error("TokenForge database is unavailable");
+  if (!db) throw new Error("Qronos AI database is unavailable");
   const amountNanos = Math.max(0, Math.trunc(input.amountNanos));
   if (!amountNanos) throw new Error("Giveaway amount must be positive");
   const expectedRecipientCount = Math.max(0, Math.trunc(input.expectedRecipientCount));
@@ -7523,7 +7687,7 @@ export async function grantDiscordVerifiedAccountGiveaway(input: { actorUserId: 
       amountNanos,
       balanceAfterNanos: account.balanceNanos,
       referenceId: `giveaway:${giveawayId}:${account.userId}`,
-      note: announcementNote ?? "TokenForge registered account giveaway",
+      note: announcementNote ?? "Qronos AI registered account giveaway",
     })));
     await tx.insert(creditGiveaways).values({
       id: giveawayId,
@@ -7577,7 +7741,7 @@ export async function listUnreadCreditGiveawayNotifications(userId: number, limi
 /** Dismisses one recipient's own giveaway notice without changing the underlying wallet credit. */
 export async function dismissCreditGiveawayNotification(input: { userId: number; notificationId: number }) {
   const db = await getDb();
-  if (!db) throw new Error("TokenForge database is unavailable");
+  if (!db) throw new Error("Qronos AI database is unavailable");
   const result = await db.update(creditGiveawayNotifications)
     .set({ dismissedAt: new Date() })
     .where(and(
@@ -7597,7 +7761,7 @@ export async function grantAdminAccountCredit(input: {
   amountTokens?: number;
 }) {
   const db = await getDb();
-  if (!db) throw new Error("TokenForge database is unavailable");
+  if (!db) throw new Error("Qronos AI database is unavailable");
   const amountNanos = Math.max(0, Math.trunc(input.amountNanos));
   const amountTokens = input.amountTokens ? Math.max(0, Math.trunc(input.amountTokens)) : 0;
   if (!amountNanos && !amountTokens) throw new Error("Credit grant amount must be positive");
@@ -7612,7 +7776,7 @@ export async function grantAdminAccountCredit(input: {
     if (balanceType === "tokens") {
       const tokensToAdd = amountTokens || amountNanos;
       const mTokens = (tokensToAdd / 1_000_000).toLocaleString();
-      const announcementNote = `An administrator added ${mTokens}M coding tokens to your TokenForge account.`;
+      const announcementNote = `An administrator added ${mTokens}M coding tokens to your Qronos AI account.`;
       await tx
         .update(creditAccounts)
         .set({ codingPlanTokens: sql`${creditAccounts.codingPlanTokens} + ${tokensToAdd}` })
@@ -7649,7 +7813,7 @@ export async function grantAdminAccountCredit(input: {
         balanceType: "tokens" as const,
       };
     } else if (balanceType === "payg") {
-      const announcementNote = "An administrator added PAYG balance to your TokenForge account.";
+      const announcementNote = "An administrator added PAYG balance to your Qronos AI account.";
       await tx.update(creditAccounts).set({ paygBalanceNanos: sql`${creditAccounts.paygBalanceNanos} + ${amountNanos}` }).where(eq(creditAccounts.userId, input.userId));
       const account = (await tx.select().from(creditAccounts).where(eq(creditAccounts.userId, input.userId)).limit(1))[0];
       const balanceNanos = account?.balanceNanos ?? 0;
@@ -7674,7 +7838,7 @@ export async function grantAdminAccountCredit(input: {
       await tx.insert(creditGiveawayNotifications).values({ giveawayId, userId: input.userId });
       return { amountNanos, balanceNanos, paygBalanceNanos, codingPlanTokens, balanceType: "payg" as const };
     } else {
-      const announcementNote = "An administrator added credits to your TokenForge account.";
+      const announcementNote = "An administrator added credits to your Qronos AI account.";
       await tx.update(creditAccounts).set({ balanceNanos: sql`${creditAccounts.balanceNanos} + ${amountNanos}` }).where(eq(creditAccounts.userId, input.userId));
       const account = (await tx.select().from(creditAccounts).where(eq(creditAccounts.userId, input.userId)).limit(1))[0];
       const balanceNanos = account?.balanceNanos ?? amountNanos;
@@ -7712,7 +7876,7 @@ export async function setAdminAccountCredit(input: {
   note?: string;
 }) {
   const db = await getDb();
-  if (!db) throw new Error("TokenForge database is unavailable");
+  if (!db) throw new Error("Qronos AI database is unavailable");
   const targetAmountNanos = Math.max(0, Math.trunc(input.targetAmountNanos));
   const targetTokens = input.targetTokens !== undefined ? Math.max(0, Math.trunc(input.targetTokens)) : undefined;
   const user = (await db.select({ id: users.id }).from(users).where(eq(users.id, input.userId)).limit(1))[0];
@@ -7896,7 +8060,7 @@ export async function setAllUsersCreditBalance(input: {
   }
 
   const db = await getDb();
-  if (!db) throw new Error("TokenForge database is unavailable");
+  if (!db) throw new Error("Qronos AI database is unavailable");
   const targetAmountNanos = Math.max(0, Math.trunc(input.targetAmountNanos));
   const conversionRate = typeof NANODOLLARS_PER_DOLLAR === "number" && NANODOLLARS_PER_DOLLAR > 0 ? NANODOLLARS_PER_DOLLAR : 1_000_000_000;
   const targetAmountUsd = targetAmountNanos / conversionRate;
@@ -7972,7 +8136,7 @@ export async function grantAllUsersPaygBalance(input: {
   note?: string;
 }) {
   const db = await getDb();
-  if (!db) throw new Error("TokenForge database is unavailable");
+  if (!db) throw new Error("Qronos AI database is unavailable");
   const amountNanos = Math.round(input.amountDollars * 1_000_000_000);
   const note = input.note?.trim() || `$${input.amountDollars.toFixed(2)} Pay-As-You-Go compute grant`;
 
@@ -8016,211 +8180,6 @@ export async function grantAllUsersPaygBalance(input: {
   };
 }
 
-let _ticketsTableChecked = false;
-export async function ensureCreditTicketsTable() {
-  if (_ticketsTableChecked) return;
-  const db = await getDb();
-  if (!db) return;
-  try {
-    await db.execute(sql`
-      CREATE TABLE IF NOT EXISTS credit_tickets (
-        id VARCHAR(32) PRIMARY KEY,
-        userId INT NOT NULL,
-        userEmail VARCHAR(320) NOT NULL,
-        userName VARCHAR(255) NULL,
-        type VARCHAR(64) NOT NULL DEFAULT 'credit_issue',
-        requestedAmountDollars DECIMAL(12, 2) NOT NULL,
-        requestedAmountNanos BIGINT NOT NULL,
-        reason TEXT NULL,
-        status ENUM('pending', 'resolved', 'rejected') NOT NULL DEFAULT 'pending',
-        approvedAmountDollars DECIMAL(12, 2) NULL,
-        approvedAmountNanos BIGINT NULL,
-        adminNote VARCHAR(256) NULL,
-        resolvedByUserId INT NULL,
-        resolvedAt TIMESTAMP NULL,
-        createdAt TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        updatedAt TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-        INDEX credit_tickets_user_idx (userId, createdAt),
-        INDEX credit_tickets_status_idx (status, createdAt)
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-    `);
-    _ticketsTableChecked = true;
-  } catch (error) {
-    console.warn("[Database] ensureCreditTicketsTable check:", error);
-    _ticketsTableChecked = true;
-  }
-}
-
-export async function createCreditTicket(input: {
-  userId: number;
-  userEmail: string;
-  userName?: string;
-  requestedAmountDollars: number;
-  reason?: string;
-}) {
-  const db = await getDb();
-  if (!db) throw new Error("TokenForge database is unavailable");
-  await ensureCreditTicketsTable();
-  const ticketId = `tkt_${randomBytes(8).toString("hex")}`;
-  const requestedDollars = Math.max(0.01, Number(Number(input.requestedAmountDollars).toFixed(2)));
-  const requestedAmountNanos = Math.round(requestedDollars * NANODOLLARS_PER_DOLLAR);
-
-  await db.insert(creditTickets).values({
-    id: ticketId,
-    userId: input.userId,
-    userEmail: input.userEmail,
-    userName: input.userName ?? null,
-    type: "credit_issue",
-    requestedAmountDollars: requestedDollars.toFixed(2),
-    requestedAmountNanos,
-    reason: input.reason?.trim() || null,
-    status: "pending",
-  });
-
-  return { id: ticketId, requestedAmountDollars: requestedDollars, requestedAmountNanos, status: "pending" as const };
-}
-
-export async function listUserTickets(userId: number) {
-  const db = await getDb();
-  if (!db) return [];
-  await ensureCreditTicketsTable();
-  return db
-    .select()
-    .from(creditTickets)
-    .where(eq(creditTickets.userId, userId))
-    .orderBy(desc(creditTickets.createdAt))
-    .limit(50);
-}
-
-export async function listAllTickets(limit = 100) {
-  const db = await getDb();
-  if (!db) return [];
-  await ensureCreditTicketsTable();
-  return db
-    .select()
-    .from(creditTickets)
-    .orderBy(desc(creditTickets.createdAt))
-    .limit(limit);
-}
-
-export async function approveCreditTicket(input: {
-  ticketId: string;
-  approvedAmountDollars: number;
-  actorUserId: number;
-  adminNote?: string;
-}) {
-  const db = await getDb();
-  if (!db) throw new Error("TokenForge database is unavailable");
-  await ensureCreditTicketsTable();
-
-  const ticket = (
-    await db.select().from(creditTickets).where(eq(creditTickets.id, input.ticketId)).limit(1)
-  )[0];
-  if (!ticket) throw new Error("Ticket not found");
-  if (ticket.status !== "pending") throw new Error(`Ticket has already been marked as ${ticket.status}`);
-
-  const approvedDollars = Math.max(0.01, Number(Number(input.approvedAmountDollars).toFixed(2)));
-  const approvedNanos = Math.round(approvedDollars * NANODOLLARS_PER_DOLLAR);
-
-  return db.transaction(async tx => {
-    // 1. Credit recipient's wallet
-    await tx
-      .insert(creditAccounts)
-      .values({ userId: ticket.userId, balanceNanos: approvedNanos })
-      .onDuplicateKeyUpdate({
-        set: { balanceNanos: sql`${creditAccounts.balanceNanos} + ${approvedNanos}` },
-      });
-
-    const account = (
-      await tx
-        .select({ balanceNanos: creditAccounts.balanceNanos })
-        .from(creditAccounts)
-        .where(eq(creditAccounts.userId, ticket.userId))
-        .limit(1)
-    )[0];
-    const balanceAfterNanos = account?.balanceNanos ?? approvedNanos;
-
-    const giveawayId = randomBytes(12).toString("hex");
-    const announcementNote =
-      input.adminNote?.trim() ||
-      `Your credit issue ticket was approved! $${approvedDollars.toFixed(2)} in build credit has been added to your TokenForge wallet.`;
-
-    // 2. Add entry to credit ledger
-    await tx.insert(creditLedger).values({
-      userId: ticket.userId,
-      kind: "manual_adjustment",
-      amountNanos: approvedNanos,
-      balanceAfterNanos,
-      referenceId: `ticket-approval:${ticket.id}:${giveawayId}`,
-      note: announcementNote,
-    });
-
-    // 3. Insert into credit giveaways & credit giveaway notifications (triggers giveaway ribbon banner!)
-    await tx.insert(creditGiveaways).values({
-      id: giveawayId,
-      actorUserId: input.actorUserId,
-      amountNanos: approvedNanos,
-      recipientCount: 1,
-      totalAmountNanos: approvedNanos,
-      announcementNote,
-    });
-
-    await tx.insert(creditGiveawayNotifications).values({
-      giveawayId,
-      userId: ticket.userId,
-    });
-
-    // 4. Update ticket status to resolved
-    await tx
-      .update(creditTickets)
-      .set({
-        status: "resolved",
-        approvedAmountDollars: approvedDollars.toFixed(2),
-        approvedAmountNanos: approvedNanos,
-        adminNote: input.adminNote?.trim() || null,
-        resolvedByUserId: input.actorUserId,
-        resolvedAt: new Date(),
-      })
-      .where(eq(creditTickets.id, ticket.id));
-
-    return {
-      ticketId: ticket.id,
-      status: "resolved" as const,
-      approvedAmountDollars: approvedDollars,
-      approvedAmountNanos: approvedNanos,
-      balanceAfterNanos,
-    };
-  });
-}
-
-export async function rejectCreditTicket(input: {
-  ticketId: string;
-  actorUserId: number;
-  adminNote?: string;
-}) {
-  const db = await getDb();
-  if (!db) throw new Error("TokenForge database is unavailable");
-  await ensureCreditTicketsTable();
-
-  const ticket = (
-    await db.select().from(creditTickets).where(eq(creditTickets.id, input.ticketId)).limit(1)
-  )[0];
-  if (!ticket) throw new Error("Ticket not found");
-  if (ticket.status !== "pending") throw new Error(`Ticket has already been marked as ${ticket.status}`);
-
-  await db
-    .update(creditTickets)
-    .set({
-      status: "rejected",
-      adminNote: input.adminNote?.trim() || "Ticket was reviewed and declined by administrator.",
-      resolvedByUserId: input.actorUserId,
-      resolvedAt: new Date(),
-    })
-    .where(eq(creditTickets.id, ticket.id));
-
-  return { ticketId: ticket.id, status: "rejected" as const };
-}
-
 let _accessRequestsTableChecked = false;
 export async function ensureAccessRequestsTable() {
   if (_accessRequestsTableChecked) return;
@@ -8252,7 +8211,7 @@ export async function ensureAccessRequestsTable() {
 
 export async function submitAccessRequest(inputEmail: string) {
   const db = await getDb();
-  if (!db) throw new Error("TokenForge database is unavailable");
+  if (!db) throw new Error("Qronos AI database is unavailable");
   await ensureAccessRequestsTable();
 
   const email = normalizeEmail(inputEmail);
@@ -8374,7 +8333,7 @@ export async function approveAccessRequest(input: {
   note?: string;
 }) {
   const db = await getDb();
-  if (!db) throw new Error("TokenForge database is unavailable");
+  if (!db) throw new Error("Qronos AI database is unavailable");
   await ensureAccessRequestsTable();
 
   const req = (
@@ -8419,7 +8378,7 @@ export async function denyAccessRequest(input: {
   note?: string;
 }) {
   const db = await getDb();
-  if (!db) throw new Error("TokenForge database is unavailable");
+  if (!db) throw new Error("Qronos AI database is unavailable");
   await ensureAccessRequestsTable();
 
   const req = (
@@ -9382,6 +9341,155 @@ export async function saveImageSemanticDescription(input: {
     console.warn("[saveImageSemanticDescription] error saving to DB:", err);
   }
 }
+
+export type NotificationItem = {
+  id: number;
+  title: string;
+  message: string;
+  type: string;
+  targetAudience: string;
+  targetEmails?: string | null;
+  createdAt: Date;
+  isRead: boolean;
+};
+
+export async function listUserNotifications(userId: number, userEmail?: string | null): Promise<NotificationItem[]> {
+  const db = await getDb();
+  if (!db) return [];
+  const normalizedEmail = userEmail ? normalizeEmail(userEmail) : null;
+
+  try {
+    const allNotifs = await db
+      .select({
+        id: systemNotifications.id,
+        title: systemNotifications.title,
+        message: systemNotifications.message,
+        type: systemNotifications.type,
+        targetAudience: systemNotifications.targetAudience,
+        targetEmails: systemNotifications.targetEmails,
+        createdAt: systemNotifications.createdAt,
+      })
+      .from(systemNotifications)
+      .orderBy(desc(systemNotifications.createdAt))
+      .limit(100);
+
+    // Filter notifications applicable to this user
+    const applicable = allNotifs.filter(n => {
+      if (n.targetAudience === "ALL") return true;
+      if (!n.targetEmails || !normalizedEmail) return false;
+      const emails = n.targetEmails.toLowerCase().split(/[\s,;]+/).map(e => e.trim()).filter(Boolean);
+      return emails.includes(normalizedEmail);
+    });
+
+    if (applicable.length === 0) return [];
+
+    const notifIds = applicable.map(n => n.id);
+    const reads = await db
+      .select({ notificationId: userNotificationReads.notificationId })
+      .from(userNotificationReads)
+      .where(and(eq(userNotificationReads.userId, userId), inArray(userNotificationReads.notificationId, notifIds)));
+
+    const readSet = new Set(reads.map(r => r.notificationId));
+
+    return applicable.map(n => ({
+      ...n,
+      isRead: readSet.has(n.id),
+    }));
+  } catch (error) {
+    console.error("[Notifications] Failed to list user notifications:", error);
+    return [];
+  }
+}
+
+export async function getUnreadNotificationCount(userId: number, userEmail?: string | null): Promise<number> {
+  const notifs = await listUserNotifications(userId, userEmail);
+  return notifs.filter(n => !n.isRead).length;
+}
+
+export async function markNotificationAsRead(notificationId: number, userId: number): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  try {
+    await db.insert(userNotificationReads).values({
+      notificationId,
+      userId,
+      readAt: new Date(),
+    }).onDuplicateKeyUpdate({ set: { readAt: new Date() } });
+  } catch (error) {
+    console.error("[Notifications] Failed to mark as read:", error);
+  }
+}
+
+export async function markAllNotificationsAsRead(userId: number, userEmail?: string | null): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  const notifs = await listUserNotifications(userId, userEmail);
+  const unread = notifs.filter(n => !n.isRead);
+  if (unread.length === 0) return;
+
+  try {
+    for (const n of unread) {
+      await db.insert(userNotificationReads).values({
+        notificationId: n.id,
+        userId,
+        readAt: new Date(),
+      }).onDuplicateKeyUpdate({ set: { readAt: new Date() } });
+    }
+  } catch (error) {
+    console.error("[Notifications] Failed to mark all as read:", error);
+  }
+}
+
+export async function listAdminNotifications() {
+  const db = await getDb();
+  if (!db) return [];
+  try {
+    return await db
+      .select()
+      .from(systemNotifications)
+      .orderBy(desc(systemNotifications.createdAt))
+      .limit(200);
+  } catch (error) {
+    console.error("[Notifications] Failed to list admin notifications:", error);
+    return [];
+  }
+}
+
+export async function createAdminNotification(input: {
+  title: string;
+  message: string;
+  type?: string;
+  targetAudience: "ALL" | "SPECIFIC_EMAILS";
+  targetEmails?: string[];
+  adminUserId: number;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+  const emailsString = input.targetEmails && input.targetEmails.length > 0
+    ? input.targetEmails.map(e => normalizeEmail(e)).filter(Boolean).join(", ")
+    : null;
+
+  const result = await db.insert(systemNotifications).values({
+    title: input.title.trim(),
+    message: input.message.trim(),
+    type: input.type || "announcement",
+    targetAudience: input.targetAudience,
+    targetEmails: emailsString,
+    createdByUserId: input.adminUserId,
+    createdAt: new Date(),
+  });
+
+  return { id: Number(result[0].insertId) };
+}
+
+export async function deleteAdminNotification(notificationId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+  await db.delete(userNotificationReads).where(eq(userNotificationReads.notificationId, notificationId));
+  await db.delete(systemNotifications).where(eq(systemNotifications.id, notificationId));
+  return { success: true };
+}
+
 
 
 

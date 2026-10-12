@@ -23,7 +23,11 @@ function CountdownUnit({ label, value }: { label: string; value: number }) {
 
 /** Public, database-backed scheduled-maintenance notice. It disappears locally at zero even before the next refetch. */
 export function MaintenanceCountdownBanner() {
-  const countdown = trpc.public.maintenanceCountdown.useQuery(undefined, { refetchInterval: 5_000, refetchOnWindowFocus: true });
+  const countdown = trpc.public.maintenanceCountdown.useQuery(undefined, {
+    staleTime: 20_000,
+    refetchInterval: 30_000,
+    refetchOnWindowFocus: true,
+  });
   const [now, setNow] = useState(() => Date.now());
   const endsAt = countdown.data?.endsAt;
 

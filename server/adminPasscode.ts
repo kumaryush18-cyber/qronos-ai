@@ -7,7 +7,9 @@ function equalConstantTime(received: string, expected: string) {
 }
 
 export function verifyAdminPasscode(passcode: string) {
-  const configuredPasscode = process.env.TOKENFORGE_ADMIN_PASSCODE?.trim();
-  if (!configuredPasscode) return false;
-  return equalConstantTime(passcode, configuredPasscode);
+  const configuredPasscode =
+    process.env.QRONOS_ADMIN_PASSCODE?.trim() ||
+    process.env.ADMIN_PASSCODE?.trim();
+  if (!configuredPasscode || configuredPasscode.length < 4) return false;
+  return equalConstantTime(passcode.trim(), configuredPasscode);
 }

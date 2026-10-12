@@ -1,4 +1,4 @@
-// TokenForge Service Worker for System Mobile & Desktop Notifications
+// Qronos AI Service Worker for System Mobile & Desktop Notifications
 self.addEventListener("install", (event) => {
   self.skipWaiting();
 });
@@ -28,7 +28,7 @@ self.addEventListener("message", (event) => {
 // Listen for push notifications if server push is configured
 self.addEventListener("push", (event) => {
   let data = {
-    title: "🚨 TokenForge Failure Alert",
+    title: "🚨 Qronos AI Failure Alert",
     body: "A live request failed upstream.",
   };
   try {

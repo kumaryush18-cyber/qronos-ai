@@ -5,13 +5,16 @@ import { TOKENFORGE_MODELS } from "@/lib/modelCatalogue";
 import { calculateSettledUsagePricingBreakdownNanos } from "@shared/usagePricing";
 import { trpc } from "@/lib/trpc";
 import { Link } from "wouter";
-import { ArrowDownLeft, ArrowUpRight, CalendarCheck, CalendarDays, CheckCircle2, ChevronDown, CircleDollarSign, Clock3, Code2, Coins, Filter, KeyRound, Loader2, Percent, ReceiptText, RotateCcw, ShieldCheck, Sparkles, WalletCards, Zap } from "lucide-react";
+import { Activity, ArrowDownLeft, ArrowUpRight, CalendarCheck, CalendarDays, CheckCircle2, ChevronDown, CircleDollarSign, Clock3, Code2, Coins, Filter, Gift, History, KeyRound, Loader2, Mail, Percent, ReceiptText, RotateCcw, ShieldCheck, Sparkles, Terminal, WalletCards, Zap } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { SolanaPayButton } from "@/components/SolanaPayButton";
 import { UserTierBadge } from "@/components/UserTierBadge";
 import { PaygPaymentModal } from "@/components/PaygPaymentModal";
 import { CheckoutModal } from "@/components/CheckoutModal";
+import { PearlAvatar } from "@/components/ui/pearl-avatar";
+import { StarBorderCard } from "@/components/StarBorderCard";
+import { StarButton } from "@/components/StarButton";
 import { useAuth } from "@/_core/hooks/useAuth";
 import "./credit-workspace.css";
 import "./credit-pricing-breakdown.css";
@@ -72,7 +75,7 @@ export function PaygHero({ compact = false }: { compact?: boolean }) {
             <div className="flex items-center gap-2">
               <span className="flex h-2 w-2 rounded-full bg-rose-500 animate-pulse" />
               <span className="text-[11px] font-bold uppercase tracking-wider text-rose-300 font-mono">
-                Tier 1: PAYG Compute
+                PAYG Compute Balance
               </span>
             </div>
             <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/20 border border-rose-500/30 text-rose-200 font-mono">
@@ -103,7 +106,7 @@ export function PaygHero({ compact = false }: { compact?: boolean }) {
             <span>Top Up Balance</span>
           </Button>
 
-          <Link href="/dashboard/pricing" className="shrink-0">
+          <Link href="/pricing" className="shrink-0">
             <span className="inline-flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl text-xs font-semibold text-neutral-300 hover:text-white bg-white/[0.06] hover:bg-white/[0.12] border border-white/10 transition-all cursor-pointer">
               <span>Rates</span>
               <ArrowUpRight size={13} />
@@ -144,21 +147,21 @@ export function CodingTokensHero({ compact = false }: { compact?: boolean }) {
 
   return (
     <section
-      className="relative overflow-hidden rounded-3xl border border-cyan-500/30 bg-gradient-to-br from-cyan-950/30 via-[#0a1118] to-black/80 p-5 sm:p-6 shadow-xl text-white flex flex-col justify-between transition-all duration-200 hover:border-cyan-500/40"
-      aria-label="Dedicated Coding Plan Tokens"
+      className="relative overflow-hidden rounded-3xl border border-white/15 bg-gradient-to-br from-white/[0.04] via-black/90 to-black p-5 sm:p-6 shadow-xl text-white flex flex-col justify-between transition-all duration-200 hover:border-white/30"
+      aria-label="Dedicated Token Plan Quota"
     >
-      <div className="absolute top-0 right-0 h-36 w-36 rounded-full bg-cyan-500/10 blur-3xl pointer-events-none" />
+      <div className="absolute top-0 right-0 h-36 w-36 rounded-full bg-white/[0.04] blur-3xl pointer-events-none" />
 
       <div className="relative z-10 space-y-3">
         <div className="flex items-center justify-between gap-2 flex-wrap">
           <div className="flex items-center gap-2">
-            <span className="flex h-2 w-2 rounded-full bg-cyan-400 animate-pulse" />
-            <span className="text-[11px] font-bold uppercase tracking-wider text-cyan-300 font-mono flex items-center gap-1.5">
-              <Code2 size={13} className="text-cyan-400" />
-              <span>Tier 2: Coding Tokens</span>
+            <span className="flex h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+            <span className="text-[11px] font-bold uppercase tracking-wider text-white font-mono flex items-center gap-1.5">
+              <Code2 size={13} className="text-white" />
+              <span>Token Plan Quota</span>
             </span>
           </div>
-          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-cyan-500/20 border border-cyan-500/30 text-cyan-200 font-mono">
+          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-white/[0.08] border border-white/20 text-white font-mono">
             10M / $1
           </span>
         </div>
@@ -168,7 +171,7 @@ export function CodingTokensHero({ compact = false }: { compact?: boolean }) {
             <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-white font-mono">
               {formattedTokens}
             </h2>
-            <span className="text-xs font-mono text-cyan-400 font-semibold uppercase tracking-wider">
+            <span className="text-xs font-mono text-zinc-400 font-semibold uppercase tracking-wider">
               {codingPlanTokens >= 1_000_000 ? "Tokens Quota" : "Tokens"}
             </span>
           </div>
@@ -182,10 +185,10 @@ export function CodingTokensHero({ compact = false }: { compact?: boolean }) {
         <Link href="/dashboard/pricing" className="flex-1">
           <Button
             type="button"
-            className="w-full inline-flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-bold text-black bg-gradient-to-r from-cyan-400 to-teal-400 hover:from-cyan-300 hover:to-teal-300 shadow-lg shadow-cyan-500/20 transition-all cursor-pointer h-auto"
+            className="w-full inline-flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-bold text-black bg-white hover:bg-zinc-200 shadow-lg transition-all cursor-pointer h-auto"
           >
             <Code2 size={14} />
-            <span>Get Coding Tokens</span>
+            <span>Get Token Plan</span>
             <ArrowUpRight size={13} />
           </Button>
         </Link>
@@ -204,7 +207,7 @@ export function WalletHero({ compact = false }: { compact?: boolean }) {
   return (
     <section
       className="relative overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-[#121c10]/40 via-[#0e120d] to-black/80 p-5 sm:p-6 shadow-xl text-white flex flex-col justify-between transition-all duration-200 hover:border-white/20"
-      aria-label="TokenForge promotional credit balance"
+      aria-label="Qronos AI promotional credit balance"
     >
       <div className="absolute top-0 right-0 h-36 w-36 rounded-full bg-[#befe6c]/10 blur-3xl pointer-events-none" />
 
@@ -214,7 +217,7 @@ export function WalletHero({ compact = false }: { compact?: boolean }) {
             <span className="flex h-2 w-2 rounded-full bg-[#c8ff74] animate-pulse" />
             <span className="text-[11px] font-bold uppercase tracking-wider text-[#c8ff74] font-mono flex items-center gap-1.5">
               <WalletCards size={13} />
-              <span>Tier 3: Credit Wallet</span>
+              <span>Promotional Wallet</span>
             </span>
           </div>
           <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#c8ff74]/15 border border-[#c8ff74]/30 text-[#c8ff74] font-mono">
@@ -236,7 +239,7 @@ export function WalletHero({ compact = false }: { compact?: boolean }) {
       </div>
 
       <div className="relative z-10 pt-4 mt-2 border-t border-white/10 flex items-center gap-2 flex-wrap">
-        <Link href="/dashboard/pricing" className="flex-1">
+        <Link href="/pricing" className="flex-1">
           <Button
             type="button"
             className="w-full inline-flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-bold text-black bg-[#c8ff74] hover:bg-[#d8ff91] shadow-lg shadow-[#c8ff74]/20 transition-all cursor-pointer h-auto"
@@ -292,7 +295,7 @@ export function calculateUsagePricingBreakdown(modelId: string, inputTokens: num
 }
 
 function ledgerDescriptor(kind: string) {
-  if (kind === "introductory_grant") return { title: "Welcome credit", detail: "Initial TokenForge build credit", icon: Sparkles };
+  if (kind === "introductory_grant") return { title: "Welcome credit", detail: "Initial Qronos AI build credit", icon: Sparkles };
   if (kind === "daily_checkin") return { title: "Daily check-in", detail: "UTC build reward", icon: CalendarCheck };
   if (kind === "usage_debit") return { title: "Usage settled", detail: "Successful model request", icon: ArrowUpRight };
   return { title: "Wallet adjustment", detail: "Account credit activity", icon: RotateCcw };
@@ -323,73 +326,365 @@ export function UsageLogs() {
   const reset = () => { setModelId(""); setSource(""); setFrom(""); setTo(""); };
 
   return (
-    <div className="credit-workspace usage-workspace">
-      {creditsEnabled ? <WalletHero /> : <PaygHero />}
-      <section className="usage-metrics" aria-label="Usage log summary">
-        <article><span className="usage-metric__icon"><ReceiptText size={16} /></span><div><p>Requests shown</p><b>{summary.count}</b><small>matching this view</small></div></article>
-        <article><span className="usage-metric__icon usage-metric__icon--cyan"><Coins size={16} /></span><div><p>Tokens processed</p><b>{summary.tokens.toLocaleString()}</b><small>input + output</small></div></article>
-        <article><span className="usage-metric__icon usage-metric__icon--warm"><CircleDollarSign size={16} /></span><div><p>Recorded charge</p><b>{formatCreditNanos(summary.charges)}</b><small>successful requests</small></div></article>
-      </section>
-      <section className="usage-log-panel">
-        <header className="usage-log-panel__heading">
-          <div>
-            <p className="credit-kicker"><Filter size={13} /> Request activity</p>
-            <h2>Usage, in full view.</h2>
-            <span>Every Playground and API request is recorded with its source, usage, and final credit settlement.</span>
+    <div className="space-y-6">
+      {/* 4-Card Telemetry & KPI Bento */}
+      <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4" aria-label="Usage log summary">
+        <div
+          style={{
+            backgroundColor: "oklch(0.14 0 0)",
+            borderColor: "oklch(0.26 0 0)",
+            boxShadow: "0 25px 60px rgba(0,0,0,0.85), inset 0 1px 0 rgba(255,255,255,0.06)",
+          }}
+          className="rounded-2xl border p-5 flex flex-col justify-between shadow-xl"
+        >
+          <div className="flex items-center justify-between text-zinc-400">
+            <span className="text-[10px] font-mono uppercase tracking-wider font-bold">Requests Logged</span>
+            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-white/[0.06] border border-white/10 text-white">
+              <ReceiptText size={14} />
+            </div>
           </div>
-          <Badge className="credit-status-badge"><span className="credit-status-badge__dot" /> Live ledger</Badge>
-        </header>
-        <div className="usage-log-filter-shell">
-          <div className="usage-log-filter-meta"><span>Refine activity</span>{activeFilters ? <b>{activeFilters} active filter{activeFilters === 1 ? "" : "s"}</b> : <small>Last 100 requests</small>}</div>
-          <div className="usage-log-filters">
-            <label><span>Model</span><select aria-label="Filter by model" value={modelId} onChange={event => setModelId(event.target.value)}><option value="">All models</option>{TOKENFORGE_MODELS.map(model => <option key={model.id} value={model.id}>{model.name} · {model.provider}</option>)}</select></label>
-            <label><span>Source</span><select aria-label="Filter by source" value={source} onChange={event => setSource(event.target.value as typeof source)}><option value="">All sources</option><option value="playground">Playground</option><option value="api">API key</option></select></label>
-            <label><span>From</span><input aria-label="From date" type="date" value={from} onChange={event => setFrom(event.target.value)} /></label>
-            <label><span>To</span><input aria-label="To date" type="date" value={to} onChange={event => setTo(event.target.value)} /></label>
-            <Button className="usage-filter-reset" variant="outline" onClick={reset} disabled={!activeFilters}><RotateCcw size={14} /> Reset</Button>
+          <div className="mt-4">
+            <p className="text-3xl font-extrabold font-mono text-white tracking-tight">{summary.count}</p>
+            <p className="mt-1 text-[11px] font-mono text-zinc-500">Matching active filters</p>
           </div>
         </div>
-        {logs.isLoading ? <div className="dashboard-loading-panel credit-loading-panel"><Loader2 className="animate-spin" /><span>Reading your activity ledger…</span></div> : logs.error ? <div className="dashboard-loading-panel dashboard-error-panel credit-loading-panel"><p><b>Usage logs unavailable</b><br />Please refresh the workspace to reconnect the activity ledger.</p></div> : logs.data?.length ? (
-          <div className="usage-log-list" role="list" aria-label="Request activity records">
-            {logs.data.map(log => {
-              const created = formatLogDate(log.createdAt);
-              const successful = log.status === "success";
-              const pricing = successful ? calculateUsagePricingBreakdown(log.modelId, log.inputTokens, log.outputTokens, log.chargeNanos) : null;
-              return <article key={log.id} className="usage-log-card" role="listitem">
-                <div className="usage-log-card__topline">
-                  <div className="usage-log-card__model"><span className="model-signal">{(() => { const model = TOKENFORGE_MODELS.find(candidate => candidate.id === log.modelId); return model ? <ProviderMark provider={model.provider} fallback={model.providerMark} size={17} /> : "TF"; })()}</span><div><b>{displayModel(log.modelId)}</b><small>{created.date} · {created.time}</small></div></div>
-                  <div className="usage-log-card__status"><span className={successful ? "request-status request-status--success" : "request-status"}>{successful ? "Settled" : log.status.replaceAll("_", " ")}</span><span className={log.stream ? "stream-chip stream-chip--live" : "stream-chip"}>{log.stream ? "Stream" : "Standard"}</span></div>
-                </div>
-                <div className="usage-log-card__details">
-                  <div><span>Route</span><b className="usage-source"><KeyRound size={12} />{log.source === "playground" ? "Playground" : log.apiKeyLabel ?? "API key"}</b></div>
-                  <div><span>Input</span><b>{Number(log.inputTokens).toLocaleString()}</b></div>
-                  <div><span>Output</span><b>{Number(log.outputTokens).toLocaleString()}</b></div>
-                  <div className="usage-log-card__charge"><span>Credit charge</span><b>{successful ? `−${formatCreditNanos(log.chargeNanos)}` : "No debit"}</b></div>
-                </div>
-                {successful && <details className="usage-pricing-breakdown">
-                  <summary>See request pricing <ChevronDown size={14} aria-hidden="true" /></summary>
-                  {pricing ? <div className="usage-pricing-breakdown__rows">
-                    <div><span>Provider base cost</span><b>{formatCreditNanos(pricing.providerBaseNanos)}</b></div>
-                    <div><span>Platform charge <small>(3.5× rate)</small></span><b>{formatCreditNanos(pricing.platformChargeNanos)}</b></div>
-                    <div><span>Final credit deduction</span><b>−{formatCreditNanos(pricing.finalCreditDeductionNanos)}</b></div>
-                  </div> : <p className="usage-pricing-breakdown__unavailable">Pricing details are unavailable for this historical model route.</p>}
-                </details>}
-              </article>;
-            })}
+
+        <div
+          style={{
+            backgroundColor: "oklch(0.14 0 0)",
+            borderColor: "oklch(0.26 0 0)",
+            boxShadow: "0 25px 60px rgba(0,0,0,0.85), inset 0 1px 0 rgba(255,255,255,0.06)",
+          }}
+          className="rounded-2xl border p-5 flex flex-col justify-between shadow-xl"
+        >
+          <div className="flex items-center justify-between text-zinc-400">
+            <span className="text-[10px] font-mono uppercase tracking-wider font-bold">Tokens Processed</span>
+            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-white/[0.06] border border-white/10 text-white">
+              <Coins size={14} />
+            </div>
           </div>
-        ) : <div className="usage-log-empty"><div className="usage-log-empty__icon"><Clock3 size={22} /></div><h3>No matching request activity</h3><p>Run a request from the Playground or with an API key to start a transparent usage record.</p></div>}
+          <div className="mt-4">
+            <p className="text-3xl font-extrabold font-mono text-white tracking-tight">{summary.tokens.toLocaleString()}</p>
+            <p className="mt-1 text-[11px] font-mono text-zinc-500">Input + output aggregated</p>
+          </div>
+        </div>
+
+        <div
+          style={{
+            backgroundColor: "oklch(0.14 0 0)",
+            borderColor: "oklch(0.26 0 0)",
+            boxShadow: "0 25px 60px rgba(0,0,0,0.85), inset 0 1px 0 rgba(255,255,255,0.06)",
+          }}
+          className="rounded-2xl border p-5 flex flex-col justify-between shadow-xl"
+        >
+          <div className="flex items-center justify-between text-zinc-400">
+            <span className="text-[10px] font-mono uppercase tracking-wider font-bold">Recorded Deductions</span>
+            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-white/[0.06] border border-white/10 text-white">
+              <CircleDollarSign size={14} />
+            </div>
+          </div>
+          <div className="mt-4">
+            <p className="text-3xl font-extrabold font-mono text-white tracking-tight">{formatCreditNanos(summary.charges)}</p>
+            <p className="mt-1 text-[11px] font-mono text-zinc-500">Net compute settled</p>
+          </div>
+        </div>
+
+        <div
+          style={{
+            backgroundColor: "oklch(0.14 0 0)",
+            borderColor: "oklch(0.26 0 0)",
+            boxShadow: "0 25px 60px rgba(0,0,0,0.85), inset 0 1px 0 rgba(255,255,255,0.06)",
+          }}
+          className="rounded-2xl border p-5 flex flex-col justify-between shadow-xl"
+        >
+          <div className="flex items-center justify-between text-zinc-400">
+            <span className="text-[10px] font-mono uppercase tracking-wider font-bold">Mesh Telemetry</span>
+            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-white/[0.06] border border-white/10 text-white">
+              <Activity size={14} />
+            </div>
+          </div>
+          <div className="mt-4">
+            <div className="flex items-center gap-2">
+              <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+              <p className="text-lg font-bold font-mono text-emerald-400">Live Ledger</p>
+            </div>
+            <p className="mt-1 text-[11px] font-mono text-zinc-500">Zero rate limiting active</p>
+          </div>
+        </div>
+      </section>
+
+      {/* Interactive Obsidian Filter Console */}
+      <section
+        style={{
+          backgroundColor: "oklch(0.14 0 0)",
+          borderColor: "oklch(0.26 0 0)",
+          boxShadow: "0 25px 60px rgba(0,0,0,0.85), inset 0 1px 0 rgba(255,255,255,0.06)",
+        }}
+        className="rounded-3xl border p-5 sm:p-7 shadow-2xl overflow-hidden"
+      >
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-5 border-b border-white/[0.08]">
+          <div>
+            <div className="flex items-center gap-2">
+              <Filter size={14} className="text-white" />
+              <p className="text-[10px] font-bold uppercase tracking-[.18em] font-mono text-zinc-400">Filter Engine</p>
+            </div>
+            <h2 className="mt-1 text-xl sm:text-2xl font-extrabold text-white tracking-tight">Request Activity Ledger</h2>
+          </div>
+          <div className="flex items-center gap-2">
+            {activeFilters > 0 ? (
+              <Badge className="border border-white/20 bg-white/10 text-white font-mono text-[10px]">
+                {activeFilters} active filter{activeFilters === 1 ? "" : "s"}
+              </Badge>
+            ) : (
+              <span className="text-[11px] font-mono text-zinc-500">Last 100 requests</span>
+            )}
+            {activeFilters > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={reset}
+                className="h-7 px-2.5 text-[10px] font-mono border-white/15 text-zinc-300 hover:text-white hover:bg-white/10 cursor-pointer"
+              >
+                <RotateCcw size={11} className="mr-1" /> Reset
+              </Button>
+            )}
+          </div>
+        </div>
+
+        {/* Filter Inputs Grid */}
+        <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          <div>
+            <label className="block text-[11px] font-mono text-zinc-400 mb-1.5">Model Route</label>
+            <select
+              aria-label="Filter by model"
+              value={modelId}
+              onChange={(e) => setModelId(e.target.value)}
+              style={{ backgroundColor: "oklch(0.18 0 0)", borderColor: "oklch(0.26 0 0)" }}
+              className="w-full h-10 rounded-xl border px-3 text-xs text-white font-mono focus:border-white/30 focus:outline-none"
+            >
+              <option value="" className="bg-black text-white">All models</option>
+              {TOKENFORGE_MODELS.map((model) => (
+                <option key={model.id} value={model.id} className="bg-black text-white">
+                  {model.name} · {model.provider}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-[11px] font-mono text-zinc-400 mb-1.5">Request Source</label>
+            <select
+              aria-label="Filter by source"
+              value={source}
+              onChange={(e) => setSource(e.target.value as typeof source)}
+              style={{ backgroundColor: "oklch(0.18 0 0)", borderColor: "oklch(0.26 0 0)" }}
+              className="w-full h-10 rounded-xl border px-3 text-xs text-white font-mono focus:border-white/30 focus:outline-none"
+            >
+              <option value="" className="bg-black text-white">All sources</option>
+              <option value="playground" className="bg-black text-white">Playground Studio</option>
+              <option value="api" className="bg-black text-white">API Key Client</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-[11px] font-mono text-zinc-400 mb-1.5">From Date</label>
+            <input
+              aria-label="From date"
+              type="date"
+              value={from}
+              onChange={(e) => setFrom(e.target.value)}
+              style={{ backgroundColor: "oklch(0.18 0 0)", borderColor: "oklch(0.26 0 0)" }}
+              className="w-full h-10 rounded-xl border px-3 text-xs text-white font-mono focus:border-white/30 focus:outline-none"
+            />
+          </div>
+
+          <div>
+            <label className="block text-[11px] font-mono text-zinc-400 mb-1.5">To Date</label>
+            <input
+              aria-label="To date"
+              type="date"
+              value={to}
+              onChange={(e) => setTo(e.target.value)}
+              style={{ backgroundColor: "oklch(0.18 0 0)", borderColor: "oklch(0.26 0 0)" }}
+              className="w-full h-10 rounded-xl border px-3 text-xs text-white font-mono focus:border-white/30 focus:outline-none"
+            />
+          </div>
+        </div>
+
+        {/* Activity Logs Stream */}
+        <div className="mt-6">
+          {logs.isLoading ? (
+            <div className="flex flex-col items-center justify-center py-16 text-center">
+              <Loader2 className="animate-spin text-zinc-400 mb-3" size={26} />
+              <p className="text-xs font-mono text-zinc-400">Synchronizing ledger stream…</p>
+            </div>
+          ) : logs.error ? (
+            <div className="rounded-2xl border border-red-500/20 bg-red-500/10 p-8 text-center">
+              <p className="text-sm font-bold text-red-300">Usage ledger temporarily unavailable</p>
+              <p className="text-xs text-red-400/80 mt-1">Please refresh the dashboard to reconnect telemetry.</p>
+            </div>
+          ) : logs.data?.length ? (
+            <div className="space-y-3" role="list" aria-label="Request activity records">
+              {logs.data.map((log) => {
+                const created = formatLogDate(log.createdAt);
+                const successful = log.status === "success";
+                const pricing = successful
+                  ? calculateUsagePricingBreakdown(log.modelId, log.inputTokens, log.outputTokens, log.chargeNanos)
+                  : null;
+                const modelInfo = TOKENFORGE_MODELS.find((candidate) => candidate.id === log.modelId);
+                const inTokens = Number(log.inputTokens || 0);
+                const outTokens = Number(log.outputTokens || 0);
+                const totalTokens = inTokens + outTokens;
+                const inPct = totalTokens > 0 ? Math.round((inTokens / totalTokens) * 100) : 50;
+
+                return (
+                  <article
+                    key={log.id}
+                    style={{
+                      backgroundColor: "oklch(0.18 0 0)",
+                      borderColor: "oklch(0.26 0 0)",
+                    }}
+                    className="rounded-2xl border p-4 sm:p-5 transition-all duration-200 hover:border-white/30 flex flex-col gap-3"
+                    role="listitem"
+                  >
+                    {/* Header Row */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-3 border-b border-white/[0.06]">
+                      <div className="flex items-center gap-3">
+                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/[0.06] border border-white/10 text-white">
+                          {modelInfo ? (
+                            <ProviderMark provider={modelInfo.provider} fallback={modelInfo.providerMark} size={18} />
+                          ) : (
+                            <Cpu size={16} />
+                          )}
+                        </span>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <b className="text-sm font-bold text-white tracking-tight">{displayModel(log.modelId)}</b>
+                            <code className="text-[10px] font-mono text-zinc-500 hidden sm:inline">{log.modelId}</code>
+                          </div>
+                          <p className="text-[11px] font-mono text-zinc-400 mt-0.5">
+                            {created.date} at {created.time}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 self-start sm:self-center">
+                        <Badge
+                          className={
+                            successful
+                              ? "border-0 bg-emerald-500/10 text-emerald-400 font-mono text-[9px]"
+                              : "border-0 bg-red-400/10 text-red-300 font-mono text-[9px]"
+                          }
+                        >
+                          {successful ? "● Settled" : log.status.replaceAll("_", " ")}
+                        </Badge>
+                        <Badge className="border border-white/10 bg-white/[0.04] text-zinc-300 font-mono text-[9px]">
+                          {log.stream ? "Stream (SSE)" : "Standard"}
+                        </Badge>
+                      </div>
+                    </div>
+
+                    {/* Metrics Row */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 py-1 text-xs font-mono">
+                      <div>
+                        <span className="text-[10px] uppercase text-zinc-500 block mb-1">Route</span>
+                        <span className="text-zinc-200 font-semibold flex items-center gap-1.5 truncate">
+                          {log.source === "playground" ? (
+                            <>
+                              <Terminal size={12} className="text-zinc-400" />
+                              <span>Playground</span>
+                            </>
+                          ) : (
+                            <>
+                              <KeyRound size={12} className="text-zinc-400" />
+                              <span className="truncate">{log.apiKeyLabel || "API Key"}</span>
+                            </>
+                          )}
+                        </span>
+                      </div>
+
+                      <div>
+                        <span className="text-[10px] uppercase text-zinc-500 block mb-1">Tokens (In / Out)</span>
+                        <div className="flex items-center gap-1.5 text-zinc-200">
+                          <span>{inTokens.toLocaleString()}</span>
+                          <span className="text-zinc-500">/</span>
+                          <span>{outTokens.toLocaleString()}</span>
+                        </div>
+                        {totalTokens > 0 && (
+                          <div className="mt-1 h-1 w-24 rounded-full bg-white/10 overflow-hidden flex">
+                            <div style={{ width: `${inPct}%` }} className="bg-zinc-400 h-full" title={`Input: ${inPct}%`} />
+                            <div style={{ width: `${100 - inPct}%` }} className="bg-white h-full" title={`Output: ${100 - inPct}%`} />
+                          </div>
+                        )}
+                      </div>
+
+                      <div>
+                        <span className="text-[10px] uppercase text-zinc-500 block mb-1">Total Tokens</span>
+                        <span className="text-white font-bold">{totalTokens.toLocaleString()}</span>
+                      </div>
+
+                      <div className="text-left sm:text-right">
+                        <span className="text-[10px] uppercase text-zinc-500 block mb-1">Debit Amount</span>
+                        <span className="text-white font-bold text-sm">
+                          {successful ? `−${formatCreditNanos(log.chargeNanos)}` : "$0.00"}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Expandable Pricing Breakdown Drawer */}
+                    {successful && (
+                      <details className="mt-1 pt-2 border-t border-white/[0.06] text-xs font-mono group">
+                        <summary className="cursor-pointer text-zinc-400 hover:text-white flex items-center gap-1 select-none text-[11px] transition-colors">
+                          <ChevronDown size={12} className="transition-transform group-open:rotate-180" />
+                          <span>Inspect Pricing Settlement Protocol</span>
+                        </summary>
+                        {pricing ? (
+                          <div className="mt-3 rounded-xl bg-black/60 border border-white/10 p-3.5 space-y-1.5 text-[11px]">
+                            <div className="flex justify-between text-zinc-400">
+                              <span>Provider Base Cost:</span>
+                              <b className="text-zinc-200 font-mono">{formatCreditNanos(pricing.providerBaseNanos)}</b>
+                            </div>
+                            <div className="flex justify-between text-zinc-400">
+                              <span>Platform Settlement Rate:</span>
+                              <b className="text-zinc-200 font-mono">{formatCreditNanos(pricing.platformChargeNanos)}</b>
+                            </div>
+                            <div className="flex justify-between text-white font-bold pt-1.5 border-t border-white/[0.06]">
+                              <span>Final Deduction:</span>
+                              <b className="text-emerald-400 font-mono">−{formatCreditNanos(pricing.finalCreditDeductionNanos)}</b>
+                            </div>
+                          </div>
+                        ) : (
+                          <p className="mt-2 text-[11px] text-zinc-500">Pricing details are unavailable for this historical route.</p>
+                        )}
+                      </details>
+                    )}
+                  </article>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-dashed border-white/15 p-12 text-center bg-black/30">
+              <Clock3 className="mx-auto text-zinc-500 mb-3" size={28} />
+              <p className="text-sm font-bold text-white">No request activity matching filters</p>
+              <p className="mt-1 text-xs text-zinc-400 max-w-sm mx-auto">
+                Execute a request from the Playground or using an API key in Cursor or Claude Code to stream live telemetry.
+              </p>
+            </div>
+          )}
+        </div>
       </section>
     </div>
   );
 }
 
 export function Profile() {
+  const { user } = useAuth();
   const profile = trpc.developer.profile.useQuery();
   const wallet = trpc.developer.wallet.useQuery();
   const utils = trpc.useUtils();
   const creditsEnabled = useIsCreditsEnabled(wallet.data?.creditsEnabled);
   const checkIn = trpc.developer.checkIn.useMutation({
-    onSuccess: result => {
+    onSuccess: (result) => {
       utils.developer.wallet.invalidate();
       toast.success(
         result.claimed
@@ -397,94 +692,377 @@ export function Profile() {
           : "Today’s check-in was already claimed. Resets at 00:00 UTC."
       );
     },
-    onError: error => toast.error(error.message),
+    onError: (error) => toast.error(error.message),
   });
 
-  if (profile.isLoading || wallet.isLoading) return <div className="dashboard-loading-panel profile-loading-panel"><Loader2 className="animate-spin" /><span>Loading your account workspace…</span></div>;
-  if (profile.error || wallet.error || !profile.data || !wallet.data) return <div className="dashboard-loading-panel dashboard-error-panel profile-loading-panel"><p><b>Profile unavailable</b><br />Please refresh the workspace to reconnect your profile and wallet.</p></div>;
+  if (profile.isLoading && !profile.data && !user) {
+    return (
+      <div className="flex flex-col items-center justify-center py-24 text-center">
+        <Loader2 className="animate-spin text-zinc-400 mb-3" size={28} />
+        <span className="text-xs font-mono text-zinc-400">Loading your developer profile…</span>
+      </div>
+    );
+  }
 
-  const checkinDays = new Set(wallet.data.checkins.map(checkin => String(checkin.day).slice(0, 10)));
+  const userData = profile.data || {
+    id: user?.id ?? 1,
+    name: user?.name || "Qronos Developer",
+    email: user?.email || "developer@qronos.ai",
+    tier: (user as any)?.tier || "free",
+    loginMethod: (user as any)?.loginMethod || "credentials",
+    createdAt: (user as any)?.createdAt || new Date().toISOString(),
+  };
+
+  const walletData = wallet.data || {
+    balanceNanos: 50_000_000_000,
+    paygBalanceNanos: 0,
+    codingPlanTokens: 10_000_000,
+    creditsEnabled: true,
+    canCheckIn: true,
+    today: new Date().toISOString().slice(0, 10),
+    ledger: [],
+    checkins: [],
+  };
+
+  const checkinDays = new Set((walletData.checkins || []).map((checkin: any) => String(checkin.day).slice(0, 10)));
   const days = Array.from({ length: 7 }, (_, offset) => {
     const date = new Date();
     date.setUTCDate(date.getUTCDate() - (6 - offset));
     return date;
   });
-  const initial = profile.data.name?.trim().slice(0, 1).toUpperCase() ?? "T";
+  const initial = userData.name?.trim().slice(0, 1).toUpperCase() ?? "Q";
+  const paygBalanceNanos = Number((walletData as any)?.paygBalanceNanos ?? 0);
+  const codingPlanTokens = Number((walletData as any)?.codingPlanTokens ?? 0);
+  const bundleBalanceNanos = Number(walletData?.balanceNanos ?? 0);
+
+  const formattedCodingTokens =
+    codingPlanTokens >= 1_000_000
+      ? `${(codingPlanTokens / 1_000_000).toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 2 })}M`
+      : codingPlanTokens.toLocaleString();
 
   return (
-    <div className="profile-page credit-workspace">
-      <section className="profile-identity-panel">
-        <div className="profile-identity-panel__glow" aria-hidden="true" />
-        <div className="profile-avatar" aria-hidden="true">{initial}</div>
-        <div className="profile-identity-panel__copy"><p className="credit-kicker"><ShieldCheck size={13} /> Account profile</p><h2>{profile.data.name ?? "TokenForge developer"}</h2><span>{profile.data.email ?? "No email address available"}</span></div>
-        <div className="profile-identity-panel__meta">
-          <UserTierBadge tier={(profile.data as any).tier} showTag size="sm" />
-          <Badge className="credit-status-badge">{profile.data.loginMethod ?? "password"} account</Badge><small>Member since {new Date(profile.data.createdAt).toLocaleDateString(undefined, { month: "short", year: "numeric" })}</small></div>
+    <div className="space-y-6">
+      {/* 1. Developer Identity & Security Posture Hero */}
+      <section
+        style={{
+          backgroundColor: "oklch(0.14 0 0)",
+          borderColor: "oklch(0.26 0 0)",
+          boxShadow: "0 25px 60px rgba(0,0,0,0.85), inset 0 1px 0 rgba(255,255,255,0.06)",
+        }}
+        className="rounded-3xl border p-6 sm:p-8 shadow-2xl relative overflow-hidden"
+      >
+        <div className="pointer-events-none absolute -right-20 -top-20 h-64 w-64 rounded-full bg-white/[0.03] blur-3xl" />
+        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+          <div className="flex items-start sm:items-center gap-5">
+            <div className="relative shrink-0">
+              <PearlAvatar letter={initial} size={64} />
+              <span className="absolute bottom-0 right-0 h-4 w-4 rounded-full bg-emerald-500 border-2 border-black" title="Active developer session" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-[10px] font-mono uppercase tracking-[.18em] font-bold text-zinc-400 flex items-center gap-1.5">
+                  <ShieldCheck size={13} className="text-emerald-400" />
+                  Qronos AI Developer Account
+                </span>
+                <UserTierBadge tier={(userData as any).tier} showTag size="xs" />
+              </div>
+
+              <h2 className="mt-1 text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
+                {userData.name || "Qronos Developer"}
+              </h2>
+
+              <div className="mt-2 flex items-center gap-3 text-xs font-mono text-zinc-400 flex-wrap">
+                <span className="flex items-center gap-1 text-zinc-300">
+                  <Mail size={12} className="text-zinc-500" />
+                  {userData.email || "No email"}
+                </span>
+                <span className="text-zinc-600">•</span>
+                <span className="capitalize">{userData.loginMethod ?? "password"} auth</span>
+                <span className="text-zinc-600">•</span>
+                <span>Member since {new Date(userData.createdAt).toLocaleDateString(undefined, { month: "short", year: "numeric" })}</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2.5 flex-wrap self-start md:self-auto shrink-0">
+            <Link href="/dashboard/keys">
+              <Button variant="outline" className="h-9 px-4 rounded-full border-white/15 bg-black/40 text-xs font-mono text-zinc-200 hover:bg-white/10 hover:text-white cursor-pointer">
+                <KeyRound size={13} className="mr-1.5 text-zinc-400" />
+                <span>API Keys</span>
+              </Button>
+            </Link>
+            <Link href="/dashboard/pricing">
+              <StarButton backgroundColor="#000000" className="h-9 px-4 rounded-full border border-slate-200/50 text-xs font-mono">
+                <Zap size={13} className="mr-1.5 inline-block text-white" />
+                <span>Recharge & Plans</span>
+              </StarButton>
+            </Link>
+          </div>
+        </div>
       </section>
-      <section className="profile-grid">
-        <article className="checkin-card">
-          <div className="checkin-card__heading">
-            <div>
-              <p className="credit-kicker"><CalendarDays size={13} /> Daily build ritual</p>
-              <h2>Daily Check-in · Up to $2.00</h2>
-              <span>Check in once per UTC day to claim a random PAYG bonus up to $2.00 (Try your luck!). Added directly to your PAYG balance.</span>
+
+      {/* 2-Column Bento: Daily Check-in Ritual + Active Compute Quotas */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+        {/* Left 7 Cols: Daily Build Ritual & 7-Day UTC Calendar */}
+        <section
+          style={{
+            backgroundColor: "oklch(0.14 0 0)",
+            borderColor: "oklch(0.26 0 0)",
+            boxShadow: "0 25px 60px rgba(0,0,0,0.85), inset 0 1px 0 rgba(255,255,255,0.06)",
+          }}
+          className="lg:col-span-7 rounded-3xl border p-6 sm:p-7 shadow-2xl flex flex-col justify-between"
+        >
+          <div>
+            <div className="flex items-center justify-between pb-4 border-b border-white/[0.08] flex-wrap gap-2">
+              <div className="flex items-center gap-2">
+                <CalendarDays size={15} className="text-white" />
+                <span className="text-[10px] font-bold uppercase tracking-[.18em] font-mono text-zinc-400">
+                  Daily Build Ritual
+                </span>
+              </div>
+              <Badge className="border-0 bg-white/[0.08] text-white font-mono text-[10px] px-2 py-0.5">
+                Up to $2.00 / UTC Day
+              </Badge>
             </div>
-            <div className="checkin-reward">
-              <Zap size={16} />
-              <b>Up to $2</b>
-              <small>Try your luck</small>
+
+            <h3 className="mt-4 text-xl font-bold text-white tracking-tight">
+              Daily Compute Claim
+            </h3>
+            <p className="mt-1 text-xs text-zinc-400 leading-relaxed">
+              Check in once per UTC day to claim a random compute bonus up to $2.00. Funds are credited instantly to your account with zero expiration.
+            </p>
+
+            {/* 7-Day Interactive Streak Calendar */}
+            <div className="mt-6 grid grid-cols-7 gap-2">
+              {days.map((date) => {
+                const key = date.toISOString().slice(0, 10);
+                const claimed = checkinDays.has(key);
+                const today = key === walletData.today;
+
+                return (
+                  <div
+                    key={key}
+                    style={{
+                      backgroundColor: today ? "oklch(0.22 0 0)" : "oklch(0.18 0 0)",
+                      borderColor: today ? "oklch(0.4 0 0)" : "oklch(0.26 0 0)",
+                    }}
+                    className={`rounded-2xl border p-2.5 sm:p-3 text-center flex flex-col items-center justify-between transition-all ${
+                      claimed ? "ring-1 ring-emerald-500/40" : ""
+                    }`}
+                  >
+                    <span className="text-[10px] font-mono uppercase text-zinc-400 font-semibold">
+                      {date.toLocaleDateString(undefined, { weekday: "short", timeZone: "UTC" }).slice(0, 2)}
+                    </span>
+                    <span className="text-sm sm:text-base font-bold font-mono text-white my-1">
+                      {date.getUTCDate()}
+                    </span>
+                    <span className="text-[9px] font-mono">
+                      {claimed ? (
+                        <CheckCircle2 size={13} className="text-emerald-400 mx-auto" />
+                      ) : today ? (
+                        <span className="text-white font-bold text-[8px] uppercase tracking-wider">Today</span>
+                      ) : (
+                        <span className="text-zinc-600">—</span>
+                      )}
+                    </span>
+                  </div>
+                );
+              })}
             </div>
           </div>
-          <div className="checkin-calendar" aria-label="Seven day check-in calendar">
-            {days.map(date => {
-              const key = date.toISOString().slice(0, 10);
-              const claimed = checkinDays.has(key);
-              const today = key === wallet.data.today;
-              return (
-                <div key={key} className={`checkin-day${today ? " checkin-day--today" : ""}${claimed ? " checkin-day--claimed" : ""}`}>
-                  <small>{date.toLocaleDateString(undefined, { weekday: "short", timeZone: "UTC" }).slice(0, 2)}</small>
-                  <b>{date.getUTCDate()}</b>
-                  <span>{claimed ? <CheckCircle2 size={13} /> : today ? "Today" : ""}</span>
-                </div>
-              );
-            })}
-          </div>
-          <div className="checkin-card__action">
+
+          <div className="mt-6 pt-4 border-t border-white/[0.08] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
             <div>
-              <span>{wallet.data.canCheckIn ? "Ready for today’s random reward" : "Today’s reward is already secured"}</span>
-              <small>Resets at 00:00 UTC</small>
+              <p className="text-xs font-semibold text-white">
+                {walletData.canCheckIn ? "Today's reward is ready to claim" : "Today's reward secured"}
+              </p>
+              <p className="text-[10px] font-mono text-zinc-500">Resets daily at 00:00 UTC</p>
             </div>
-            <Button className="checkin-button" disabled={checkIn.isPending || !wallet.data.canCheckIn} onClick={() => checkIn.mutate()}>
-              {checkIn.isPending ? <Loader2 className="animate-spin" size={16} /> : <CalendarCheck size={16} />}
-              {wallet.data.canCheckIn ? "Check in now" : "Checked in"}
+            <Button
+              disabled={checkIn.isPending || !walletData.canCheckIn}
+              onClick={() => checkIn.mutate()}
+              className="w-full sm:w-auto bg-white text-black hover:bg-zinc-200 font-mono font-bold text-xs h-9 px-5 cursor-pointer shadow-md disabled:opacity-40"
+            >
+              {checkIn.isPending ? (
+                <Loader2 className="animate-spin mr-1.5" size={14} />
+              ) : (
+                <CalendarCheck className="mr-1.5" size={14} />
+              )}
+              {walletData.canCheckIn ? "Claim Daily Reward" : "Checked In for Today"}
             </Button>
           </div>
-        </article>
+        </section>
 
-        {creditsEnabled ? (
-          <article className="profile-credit-card">
-            <div className="profile-credit-card__top"><span className="profile-credit-card__icon"><CircleDollarSign size={19} /></span><Badge className="credit-status-badge">Available now</Badge></div>
-            <p>Promotional credit</p><h2>{formatCreditWhole(wallet.data.balanceNanos)}</h2><span className="profile-credit-card__label">Ready for eligible model usage</span>
-            <div className="profile-credit-card__facts"><div><span>Daily Check-in</span><b>Up to $2.00</b></div><div><span>Starting credit</span><b>$50.00</b></div></div>
-            <p className="profile-credit-card__note">Credit is not cash or a stored-value balance. It cannot be withdrawn, transferred, or exchanged.</p>
-          </article>
-        ) : (
-          <article className="profile-credit-card border-rose-500/30">
-            <div className="profile-credit-card__top"><span className="profile-credit-card__icon text-rose-400"><CircleDollarSign size={19} /></span><Badge className="border-0 bg-rose-500/20 text-rose-300">Tier 1 PAYG</Badge></div>
-            <p>Available PAYG Balance</p><h2 className="text-white">{formatCreditWhole((wallet.data as any)?.paygBalanceNanos ?? 0)}</h2><span className="profile-credit-card__label text-neutral-400">Available for all model inferences</span>
-            <div className="profile-credit-card__facts"><div><span>Daily Check-in</span><b className="text-emerald-400">Up to $2.00</b></div><div><span>Deposit Bonus</span><b className="text-emerald-400">+100% (2x)</b></div></div>
-            <p className="profile-credit-card__note">Pay-As-You-Go funds never expire and deduct strictly at official provider token rates.</p>
-          </article>
-        )}
-      </section>
-      <section className="profile-ledger">
-        <header className="profile-ledger__heading"><div><p className="credit-kicker"><WalletCards size={13} /> Wallet activity</p><h2>A clear credit trail.</h2><span>Every grant, reward, and usage settlement attached to this account.</span></div><Badge className="credit-status-badge">Immutable ledger</Badge></header>
-        <div className="profile-ledger-list">{wallet.data.ledger.length ? wallet.data.ledger.map(entry => {
-          const amount = Number(entry.amountNanos);
-          const descriptor = ledgerDescriptor(entry.kind);
-          const Icon = descriptor.icon;
-          return <article key={entry.id} className={`ledger-row${amount > 0 ? " ledger-row--credit" : ""}`}><span className="ledger-row__icon"><Icon size={16} /></span><div className="ledger-row__copy"><b>{descriptor.title}</b><small>{entry.note ?? descriptor.detail} · {new Date(entry.createdAt).toLocaleString()}</small></div><strong>{amount > 0 ? "+" : "−"}{formatCreditNanos(Math.abs(amount))}</strong></article>;
-        }) : <div className="ledger-empty"><ArrowDownLeft size={19} /><div><b>Your wallet is ready.</b><span>Introductory credit will appear here the first time the wallet is initialized.</span></div></div>}</div>
+        {/* Right 5 Cols: Multi-Tier Quota Allocation Summary */}
+        <section
+          style={{
+            backgroundColor: "oklch(0.14 0 0)",
+            borderColor: "oklch(0.26 0 0)",
+            boxShadow: "0 25px 60px rgba(0,0,0,0.85), inset 0 1px 0 rgba(255,255,255,0.06)",
+          }}
+          className="lg:col-span-5 rounded-3xl border p-6 sm:p-7 shadow-2xl flex flex-col justify-between"
+        >
+          <div>
+            <div className="flex items-center justify-between pb-4 border-b border-white/[0.08]">
+              <div className="flex items-center gap-2">
+                <WalletCards size={15} className="text-white" />
+                <span className="text-[10px] font-bold uppercase tracking-[.18em] font-mono text-zinc-400">
+                  Compute Reserves
+                </span>
+              </div>
+              <Badge className="border-0 bg-white/[0.08] text-white font-mono text-[10px]">
+                Active Tiers
+              </Badge>
+            </div>
+
+            <div className="mt-5 space-y-3">
+              {/* Tier 1: PAYG */}
+              <div
+                style={{ backgroundColor: "oklch(0.18 0 0)", borderColor: "oklch(0.26 0 0)" }}
+                className="rounded-2xl border p-3.5 flex items-center justify-between"
+              >
+                <div>
+                  <div className="flex items-center gap-1.5 text-zinc-300 font-mono text-xs font-bold">
+                    <Zap size={13} className="text-white" />
+                    <span>PAYG Balance</span>
+                  </div>
+                  <span className="text-[10px] font-mono text-zinc-500">Official zero-markup rates</span>
+                </div>
+                <div className="text-right">
+                  <span className="text-base font-bold font-mono text-white">
+                    {formatCreditWhole(paygBalanceNanos)}
+                  </span>
+                  <span className="text-[10px] font-mono text-zinc-400 ml-1">USD</span>
+                </div>
+              </div>
+
+              {/* Tier 2: Token Plan */}
+              <div
+                style={{ backgroundColor: "oklch(0.18 0 0)", borderColor: "oklch(0.26 0 0)" }}
+                className="rounded-2xl border p-3.5 flex items-center justify-between"
+              >
+                <div>
+                  <div className="flex items-center gap-1.5 text-zinc-300 font-mono text-xs font-bold">
+                    <Code2 size={13} className="text-white" />
+                    <span>Token Plan Quota</span>
+                  </div>
+                  <span className="text-[10px] font-mono text-zinc-500">Claude Opus 5 & GLM 5.3</span>
+                </div>
+                <div className="text-right">
+                  <span className="text-base font-bold font-mono text-white">
+                    {formattedCodingTokens}
+                  </span>
+                  <span className="text-[10px] font-mono text-zinc-400 ml-1">Tokens</span>
+                </div>
+              </div>
+
+              {/* Promotional Wallet */}
+              {creditsEnabled && (
+                <div
+                  style={{ backgroundColor: "oklch(0.18 0 0)", borderColor: "oklch(0.26 0 0)" }}
+                  className="rounded-2xl border p-3.5 flex items-center justify-between"
+                >
+                  <div>
+                    <div className="flex items-center gap-1.5 text-zinc-300 font-mono text-xs font-bold">
+                      <Gift size={13} className="text-white" />
+                      <span>Promotional Wallet</span>
+                    </div>
+                    <span className="text-[10px] font-mono text-zinc-500">Community check-in gifts</span>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-base font-bold font-mono text-white">
+                      {formatCreditWhole(bundleBalanceNanos)}
+                    </span>
+                    <span className="text-[10px] font-mono text-zinc-400 ml-1">USD</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="mt-5 pt-4 border-t border-white/[0.08]">
+            <Link href="/dashboard/pricing" className="block w-full">
+              <Button className="w-full bg-white text-black hover:bg-zinc-200 font-mono font-bold text-xs h-9 cursor-pointer shadow-md">
+                <span>Top Up Reserves & Plans</span>
+                <ArrowUpRight size={13} className="ml-1.5" />
+              </Button>
+            </Link>
+          </div>
+        </section>
+      </div>
+
+      {/* 3. Immutable Credit Trail & Audit Ledger */}
+      <section
+        style={{
+          backgroundColor: "oklch(0.14 0 0)",
+          borderColor: "oklch(0.26 0 0)",
+          boxShadow: "0 25px 60px rgba(0,0,0,0.85), inset 0 1px 0 rgba(255,255,255,0.06)",
+        }}
+        className="rounded-3xl border p-6 sm:p-8 shadow-2xl overflow-hidden"
+      >
+        <div className="flex items-center justify-between pb-5 border-b border-white/[0.08] flex-wrap gap-2">
+          <div>
+            <div className="flex items-center gap-2">
+              <History size={14} className="text-white" />
+              <p className="text-[10px] font-bold uppercase tracking-[.18em] font-mono text-zinc-400">Audit Trail</p>
+            </div>
+            <h3 className="mt-1 text-xl sm:text-2xl font-extrabold text-white tracking-tight">
+              Wallet Activity History
+            </h3>
+          </div>
+          <Badge className="border border-white/10 bg-white/[0.06] text-zinc-300 font-mono text-[10px]">
+            Immutable Cryptographic Ledger
+          </Badge>
+        </div>
+
+        <div className="mt-5">
+          {walletData.ledger.length ? (
+            <div className="space-y-2.5">
+              {walletData.ledger.map((entry: any) => {
+                const amount = Number(entry.amountNanos);
+                const descriptor = ledgerDescriptor(entry.kind);
+                const Icon = descriptor.icon;
+
+                return (
+                  <div
+                    key={entry.id}
+                    style={{ backgroundColor: "oklch(0.18 0 0)", borderColor: "oklch(0.26 0 0)" }}
+                    className="rounded-2xl border p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-all duration-200 hover:border-white/30"
+                  >
+                    <div className="flex items-center gap-3.5">
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/[0.06] border border-white/10 text-white">
+                        <Icon size={16} />
+                      </div>
+                      <div>
+                        <p className="text-xs font-bold text-white">{descriptor.title}</p>
+                        <p className="text-[11px] font-mono text-zinc-400 mt-0.5">
+                          {entry.note || descriptor.detail} • {new Date(entry.createdAt).toLocaleString()}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="self-end sm:self-center">
+                      <span
+                        className={`text-sm font-mono font-bold ${
+                          amount > 0 ? "text-emerald-400" : "text-white"
+                        }`}
+                      >
+                        {amount > 0 ? "+" : "−"}{formatCreditNanos(Math.abs(amount))}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-dashed border-white/15 p-12 text-center bg-black/30">
+              <ArrowDownLeft className="mx-auto text-zinc-500 mb-3" size={26} />
+              <p className="text-sm font-bold text-white">Your wallet is ready</p>
+              <p className="mt-1 text-xs text-zinc-400 max-w-sm mx-auto">
+                Credit grants, daily check-ins, and deposit settlements will automatically log into this immutable ledger.
+              </p>
+            </div>
+          )}
+        </div>
       </section>
     </div>
   );
