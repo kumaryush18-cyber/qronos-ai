@@ -1,8 +1,91 @@
 import React, { useRef, useEffect, useState } from "react";
 import { motion, useMotionValue, useTransform } from "framer-motion";
 import { QronosGlyph } from "@/components/QronosGlyph";
+import { StarBackgroundSvg } from "@/components/StarButton";
 import { Loader2, ArrowRight } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+function OnboardingGitHubLogo() {
+  const logoRef = useRef<HTMLDivElement>(null);
+  const [logoPath, setLogoPath] = useState<string>("");
+
+  useEffect(() => {
+    const updateLogoPath = () => {
+      if (logoRef.current) {
+        const w = logoRef.current.offsetWidth;
+        const h = logoRef.current.offsetHeight;
+        if (w > 0 && h > 0) {
+          setLogoPath(`path('M 0 0 H ${w} V ${h} H 0 V 0')`);
+        }
+      }
+    };
+    updateLogoPath();
+    const ro = new ResizeObserver(updateLogoPath);
+    if (logoRef.current) ro.observe(logoRef.current);
+    return () => ro.disconnect();
+  }, []);
+
+  return (
+    <div
+      ref={logoRef}
+      style={{
+        ["--duration" as any]: 3.2,
+        ["--light-width" as any]: "75px",
+        ["--light-color" as any]: "#FAFAFA",
+        ["--path" as any]: logoPath,
+        isolation: "isolate",
+      }}
+      className="relative mx-auto w-16 h-16 rounded-2xl overflow-hidden group select-none shrink-0 flex items-center justify-center border border-slate-200/50 hover:border-slate-100 shadow-[0_0_30px_rgba(255,255,255,0.14)] transition-all duration-300"
+    >
+      {/* Revolving glowing light on path */}
+      {logoPath && (
+        <div
+          className="absolute aspect-square inset-0 animate-star-btn bg-[radial-gradient(ellipse_at_center,var(--light-color),transparent,transparent)] pointer-events-none"
+          style={{
+            offsetPath: "var(--path)",
+            offsetDistance: "0%",
+            width: "var(--light-width)",
+          }}
+        />
+      )}
+
+      {/* Rotating conic ray for smooth perimeter sweep */}
+      <div
+        aria-hidden="true"
+        className="absolute inset-[-60%] pointer-events-none animate-spin opacity-80"
+        style={{
+          animationDuration: "3.2s",
+          animationTimingFunction: "linear",
+          background:
+            "conic-gradient(from 0deg, transparent 0deg 270deg, rgba(255,255,255,0.25) 320deg, rgba(255,255,255,0.9) 350deg, #ffffff 360deg)",
+        }}
+      />
+
+      {/* Inner background with starry backdrop and inner border */}
+      <div
+        aria-hidden="true"
+        className="absolute inset-[2.5px] border border-white/20 z-[4] overflow-hidden rounded-[13px] pointer-events-none bg-black flex items-center justify-center"
+      >
+        <StarBackgroundSvg color="#000000" starColor="#ffffff" />
+      </div>
+
+      {/* Foreground GitHub Octocat SVG */}
+      <div className="relative z-10 flex items-center justify-center">
+        <svg
+          className="w-8 h-8 fill-current text-white drop-shadow-[0_2px_12px_rgba(255,255,255,0.35)]"
+          viewBox="0 0 24 24"
+          aria-hidden="true"
+        >
+          <path
+            fillRule="evenodd"
+            clipRule="evenodd"
+            d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"
+          />
+        </svg>
+      </div>
+    </div>
+  );
+}
 
 export interface SignInCardProps {
   onGitHubSignIn?: () => void;
@@ -215,19 +298,14 @@ export function SignInCard({
               }}
               className="relative backdrop-blur-2xl rounded-2xl p-7 sm:p-8 border shadow-2xl overflow-hidden z-10"
             >
-              {/* Logo and Header with Qronos Logo */}
-              <div className="text-center space-y-2 mb-6">
+              {/* Logo and Header with Onboarding GitHub Logo (Double Border Rotating Star Light Design) */}
+              <div className="text-center space-y-3 mb-6">
                 <motion.div
                   initial={{ scale: 0.5, opacity: 0 }}
                   animate={{ scale: 1, opacity: 1 }}
                   transition={{ type: "spring", duration: 0.8 }}
-                  style={{
-                    backgroundColor: "oklch(0.18 0 0)",
-                    borderColor: "oklch(0.32 0 0)",
-                  }}
-                  className="mx-auto w-12 h-12 rounded-2xl border flex items-center justify-center p-2 shadow-xl"
                 >
-                  <QronosGlyph size={32} alt="Qronos AI" />
+                  <OnboardingGitHubLogo />
                 </motion.div>
 
                 <motion.h1

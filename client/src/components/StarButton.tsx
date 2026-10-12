@@ -11,7 +11,7 @@ export interface StarButtonProps extends React.ButtonHTMLAttributes<HTMLButtonEl
   children: React.ReactNode;
 }
 
-function StarBackgroundSvg({
+export function StarBackgroundSvg({
   color = "#000000",
   starColor = "currentColor",
 }: {
