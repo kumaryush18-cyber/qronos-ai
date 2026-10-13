@@ -255,11 +255,9 @@ export function CapacitySection({
 
 const TIER_OPTIONS: Array<{ value: UserTier; label: string; badge: string; color: string }> = [
   { value: "free", label: "Free (All Users)", badge: "Free", color: "border-emerald-500/30 bg-emerald-500/10 text-emerald-300" },
-  { value: "starter", label: "Starter+", badge: "Starter+", color: "border-sky-500/30 bg-sky-500/10 text-sky-300" },
-  { value: "pro", label: "Pro+", badge: "Pro+", color: "border-indigo-500/30 bg-indigo-500/10 text-indigo-300" },
-  { value: "max", label: "Max+", badge: "Max+", color: "border-purple-500/30 bg-purple-500/10 text-purple-300" },
-  { value: "power", label: "Power+", badge: "Power+", color: "border-amber-500/30 bg-amber-500/10 text-amber-300" },
-  { value: "ultra", label: "Ultra Only", badge: "Ultra", color: "border-rose-500/30 bg-rose-500/10 text-rose-300" },
+  { value: "starter", label: "Plus", badge: "Plus", color: "border-sky-500/30 bg-sky-500/10 text-sky-300" },
+  { value: "pro", label: "Pro", badge: "Pro", color: "border-indigo-500/30 bg-indigo-500/10 text-indigo-300" },
+  { value: "ultra", label: "Ultra", badge: "Ultra", color: "border-rose-500/30 bg-rose-500/10 text-rose-300" },
 ];
 
 export function ModelCompactScalingBar({
@@ -362,7 +360,6 @@ export function InferenceControlsSection({
   onModelToggle,
   onModelTierChange,
   onModelPaygToggle,
-  onModelBundleToggle,
   onModelTokenPlanToggle,
   onModelCompactScalingToggle,
   providerPending,
@@ -371,7 +368,6 @@ export function InferenceControlsSection({
   modelPending,
   modelTierPending,
   modelPaygPending,
-  modelBundlePending,
   modelTokenPlanPending,
   modelCompactScalingPending,
 }: {
@@ -386,7 +382,6 @@ export function InferenceControlsSection({
   onModelToggle: (modelId: string, enabled: boolean) => void;
   onModelTierChange?: (modelId: string, minTier: UserTier) => void;
   onModelPaygToggle?: (modelId: string, isPayg: boolean) => void;
-  onModelBundleToggle?: (modelId: string, isBundle: boolean) => void;
   onModelTokenPlanToggle?: (modelId: string, isTokenPlan: boolean) => void;
   onModelCompactScalingToggle?: (modelId: string, enabled: boolean, triggerTokens: number | string) => void;
   providerPending: boolean;
@@ -395,11 +390,10 @@ export function InferenceControlsSection({
   modelPending: boolean;
   modelTierPending?: boolean;
   modelPaygPending?: boolean;
-  modelBundlePending?: boolean;
   modelTokenPlanPending?: boolean;
   modelCompactScalingPending?: boolean;
 }) {
-  const [tierFilter, setTierFilter] = React.useState<"all" | "free" | "paid" | "token_plan" | "payg" | "bundle">("all");
+  const [tierFilter, setTierFilter] = React.useState<"all" | "free" | "paid" | "token_plan" | "payg">("all");
 
   const telemetryFor = (providerSlug: string) =>
     telemetry.find((provider) => provider.providerSlug === providerSlug);
@@ -408,7 +402,6 @@ export function InferenceControlsSection({
   const paidCount = models.length - freeCount;
   const tokenPlanCount = models.filter((m) => Boolean(m.isTokenPlan)).length;
   const paygCount = models.filter((m) => Boolean(m.isPayg)).length;
-  const bundleCount = models.filter((m) => m.isBundle !== false).length;
 
   const visibleModels = models.filter((model) => {
     const matchesSearch = `${model.displayName} ${model.modelId}`.toLowerCase().includes(modelQuery.trim().toLowerCase());
@@ -417,7 +410,6 @@ export function InferenceControlsSection({
     if (tierFilter === "paid") return matchesSearch && !isFree;
     if (tierFilter === "token_plan") return matchesSearch && Boolean(model.isTokenPlan);
     if (tierFilter === "payg") return matchesSearch && Boolean(model.isPayg);
-    if (tierFilter === "bundle") return matchesSearch && model.isBundle !== false;
     return matchesSearch;
   });
 
@@ -554,15 +546,6 @@ export function InferenceControlsSection({
               >
                 PAYG ({paygCount})
               </button>
-              <button
-                type="button"
-                onClick={() => setTierFilter("bundle")}
-                className={`rounded px-2.5 py-1 text-[11px] font-medium transition-colors ${
-                  tierFilter === "bundle" ? "bg-emerald-500/20 text-emerald-300 shadow-sm" : "text-[#858697] hover:text-emerald-400"
-                }`}
-              >
-                Bundles ({bundleCount})
-              </button>
             </div>
           </div>
           <div className="mt-2 max-h-[30rem] space-y-1.5 overflow-y-auto rounded-xl border border-white/8 bg-black/10 p-2">
@@ -571,7 +554,6 @@ export function InferenceControlsSection({
               const tierConfig = TIER_OPTIONS.find((t) => t.value === currentTier) || TIER_OPTIONS[0];
               const isPaid = currentTier !== "free";
               const isPayg = Boolean(model.isPayg);
-              const isBundle = model.isBundle !== false;
               const isTokenPlan = Boolean(model.isTokenPlan);
               return (
                 <div
@@ -600,11 +582,6 @@ export function InferenceControlsSection({
                         {isPayg && (
                           <span className="inline-flex items-center gap-1 rounded border border-rose-500/40 bg-rose-500/15 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-rose-300">
                             PAYG
-                          </span>
-                        )}
-                        {isBundle && (
-                          <span className="inline-flex items-center gap-1 rounded border border-emerald-500/40 bg-emerald-500/15 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-300">
-                            Bundle
                           </span>
                         )}
                       </div>
@@ -643,22 +620,6 @@ export function InferenceControlsSection({
                       >
                         <span className={`w-1.5 h-1.5 rounded-full ${isPayg ? "bg-rose-400 animate-pulse" : "bg-neutral-500"}`} />
                         <span>{isPayg ? "PAYG Active" : "+ PAYG"}</span>
-                      </button>
-
-                      {/* Bundle Toggle Button */}
-                      <button
-                        type="button"
-                        onClick={() => onModelBundleToggle?.(model.modelId, !isBundle)}
-                        disabled={modelBundlePending}
-                        title={isBundle ? "Click to disable Credit Bundle access" : "Click to enable Credit Bundle access"}
-                        className={`inline-flex items-center gap-1.5 px-2 py-1 rounded text-[10px] font-semibold transition-colors cursor-pointer border ${
-                          isBundle
-                            ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/30"
-                            : "bg-white/5 text-neutral-400 border-white/10 hover:bg-white/10 hover:text-white"
-                        }`}
-                      >
-                        <span className={`w-1.5 h-1.5 rounded-full ${isBundle ? "bg-emerald-400 animate-pulse" : "bg-neutral-500"}`} />
-                        <span>{isBundle ? "Bundle Active" : "+ Bundle"}</span>
                       </button>
 
                       <div className="flex items-center gap-1.5">

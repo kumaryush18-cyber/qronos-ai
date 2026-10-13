@@ -64,7 +64,6 @@ export function UniversalModelProviderBalancer({
 
   const isTokenPlanActive = selectedModelMeta?.isTokenPlan === true;
   const isPaygActive = (selectedModelMeta as any)?.isPayg === true;
-  const isBundleActive = (selectedModelMeta as any)?.isBundle !== false;
 
   const toggleTokenPlan = trpc.admin.setModelIsTokenPlan.useMutation({
     onSuccess: (res) => {
@@ -83,17 +82,6 @@ export function UniversalModelProviderBalancer({
       utils.admin.overview.invalidate();
       toast.success(
         `PAYG tag for ${selectedModelId} is now ${res.isPayg ? "ENABLED" : "DISABLED"}`
-      );
-    },
-    onError: (err) => toast.error(err.message),
-  });
-
-  const toggleBundle = trpc.admin.setModelIsBundle.useMutation({
-    onSuccess: (res) => {
-      utils.public.modelAvailability.invalidate();
-      utils.admin.overview.invalidate();
-      toast.success(
-        `Bundle access for ${selectedModelId} is now ${res.isBundle ? "ENABLED" : "DISABLED"}`
       );
     },
     onError: (err) => toast.error(err.message),
@@ -388,22 +376,6 @@ export function UniversalModelProviderBalancer({
           >
             <span className={`w-1.5 h-1.5 rounded-full ${isPaygActive ? "bg-rose-400 animate-pulse" : "bg-neutral-500"}`} />
             <span>{isPaygActive ? "PAYG: ON" : "+ PAYG Tag"}</span>
-          </button>
-
-          {/* Bundle Access Toggle Button */}
-          <button
-            type="button"
-            onClick={() => toggleBundle.mutate({ modelId: selectedModelId, isBundle: !isBundleActive })}
-            disabled={toggleBundle.isPending}
-            title={isBundleActive ? "Click to disable Credit Bundle access for this model" : "Click to enable Credit Bundle access for this model"}
-            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold transition-colors cursor-pointer border ${
-              isBundleActive
-                ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/30"
-                : "bg-white/5 text-neutral-400 border-white/10 hover:bg-white/10 hover:text-white"
-            }`}
-          >
-            <span className={`w-1.5 h-1.5 rounded-full ${isBundleActive ? "bg-emerald-400 animate-pulse" : "bg-neutral-500"}`} />
-            <span>{isBundleActive ? "Bundle: ON" : "+ Bundle"}</span>
           </button>
         </div>
       </div>

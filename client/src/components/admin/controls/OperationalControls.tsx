@@ -362,7 +362,7 @@ export function OrcaRouterCredentialPanel() {
   );
 }
 
-const MAINTENANCE_TIER_LIST: UserTier[] = ["free", "starter", "pro", "max", "power", "ultra"];
+const MAINTENANCE_TIER_LIST: UserTier[] = ["free", "starter", "pro", "ultra"];
 const DEFAULT_HARDCODED_MAINTENANCE_MSG = "Site entered in maintainence mode due to massive request.";
 
 export function PlatformMaintenanceMessagesConfig() {

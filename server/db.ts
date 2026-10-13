@@ -7248,10 +7248,10 @@ export const USER_TIER_RANK: Record<UserTier, number> = {
 
 export const USER_TIER_DISPLAY_NAMES: Record<UserTier, string> = {
   free: "Free",
-  starter: "Starter",
+  starter: "Plus",
   pro: "Pro",
-  max: "Max",
-  power: "Power",
+  max: "Pro",
+  power: "Ultra",
   ultra: "Ultra",
 };
 
@@ -7813,15 +7813,21 @@ export async function grantAdminAccountCredit(input: {
         referenceId: `admin-tokens:${giveawayId}:${input.userId}`,
         note: announcementNote,
       });
-      await tx.insert(creditGiveaways).values({
-        id: giveawayId,
-        actorUserId: input.actorUserId,
-        amountNanos: 0,
-        recipientCount: 1,
-        totalAmountNanos: 0,
-        announcementNote,
-      });
-      await tx.insert(creditGiveawayNotifications).values({ giveawayId, userId: input.userId });
+
+      const recipientUser = (await tx.select().from(users).where(eq(users.id, input.userId)).limit(1))[0];
+      const targetEmail = recipientUser?.email ? normalizeEmail(recipientUser.email) : null;
+      if (targetEmail) {
+        await tx.insert(systemNotifications).values({
+          title: "Coding Tokens Credited",
+          message: announcementNote,
+          type: "update",
+          targetAudience: "SPECIFIC_EMAILS",
+          targetEmails: targetEmail,
+          createdByUserId: input.actorUserId,
+          createdAt: new Date(),
+        });
+      }
+
       return {
         amountNanos,
         amountTokens: tokensToAdd,
@@ -7831,12 +7837,15 @@ export async function grantAdminAccountCredit(input: {
         balanceType: "tokens" as const,
       };
     } else if (balanceType === "payg") {
-      const announcementNote = "An administrator added PAYG balance to your Qronos AI account.";
       await tx.update(creditAccounts).set({ paygBalanceNanos: sql`${creditAccounts.paygBalanceNanos} + ${amountNanos}` }).where(eq(creditAccounts.userId, input.userId));
       const account = (await tx.select().from(creditAccounts).where(eq(creditAccounts.userId, input.userId)).limit(1))[0];
       const balanceNanos = account?.balanceNanos ?? 0;
       const paygBalanceNanos = Number(account?.paygBalanceNanos ?? amountNanos);
       const codingPlanTokens = Number((account as any)?.codingPlanTokens ?? 0);
+      const usdAmount = (amountNanos / 1_000_000_000).toFixed(2);
+      const newPaygUsd = (paygBalanceNanos / 1_000_000_000).toFixed(2);
+      const announcementNote = `An administrator added $${usdAmount} PAYG balance to your account. Your new PAYG balance is $${newPaygUsd}.`;
+
       await tx.insert(creditLedger).values({
         userId: input.userId,
         kind: "manual_adjustment",
@@ -7845,15 +7854,21 @@ export async function grantAdminAccountCredit(input: {
         referenceId: `admin-payg:${giveawayId}:${input.userId}`,
         note: announcementNote,
       });
-      await tx.insert(creditGiveaways).values({
-        id: giveawayId,
-        actorUserId: input.actorUserId,
-        amountNanos,
-        recipientCount: 1,
-        totalAmountNanos: amountNanos,
-        announcementNote,
-      });
-      await tx.insert(creditGiveawayNotifications).values({ giveawayId, userId: input.userId });
+
+      const recipientUser = (await tx.select().from(users).where(eq(users.id, input.userId)).limit(1))[0];
+      const targetEmail = recipientUser?.email ? normalizeEmail(recipientUser.email) : null;
+      if (targetEmail) {
+        await tx.insert(systemNotifications).values({
+          title: "PAYG Balance Credited",
+          message: announcementNote,
+          type: "update",
+          targetAudience: "SPECIFIC_EMAILS",
+          targetEmails: targetEmail,
+          createdByUserId: input.actorUserId,
+          createdAt: new Date(),
+        });
+      }
+
       return { amountNanos, balanceNanos, paygBalanceNanos, codingPlanTokens, balanceType: "payg" as const };
     } else {
       const announcementNote = "An administrator added credits to your Qronos AI account.";
@@ -7870,15 +7885,21 @@ export async function grantAdminAccountCredit(input: {
         referenceId: `admin-credit:${giveawayId}:${input.userId}`,
         note: announcementNote,
       });
-      await tx.insert(creditGiveaways).values({
-        id: giveawayId,
-        actorUserId: input.actorUserId,
-        amountNanos,
-        recipientCount: 1,
-        totalAmountNanos: amountNanos,
-        announcementNote,
-      });
-      await tx.insert(creditGiveawayNotifications).values({ giveawayId, userId: input.userId });
+
+      const recipientUser = (await tx.select().from(users).where(eq(users.id, input.userId)).limit(1))[0];
+      const targetEmail = recipientUser?.email ? normalizeEmail(recipientUser.email) : null;
+      if (targetEmail) {
+        await tx.insert(systemNotifications).values({
+          title: "Account Balance Credited",
+          message: announcementNote,
+          type: "update",
+          targetAudience: "SPECIFIC_EMAILS",
+          targetEmails: targetEmail,
+          createdByUserId: input.actorUserId,
+          createdAt: new Date(),
+        });
+      }
+
       return { amountNanos, balanceNanos, paygBalanceNanos, codingPlanTokens, balanceType: "bundle" as const };
     }
   });
@@ -7939,6 +7960,20 @@ export async function setAdminAccountCredit(input: {
         note,
       });
 
+      const recipientUser = (await tx.select().from(users).where(eq(users.id, input.userId)).limit(1))[0];
+      const targetEmail = recipientUser?.email ? normalizeEmail(recipientUser.email) : null;
+      if (targetEmail) {
+        await tx.insert(systemNotifications).values({
+          title: "Coding Tokens Updated",
+          message: note,
+          type: "update",
+          targetAudience: "SPECIFIC_EMAILS",
+          targetEmails: targetEmail,
+          createdByUserId: input.actorUserId,
+          createdAt: new Date(),
+        });
+      }
+
       return {
         targetAmountNanos,
         targetTokens: finalTargetTokens,
@@ -7970,6 +8005,20 @@ export async function setAdminAccountCredit(input: {
         referenceId: `admin-set-payg:${adjustmentId}:${input.userId}`,
         note,
       });
+
+      const recipientUser = (await tx.select().from(users).where(eq(users.id, input.userId)).limit(1))[0];
+      const targetEmail = recipientUser?.email ? normalizeEmail(recipientUser.email) : null;
+      if (targetEmail) {
+        await tx.insert(systemNotifications).values({
+          title: "PAYG Balance Updated",
+          message: note,
+          type: "update",
+          targetAudience: "SPECIFIC_EMAILS",
+          targetEmails: targetEmail,
+          createdByUserId: input.actorUserId,
+          createdAt: new Date(),
+        });
+      }
 
       return {
         targetAmountNanos,

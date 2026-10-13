@@ -35,7 +35,7 @@ export function AccountRow({
 }) {
   const utils = trpc.useUtils();
   const [creditAmount, setCreditAmount] = useState("");
-  const [creditTarget, setCreditTarget] = useState<"bundle" | "payg" | "tokens">("payg");
+  const [creditTarget, setCreditTarget] = useState<"payg" | "tokens">("payg");
   const [creditAction, setCreditAction] = useState<"add" | "set">("add");
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteConfirmation, setDeleteConfirmation] = useState("");
@@ -74,12 +74,10 @@ export function AccountRow({
         const addedM = (result as any).amountTokens ? ((result as any).amountTokens / 1_000_000).toLocaleString() : ((result.amountNanos ?? 0) / 1_000_000).toLocaleString();
         const totalM = (((result as any).codingPlanTokens ?? 0) / 1_000_000).toLocaleString();
         toast.success(`${addedM}M coding tokens added; balance is now ${totalM}M tokens`);
-      } else if (result.balanceType === "payg") {
+      } else {
         toast.success(
           `$${((result.amountNanos ?? 0) / 1_000_000_000).toFixed(2)} PAYG balance added; PAYG balance is now $${(((result as any).paygBalanceNanos ?? 0) / 1_000_000_000).toFixed(2)}`
         );
-      } else {
-        toast.success(`${formatCredits(result.amountNanos)} bundle credits added; balance is now ${formatCredits(result.balanceNanos)}`);
       }
     },
     onError: (error) => toast.error(error.message),
@@ -177,8 +175,7 @@ export function AccountRow({
               <option value="free" className="bg-[#121214] text-white">Free</option>
               <option value="starter" className="bg-[#121214] text-white">Plus</option>
               <option value="pro" className="bg-[#121214] text-white">Pro</option>
-              <option value="power" className="bg-[#121214] text-white">Ultra</option>
-              <option value="ultra" className="bg-[#121214] text-white">Enterprise</option>
+              <option value="ultra" className="bg-[#121214] text-white">Ultra</option>
             </select>
             {assignTier.isPending && <Loader2 className="h-2.5 w-2.5 animate-spin text-white" />}
           </div>
@@ -268,17 +265,6 @@ export function AccountRow({
               }`}
             >
               PAYG ($)
-            </button>
-            <button
-              type="button"
-              onClick={() => setCreditTarget("bundle")}
-              className={`flex-1 py-0.5 text-[8.5px] font-mono font-bold rounded transition-all cursor-pointer ${
-                creditTarget === "bundle"
-                  ? "bg-white text-black shadow-sm"
-                  : "text-zinc-400 hover:text-white"
-              }`}
-            >
-              Bundle ($)
             </button>
             <button
               type="button"

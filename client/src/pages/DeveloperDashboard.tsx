@@ -1665,28 +1665,6 @@ function Overview({ user, loading, usage }: { user: ReturnType<typeof useAuth>["
   );
 }
 
-function GiveawayNotificationBanner({ enabled }: { enabled: boolean }) {
-  const notifications = trpc.developer.unreadGiveawayNotifications.useQuery(undefined, { enabled, staleTime: 60_000, refetchInterval: 90_000, refetchOnWindowFocus: true });
-  const utils = trpc.useUtils();
-  const dismiss = trpc.developer.dismissGiveawayNotification.useMutation({
-    onSuccess: () => utils.developer.unreadGiveawayNotifications.invalidate(),
-    onError: () => toast.error("The giveaway notice could not be dismissed. Please try again."),
-  });
-  const notification = notifications.data?.[0];
-  if (!notification) return null;
-  const credit = `$${(notification.amountNanos / 1_000_000_000).toFixed(2)}`;
-  const note = notification.announcementNote || "Thank you for being a verified Qronos AI member. Your giveaway credit is ready to use.";
-  const remaining = Math.max(0, (notifications.data?.length ?? 1) - 1);
-  return <section className="giveaway-alert mb-5" aria-label="New Giveaway credit" role="status">
-    <div className="giveaway-alert__edge" aria-hidden="true" />
-    <div className="giveaway-alert__ribbons" aria-hidden="true">{Array.from({ length: 11 }, (_, index) => <i key={index} />)}</div>
-    <div className="giveaway-alert__content">
-      <div className="giveaway-alert__topline"><div className="giveaway-alert__heading"><span className="giveaway-alert__gift"><Gift size={18} /></span><p>GIVEAWAY ALERT</p></div><Button variant="ghost" size="icon" className="giveaway-alert__dismiss" onClick={() => dismiss.mutate({ notificationId: notification.id })} disabled={dismiss.isPending} aria-label="Dismiss giveaway notification"><X size={17} /></Button></div>
-      <div className="giveaway-alert__body"><div className="giveaway-alert__amount">{credit}</div><div className="min-w-0 flex-1"><h2>Credit added to your Qronos AI balance</h2><p>{note}</p>{remaining > 0 && <small>{remaining} more giveaway {remaining === 1 ? "notice" : "notices"} waiting.</small>}</div></div>
-    </div>
-  </section>;
-}
-
 function SpecialReferralGiftBox({ enabled }: { enabled: boolean }) {
   const utils = trpc.useUtils();
   const gift = trpc.developer.specialReferralGift.useQuery(undefined, { enabled, staleTime: 60_000, refetchInterval: 90_000, refetchOnWindowFocus: true });
@@ -1863,7 +1841,7 @@ export default function DeveloperDashboard({ section = "overview", modelId }: { 
     ) : (
       <Overview user={user} loading={loading} usage={usage} />
     );
-  return <DashboardLayout><div className="dashboard-page-surface"><div className="dashboard-page-content"><SpecialReferralGiftBox enabled={Boolean(user) && workspaceVerified} /><GiveawayNotificationBanner enabled={Boolean(user) && workspaceVerified} />{content}</div></div></DashboardLayout>;
+  return <DashboardLayout><div className="dashboard-page-surface"><div className="dashboard-page-content"><SpecialReferralGiftBox enabled={Boolean(user) && workspaceVerified} />{content}</div></div></DashboardLayout>;
 }
 
 function ReferralWorkspace() {

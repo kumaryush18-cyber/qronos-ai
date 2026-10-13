@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import { UserTierBadge, USER_TIER_CONFIGS, UserTier } from "@/components/UserTierBadge";
 import { SectionHeader } from "../common/AdminCommon";
 
-const TIERS: UserTier[] = ["free", "starter", "pro", "power", "ultra"];
+const TIERS: UserTier[] = ["free", "starter", "pro", "ultra"];
 
 export function UserTierAssignmentCard() {
   const [searchQuery, setSearchQuery] = useState("");
@@ -53,7 +53,7 @@ export function UserTierAssignmentCard() {
       <SectionHeader
         icon={<Award size={18} className="text-white" />}
         title="Assign User Plan Badge"
-        detail="Search any developer by email or name to assign their plan badge (Free, Plus, Pro, Ultra, Enterprise, Max)."
+        detail="Search any developer by email or name to assign their plan badge (Free, Plus, Pro, Ultra)."
       />
 
       <div className="mt-5">

@@ -1,7 +1,7 @@
 import React from "react";
 import { Sparkles, CheckCircle2, Zap, Brain, Flame, Crown } from "lucide-react";
 
-export type UserTier = "free" | "starter" | "pro" | "power" | "ultra";
+export type UserTier = "free" | "starter" | "pro" | "ultra" | "power" | "max";
 
 export interface UserTierConfig {
   tier: UserTier;
@@ -49,26 +49,37 @@ export const USER_TIER_CONFIGS: Record<UserTier, UserTierConfig> = {
     glowClass: "shadow-white/15",
     icon: Zap,
   },
+  max: {
+    tier: "max",
+    label: "Pro",
+    tag: "250M Tokens",
+    description: "250M tokens dedicated quota · Production grade & VIP routing",
+    badgeClass: "bg-white text-black border-white shadow-md font-bold",
+    borderClass: "border-white/40",
+    textClass: "text-white",
+    glowClass: "shadow-white/15",
+    icon: Zap,
+  },
   power: {
     tier: "power",
     label: "Ultra",
     tag: "1.0B Tokens",
     description: "1.0B tokens · High-throughput pipelines & autonomous agents",
-    badgeClass: "bg-emerald-500/15 border-emerald-500/35 text-emerald-300",
-    borderClass: "border-emerald-500/40",
-    textClass: "text-emerald-300",
-    glowClass: "shadow-emerald-500/15",
+    badgeClass: "bg-rose-500/15 border-rose-500/35 text-rose-300 font-semibold",
+    borderClass: "border-rose-500/40",
+    textClass: "text-rose-300",
+    glowClass: "shadow-rose-500/15",
     icon: Flame,
   },
   ultra: {
     tier: "ultra",
-    label: "Enterprise",
-    tag: "2.2B Tokens",
-    description: "2.2B tokens dedicated capacity, custom SLA & private endpoints",
-    badgeClass: "bg-white/[0.15] border-white/30 text-white font-bold",
-    borderClass: "border-white/40",
-    textClass: "text-white",
-    glowClass: "shadow-white/20",
+    label: "Ultra",
+    tag: "1.0B Tokens",
+    description: "1.0B tokens · High-throughput pipelines & autonomous agents",
+    badgeClass: "bg-rose-500/15 border-rose-500/35 text-rose-300 font-bold",
+    borderClass: "border-rose-500/40",
+    textClass: "text-rose-300",
+    glowClass: "shadow-rose-500/20",
     icon: Crown,
   },
 };
@@ -77,6 +88,8 @@ export function normalizeUserTier(tier?: string | null): UserTier {
   if (!tier) return "free";
   const normalized = tier.trim().toLowerCase();
   if (normalized === "max") return "pro";
+  if (normalized === "power" || normalized === "enterprise") return "ultra";
+  if (normalized === "plus") return "starter";
   if (normalized in USER_TIER_CONFIGS) {
     return normalized as UserTier;
   }

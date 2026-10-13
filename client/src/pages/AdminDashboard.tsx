@@ -155,14 +155,6 @@ export default function AdminDashboard({ initialSection }: { initialSection?: Ad
     onError: (error) => toast.error(error.message),
   });
 
-  const modelBundleControl = trpc.admin.setModelIsBundle.useMutation({
-    onSuccess: (data) => {
-      utils.admin.overview.invalidate();
-      toast.success(`Bundle access for ${data.modelId} set to ${data.isBundle ? "Bundle Enabled" : "Bundle Disabled"}`);
-    },
-    onError: (error) => toast.error(error.message),
-  });
-
   const modelTokenPlanControl = trpc.admin.setModelIsTokenPlan.useMutation({
     onSuccess: (data) => {
       utils.admin.overview.invalidate();
@@ -625,7 +617,6 @@ export default function AdminDashboard({ initialSection }: { initialSection?: Ad
           onModelToggle={(modelId, enabled) => modelControl.mutate({ modelId: modelId as never, enabled })}
           onModelTierChange={(modelId, minTier) => modelTierControl.mutate({ modelId: modelId as never, minTier })}
           onModelPaygToggle={(modelId, isPayg) => modelPaygControl.mutate({ modelId: modelId as never, isPayg })}
-          onModelBundleToggle={(modelId, isBundle) => modelBundleControl.mutate({ modelId: modelId as never, isBundle })}
           onModelTokenPlanToggle={(modelId, isTokenPlan) => modelTokenPlanControl.mutate({ modelId: modelId as never, isTokenPlan })}
           onModelCompactScalingToggle={(modelId, enabled, triggerTokens) =>
             modelCompactScalingControl.mutate({ modelId, enabled, triggerTokens })
@@ -636,7 +627,6 @@ export default function AdminDashboard({ initialSection }: { initialSection?: Ad
           modelPending={modelControl.isPending}
           modelTierPending={modelTierControl.isPending}
           modelPaygPending={modelPaygControl.isPending}
-          modelBundlePending={modelBundleControl.isPending}
           modelTokenPlanPending={modelTokenPlanControl.isPending}
           modelCompactScalingPending={modelCompactScalingControl.isPending}
         />
