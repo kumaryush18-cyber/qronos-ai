@@ -6,6 +6,7 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { Link, useLocation } from "wouter";
 import { QronosGlyph } from "./QronosGlyph";
 import { StarBorderCard } from "@/components/StarBorderCard";
+import { StarBackgroundSvg } from "@/components/StarButton";
 
 function formatMessageTime(date: Date | string) {
   const d = new Date(date);
@@ -79,6 +80,25 @@ export function SupportChatWidget() {
   const wasOpenRef = useRef(false);
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
   const [unreadSinceScrollUp, setUnreadSinceScrollUp] = useState(0);
+
+  const triggerBtnRef = useRef<HTMLDivElement>(null);
+  const [triggerPath, setTriggerPath] = useState<string>("");
+
+  useEffect(() => {
+    const updateTriggerPath = () => {
+      if (triggerBtnRef.current) {
+        const w = triggerBtnRef.current.offsetWidth;
+        const h = triggerBtnRef.current.offsetHeight;
+        if (w > 0 && h > 0) {
+          setTriggerPath(`path('M 0 0 H ${w} V ${h} H 0 V 0')`);
+        }
+      }
+    };
+    updateTriggerPath();
+    const ro = new ResizeObserver(updateTriggerPath);
+    if (triggerBtnRef.current) ro.observe(triggerBtnRef.current);
+    return () => ro.disconnect();
+  }, []);
 
   const sendMessage = trpc.support.sendMessage.useMutation({
     onSuccess: () => {
@@ -400,28 +420,56 @@ export function SupportChatWidget() {
         )}
       </AnimatePresence>
 
-      {/* Floating Circular Chat Launcher Icon with Rotating Star Light Rim */}
-      <div className="relative inline-flex items-center justify-center rounded-full p-[1.5px] overflow-hidden shadow-2xl">
-        {/* Revolving Star Light Beam along circular border rim */}
+      {/* Floating Circular Chat Launcher Icon with Double-Border Rotating Star Light Design */}
+      <div
+        ref={triggerBtnRef}
+        style={{
+          ["--duration" as any]: 3.2,
+          ["--light-width" as any]: "75px",
+          ["--light-color" as any]: "#FAFAFA",
+          ["--path" as any]: triggerPath,
+          isolation: "isolate",
+        }}
+        className="relative inline-flex items-center justify-center rounded-full overflow-hidden select-none shrink-0 group border border-slate-200/50 hover:border-slate-100 shadow-[0_0_25px_rgba(255,255,255,0.14)] transition-all duration-300"
+      >
+        {/* Revolving Star Light Beam along circular path */}
+        {triggerPath && (
+          <div
+            className="absolute aspect-square inset-0 animate-star-btn bg-[radial-gradient(ellipse_at_center,var(--light-color),transparent,transparent)] pointer-events-none"
+            style={{
+              offsetPath: "var(--path)",
+              offsetDistance: "0%",
+              width: "var(--light-width)",
+            }}
+          />
+        )}
+
+        {/* Rotating conic ray for smooth perimeter sweep */}
         <div
           aria-hidden="true"
-          className="absolute inset-[-60%] pointer-events-none animate-spin"
+          className="absolute inset-[-60%] pointer-events-none animate-spin opacity-85"
           style={{
-            animationDuration: "3s",
+            animationDuration: "3.2s",
             animationTimingFunction: "linear",
             background:
-              "conic-gradient(from 0deg, transparent 0deg, transparent 240deg, rgba(255,255,255,0.3) 300deg, rgba(255,255,255,0.95) 360deg)",
+              "conic-gradient(from 0deg, transparent 0deg, transparent 270deg, rgba(255,255,255,0.25) 320deg, rgba(255,255,255,0.9) 350deg, #ffffff 360deg)",
           }}
         />
+
+        {/* Inner background with starry backdrop and inner border (Double Border Ring 2) */}
+        <div
+          aria-hidden="true"
+          className="absolute inset-[2.5px] border border-white/20 z-[4] overflow-hidden rounded-full pointer-events-none bg-black flex items-center justify-center"
+        >
+          <StarBackgroundSvg color="#000000" starColor="#ffffff" />
+        </div>
 
         <button
           id="qronos-chat-trigger"
           type="button"
           onClick={() => setIsOpen(!isOpen)}
           aria-label="Open support chat"
-          className={`relative z-10 flex h-13 w-13 sm:h-14 sm:w-14 items-center justify-center rounded-full transition-all duration-300 cursor-pointer active:scale-95 shadow-xl ${
-            isOpen ? "bg-[#14151b] text-white" : "bg-[#0c0d12] text-white hover:bg-[#121318]"
-          }`}
+          className="relative z-10 flex h-13 w-13 sm:h-14 sm:w-14 items-center justify-center rounded-full transition-all duration-300 cursor-pointer active:scale-95 text-white"
         >
           <AnimatePresence mode="wait">
             <motion.div
@@ -431,7 +479,7 @@ export function SupportChatWidget() {
               exit={{ rotate: 90, opacity: 0 }}
               transition={{ duration: 0.15 }}
             >
-              {isOpen ? <X size={22} className="text-white" /> : <MessageCircle size={24} className="text-white fill-white/10" />}
+              {isOpen ? <X size={22} className="text-white drop-shadow-[0_2px_8px_rgba(255,255,255,0.4)]" /> : <MessageCircle size={24} className="text-white fill-white/10 drop-shadow-[0_2px_8px_rgba(255,255,255,0.4)]" />}
             </motion.div>
           </AnimatePresence>
 
@@ -441,7 +489,7 @@ export function SupportChatWidget() {
               initial={{ scale: 0 }}
               animate={{ scale: [1, 1.2, 1] }}
               transition={{ duration: 0.35 }}
-              className="absolute -right-0.5 -top-0.5 flex h-5 min-w-[20px] px-1 items-center justify-center rounded-full bg-emerald-500 text-[10px] font-mono font-extrabold text-black shadow-lg ring-2 ring-[#0c0d12] animate-pulse"
+              className="absolute -right-0.5 -top-0.5 flex h-5 min-w-[20px] px-1 items-center justify-center rounded-full bg-emerald-500 text-[10px] font-mono font-extrabold text-black shadow-lg ring-2 ring-[#0c0d12] animate-pulse z-20"
             >
               {unreadCount > 9 ? "9+" : unreadCount}
             </motion.div>

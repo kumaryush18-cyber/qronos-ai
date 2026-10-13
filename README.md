@@ -122,7 +122,7 @@ from openai import OpenAI
 
 client = OpenAI(
     api_key="qr_xxxxxxxxxxxxxxxxxxxx",
-    base_url="https://qronos.ai/v1"
+    base_url="https://api.qronos.me/v1"
 )
 
 response = client.chat.completions.create(
@@ -143,7 +143,7 @@ import Anthropic from "@anthropic-ai/sdk";
 
 const anthropic = new Anthropic({
   apiKey: "qr_xxxxxxxxxxxxxxxxxxxx",
-  baseURL: "https://qronos.ai/v1",
+  baseURL: "https://api.qronos.me/v1",
 });
 
 const message = await anthropic.messages.create({
@@ -158,7 +158,7 @@ console.log(message.content[0].text);
 ### Direct cURL Request
 
 ```bash
-curl -X POST https://qronos.ai/v1/chat/completions \
+curl -X POST https://api.qronos.me/v1/chat/completions \
   -H "Authorization: Bearer qr_your_api_key" \
   -H "Content-Type: application/json" \
   -d '{

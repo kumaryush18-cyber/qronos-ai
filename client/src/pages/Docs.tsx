@@ -29,7 +29,7 @@ import {
 } from "lucide-react";
 import "./infergate-docs-legal.css";
 
-const BASE_URL = "https://api.qronos.ai/v1";
+const BASE_URL = "https://api.qronos.me/v1";
 
 interface CodeBlockProps {
   title: string;
@@ -173,7 +173,7 @@ export default function Docs() {
           {/* Quick Base URL Pill */}
           <div className="p-3.5 rounded-xl border border-white/10 bg-white/[0.02] font-mono text-xs space-y-1">
             <div className="text-[10px] uppercase text-zinc-500">Universal Endpoint</div>
-            <div className="text-white text-xs truncate font-medium">https://api.qronos.ai/v1</div>
+            <div className="text-white text-xs truncate font-medium">https://api.qronos.me/v1</div>
           </div>
         </aside>
 
@@ -242,7 +242,7 @@ export default function Docs() {
 
             <CodeBlock
               title="cURL Test Request (Anthropic Messages API)"
-              code={`curl https://api.qronos.ai/v1/messages \\
+              code={`curl https://api.qronos.me/v1/messages \\
   -H "x-api-key: qr_your_qronos_key" \\
   -H "anthropic-version: 2023-06-01" \\
   -H "content-type: application/json" \\
@@ -256,7 +256,7 @@ export default function Docs() {
             />
 
             <div className="p-4 rounded-xl border border-white/10 bg-white/[0.02] text-xs text-zinc-300">
-              <strong className="text-white">Instant Migration Tip:</strong> If you are using OpenAI SDKs, change the endpoint URL to <code>https://api.qronos.ai/v1</code>. Qronos AI serves both <code>/v1/messages</code> and <code>/v1/chat/completions</code> from the same root base URL.
+              <strong className="text-white">Instant Migration Tip:</strong> If you are using OpenAI SDKs, change the endpoint URL to <code>https://api.qronos.me/v1</code>. Qronos AI serves both <code>/v1/messages</code> and <code>/v1/chat/completions</code> from the same root base URL.
             </div>
           </section>
 
@@ -311,7 +311,7 @@ export default function Docs() {
 
             <CodeBlock
               title="Terminal Environment Setup (~/.bashrc or ~/.zshrc)"
-              code={`export ANTHROPIC_BASE_URL="https://api.qronos.ai/v1"
+              code={`export ANTHROPIC_BASE_URL="https://api.qronos.me/v1"
 export ANTHROPIC_API_KEY="qr_your_qronos_key"
 
 # Run Claude Code CLI
@@ -334,9 +334,9 @@ claude`}
               title="Cursor IDE Settings -> Models"
               lang="json"
               code={`{
-  "openai.baseUrl": "https://api.qronos.ai/v1",
+  "openai.baseUrl": "https://api.qronos.me/v1",
   "openai.apiKey": "qr_your_qronos_key",
-  "anthropic.baseUrl": "https://api.qronos.ai/v1",
+  "anthropic.baseUrl": "https://api.qronos.me/v1",
   "anthropic.apiKey": "qr_your_qronos_key"
 }`}
             />

@@ -122,7 +122,7 @@ const SIMULATED_STREAMS: Record<string, { prompt: string; response: string; mode
     model: "gpt-6-astra",
   },
   python: {
-    prompt: "from anthropic import Anthropic\nclient = Anthropic(base_url='https://api.qronos.ai/v1', api_key='qr_...')\nresp = client.messages.create(model='deepseek-v4-pro', messages=[...])",
+    prompt: "from anthropic import Anthropic\nclient = Anthropic(base_url='https://api.qronos.me/v1', api_key='qr_...')\nresp = client.messages.create(model='deepseek-v4-pro', messages=[...])",
     response: "Response(id='msg_01qr', model='deepseek-v4-pro', usage={'input_tokens': 32, 'output_tokens': 194})\n# Transferred seamlessly via Qronos AI LLM Gateway route",
     model: "deepseek-v4-pro",
   },
@@ -274,7 +274,7 @@ const CODE_SNIPPETS: Record<string, { title: string; lang: string; code: string;
     title: "Claude Code CLI",
     lang: "bash",
     code: `# Route your Claude Code CLI commands directly through Qronos AI
-export ANTHROPIC_BASE_URL="https://api.qronos.ai/v1"
+export ANTHROPIC_BASE_URL="https://api.qronos.me/v1"
 export ANTHROPIC_API_KEY="qr_your_qronos_key"
 
 # Run Claude Code with full compaction scaling & 1M context
@@ -286,9 +286,9 @@ claude`,
     lang: "json",
     code: `// In Cursor or Windsurf IDE Settings -> Models:
 {
-  "openai.baseUrl": "https://api.qronos.ai/v1",
+  "openai.baseUrl": "https://api.qronos.me/v1",
   "openai.apiKey": "qr_your_qronos_key",
-  "anthropic.baseUrl": "https://api.qronos.ai/v1",
+  "anthropic.baseUrl": "https://api.qronos.me/v1",
   "anthropic.apiKey": "qr_your_qronos_key"
 }`,
     note: "Works seamlessly across both OpenAI and Anthropic provider fields in any AI editor.",
@@ -299,7 +299,7 @@ claude`,
     code: `from anthropic import Anthropic
 
 client = Anthropic(
-    base_url="https://api.qronos.ai/v1",
+    base_url="https://api.qronos.me/v1",
     api_key="qr_your_qronos_key"
 )
 
@@ -317,7 +317,7 @@ print(message.content[0].text)`,
     code: `from openai import OpenAI
 
 client = OpenAI(
-    base_url="https://api.qronos.ai/v1",
+    base_url="https://api.qronos.me/v1",
     api_key="qr_your_qronos_key"
 )
 
@@ -334,7 +334,7 @@ for chunk in response:
   curl: {
     title: "cURL",
     lang: "bash",
-    code: `curl https://api.qronos.ai/v1/messages \\
+    code: `curl https://api.qronos.me/v1/messages \\
   -H "x-api-key: qr_your_qronos_key" \\
   -H "anthropic-version: 2023-06-01" \\
   -H "content-type: application/json" \\
