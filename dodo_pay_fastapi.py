@@ -1,5 +1,5 @@
 """
-TokenForge Dodo Payments Integration Subsystem (FastAPI)
+Qronos AI Dodo Payments Integration Subsystem (FastAPI)
 -------------------------------------------------------
 Implements:
 1. POST /api/payments/create-checkout-session

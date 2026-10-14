@@ -1,5 +1,5 @@
 """
-TokenForge Solana Pay Integration - Production FastAPI Backend
+Qronos AI Solana Pay Integration - Production FastAPI Backend
 --------------------------------------------------------------
 Production-ready backend for accepting Solana Pay payments on Solana Mainnet-Beta
 with dynamic pricing from Binance and 5-minute order expiration, powered by Helius Mainnet RPC.
@@ -12,7 +12,7 @@ Specifications:
 - Dynamic pricing: amount_sol = round(package_usd / sol_usd_price, 5)
 - Expiration: expires_at = datetime.now(timezone.utc) + timedelta(minutes=5)
 - Standard Solana Pay URL:
-  solana:CUiXiA54MjUCxF1acboThD8R2CwLsqfDidiT7RWJsD7w?amount=<AMOUNT_SOL>&reference=<REFERENCE_PUBKEY>&label=TokenForge&message=API+Credits
+  solana:CUiXiA54MjUCxF1acboThD8R2CwLsqfDidiT7RWJsD7w?amount=<AMOUNT_SOL>&reference=<REFERENCE_PUBKEY>&label=Qronos AI&message=API+Credits
 
 Run with:
     uvicorn solana_pay_fastapi:app --reload --port 8000
@@ -97,7 +97,7 @@ async def get_sol_price_usd() -> float:
     def _fetch_urllib():
         req = urllib.request.Request(
             url,
-            headers={"User-Agent": "TokenForge-SolanaPay/1.0", "Accept": "application/json"}
+            headers={"User-Agent": "Qronos-SolanaPay/1.0", "Accept": "application/json"}
         )
         with urllib.request.urlopen(req, timeout=8) as response:
             res_body = response.read().decode("utf-8")
@@ -202,7 +202,7 @@ def call_helius_rpc(method: str, params: list) -> dict:
     """Makes a JSON-RPC call to Helius Mainnet RPC."""
     payload = {
         "jsonrpc": "2.0",
-        "id": "tokenforge-solana-pay-mainnet",
+        "id": "qronos-solana-pay-mainnet",
         "method": method,
         "params": params
     }
@@ -210,7 +210,7 @@ def call_helius_rpc(method: str, params: list) -> dict:
     req = urllib.request.Request(
         HELIUS_MAINNET_RPC_URL,
         data=data,
-        headers={"Content-Type": "application/json", "User-Agent": "TokenForge-SolanaPay/1.0"}
+        headers={"Content-Type": "application/json", "User-Agent": "Qronos-SolanaPay/1.0"}
     )
     try:
         with urllib.request.urlopen(req, timeout=15) as response:
@@ -233,7 +233,7 @@ def call_helius_rpc(method: str, params: list) -> dict:
 # ==============================================================================
 
 app = FastAPI(
-    title="TokenForge Solana Pay Service",
+    title="Qronos AI Solana Pay Service",
     description="Production Solana Pay backend on Solana Mainnet-Beta with dynamic pricing and Helius RPC",
     version="2.0.0"
 )
@@ -248,11 +248,11 @@ app.add_middleware(
 )
 
 class CreateOrderRequest(BaseModel):
-    user_id: Optional[int] = Field(None, description="Internal TokenForge user ID")
+    user_id: Optional[int] = Field(None, description="Internal Qronos AI user ID")
     usd_amount: Optional[float] = Field(None, gt=0, description="Package amount in USD (e.g. 5, 10, 25)")
     package_usd: Optional[float] = Field(None, gt=0, description="Alias for usd_amount")
     amount_sol: Optional[float] = Field(None, gt=0, description="Optional explicit SOL amount")
-    label: Optional[str] = Field("TokenForge", description="Payment label displayed in wallet")
+    label: Optional[str] = Field("Qronos AI", description="Payment label displayed in wallet")
     message: Optional[str] = Field("API Credits", description="Custom message attached to the order")
 
 class CreateOrderResponse(BaseModel):
@@ -270,7 +270,7 @@ class CreateOrderResponse(BaseModel):
     expires_in_seconds: int
 
 class VerifyOrderRequest(BaseModel):
-    order_id: Optional[str] = Field(None, description="Unique TokenForge order identifier")
+    order_id: Optional[str] = Field(None, description="Unique Qronos AI order identifier")
     reference_pubkey: Optional[str] = Field(None, description="Single-use payment reference pubkey")
 
 class VerifyOrderResponse(BaseModel):
@@ -295,7 +295,7 @@ class VerifyOrderResponse(BaseModel):
 def health_check():
     return {
         "status": "healthy",
-        "service": "TokenForge Solana Pay Gateway (Production)",
+        "service": "Qronos AI Solana Pay Gateway (Production)",
         "network": SOLANA_NETWORK,
         "merchant_pubkey": MERCHANT_PUBLIC_KEY
     }
@@ -342,7 +342,7 @@ async def create_order(req: CreateOrderRequest):
     5. Stores the order in the database with status PENDING, storing:
        order_id, user_id, usd_amount, sol_amount, reference_pubkey, and expires_at.
     6. Constructs and returns the standard Solana Pay URL:
-       solana:CUiXiA54MjUCxF1acboThD8R2CwLsqfDidiT7RWJsD7w?amount=<AMOUNT_SOL>&reference=<REFERENCE_PUBKEY>&label=TokenForge&message=API+Credits
+       solana:CUiXiA54MjUCxF1acboThD8R2CwLsqfDidiT7RWJsD7w?amount=<AMOUNT_SOL>&reference=<REFERENCE_PUBKEY>&label=Qronos AI&message=API+Credits
     """
     sol_usd_price = await get_sol_price_usd()
 
@@ -368,7 +368,7 @@ async def create_order(req: CreateOrderRequest):
     order_id = f"tf_ord_{int(time.time() * 1000)}_{secrets.token_hex(4)}"
 
     # 3. Construct standard Solana Pay URL
-    label = req.label or "TokenForge"
+    label = req.label or "Qronos AI"
     message = req.message or "API Credits"
     
     # Amount formatted with up to 5 decimals without trailing zeros
@@ -678,7 +678,7 @@ def get_order_status(order_id: str):
 
 if __name__ == "__main__":
     import uvicorn
-    print(f"Starting TokenForge Solana Pay Production Backend on port 8000...")
+    print(f"Starting Qronos AI Solana Pay Production Backend on port 8000...")
     print(f"Network: {SOLANA_NETWORK}")
     print(f"Merchant Wallet: {MERCHANT_PUBLIC_KEY}")
     print(f"Helius RPC: {HELIUS_MAINNET_RPC_URL}")

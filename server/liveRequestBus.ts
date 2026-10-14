@@ -17,6 +17,10 @@ export type LiveRequestEvent = {
   rawErrorMessage?: string;
   provider?: string;
   credentialSlot?: number;
+  outcome?: "success" | "truncated" | "client_disconnected" | "upstream_error" | "rejected";
+  stopReason?: string | null;
+  ttftMs?: number | null;
+  durationMs?: number | null;
   createdAt: Date;
   userName?: string | null;
   reasoningReturned?: boolean;

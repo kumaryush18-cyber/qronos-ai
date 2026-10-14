@@ -1,8 +1,8 @@
 import { useMemo } from "react";
 import { trpc } from "@/lib/trpc";
 import {
-  tokenForgeCreditRatePerMillion,
-  formatTokenForgeCreditRatePerMillion,
+  qronosCreditRatePerMillion,
+  formatQronosCreditRatePerMillion,
 } from "./modelCatalogue";
 
 export function formatRatePerMillion(rate: number) {
@@ -62,10 +62,10 @@ export function useDynamicModelPricing(tier: "payg" | "bundle" = "payg") {
       };
     }
     return {
-      inputFormatted: formatTokenForgeCreditRatePerMillion(defaultInput, modelId),
-      outputFormatted: formatTokenForgeCreditRatePerMillion(defaultOutput, modelId),
-      inputRate: tokenForgeCreditRatePerMillion(defaultInput, modelId),
-      outputRate: tokenForgeCreditRatePerMillion(defaultOutput, modelId),
+      inputFormatted: formatQronosCreditRatePerMillion(defaultInput, modelId),
+      outputFormatted: formatQronosCreditRatePerMillion(defaultOutput, modelId),
+      inputRate: qronosCreditRatePerMillion(defaultInput, modelId),
+      outputRate: qronosCreditRatePerMillion(defaultOutput, modelId),
       isCustom: false,
       tag:
         modelId === "gpt-6-astra" || modelId === "claude-opus-5"

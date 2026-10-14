@@ -3,7 +3,7 @@ import { Link } from "wouter";
 import { useMemo, useState } from "react";
 import { PUBLIC_ORIGIN } from "@shared/const";
 import { ProviderMark } from "@/components/ProviderMark";
-import { formatTokenForgeCreditRatePerMillion, TOKENFORGE_MODELS, type CatalogueModel } from "@/lib/modelCatalogue";
+import { formatQronosCreditRatePerMillion, QRONOS_MODELS, type CatalogueModel } from "@/lib/modelCatalogue";
 import { useDynamicModelPricing } from "@/lib/useDynamicModelPricing";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -38,7 +38,7 @@ export function DashboardModels({ modelId }: { modelId?: string }) {
     );
   }, [modelAvailability.data]);
 
-  const model = TOKENFORGE_MODELS.find(entry => entry.id === modelId);
+  const model = QRONOS_MODELS.find(entry => entry.id === modelId);
   if (modelId && !model) return <section className="dashboard-models-page"><Link href="/dashboard/models" className="dashboard-model-back"><ChevronLeft size={15} /> Back to models</Link><div className="dashboard-model-not-found"><Cpu size={22} /><h1>Model not found</h1><p>Choose an active text-chat model from the verified Qronos AI catalogue.</p></div></section>;
   if (model) return <ModelDetail model={model} meta={modelMetaMap.get(model.id)} userTier={userTier} />;
   return <ModelList modelMetaMap={modelMetaMap} userTier={userTier} />;
@@ -49,10 +49,10 @@ function ModelList({ modelMetaMap, userTier }: { modelMetaMap: Map<string, { ava
   const [filter, setFilter] = useState<"all" | "free" | "paid" | "token_plan" | "accessible">("all");
 
   const userRank = TIER_ORDER[userTier] ?? 0;
-  const activeCount = TOKENFORGE_MODELS.filter(model => modelMetaMap.get(model.id)?.available === true).length;
+  const activeCount = QRONOS_MODELS.filter(model => modelMetaMap.get(model.id)?.available === true).length;
 
   const filteredModels = useMemo(() => {
-    return TOKENFORGE_MODELS.filter(model => {
+    return QRONOS_MODELS.filter(model => {
       const meta = modelMetaMap.get(model.id);
       const minTier = meta?.minTier ?? "free";
       const modelRank = TIER_ORDER[minTier] ?? 0;
@@ -64,9 +64,9 @@ function ModelList({ modelMetaMap, userTier }: { modelMetaMap: Map<string, { ava
     });
   }, [modelMetaMap, filter, userRank]);
 
-  const freeCount = TOKENFORGE_MODELS.filter(m => (modelMetaMap.get(m.id)?.minTier ?? "free") === "free").length;
-  const tokenPlanCount = TOKENFORGE_MODELS.filter(m => modelMetaMap.get(m.id)?.isTokenPlan === true).length;
-  const accessibleCount = TOKENFORGE_MODELS.filter(m => userRank >= (TIER_ORDER[modelMetaMap.get(m.id)?.minTier ?? "free"] ?? 0)).length;
+  const freeCount = QRONOS_MODELS.filter(m => (modelMetaMap.get(m.id)?.minTier ?? "free") === "free").length;
+  const tokenPlanCount = QRONOS_MODELS.filter(m => modelMetaMap.get(m.id)?.isTokenPlan === true).length;
+  const accessibleCount = QRONOS_MODELS.filter(m => userRank >= (TIER_ORDER[modelMetaMap.get(m.id)?.minTier ?? "free"] ?? 0)).length;
 
   return (
     <section className="dashboard-models-page">
@@ -82,7 +82,7 @@ function ModelList({ modelMetaMap, userTier }: { modelMetaMap: Map<string, { ava
       <div className="dashboard-models-live">
         <i />
         <span>LIVE AVAILABILITY & TIER ACCESS</span>
-        <b>{activeCount} of {TOKENFORGE_MODELS.length} routes currently available</b>
+        <b>{activeCount} of {QRONOS_MODELS.length} routes currently available</b>
         <small>Your account tier: <strong className="uppercase text-[#c9ff73]">{userTier}</strong> ({accessibleCount} models unlocked). Upgraded tiers unlock frontier models.</small>
       </div>
 
@@ -100,7 +100,7 @@ function ModelList({ modelMetaMap, userTier }: { modelMetaMap: Map<string, { ava
                 : "text-[#9ea0af] hover:text-white border border-transparent"
             }`}
           >
-            All Models ({TOKENFORGE_MODELS.length})
+            All Models ({QRONOS_MODELS.length})
           </button>
           <button
             type="button"
@@ -139,7 +139,7 @@ function ModelList({ modelMetaMap, userTier }: { modelMetaMap: Map<string, { ava
                 : "text-[#9ea0af] hover:text-amber-300 border border-transparent"
             }`}
           >
-            <Lock size={13} className="text-amber-400" /> Paid Tiers ({TOKENFORGE_MODELS.length - freeCount})
+            <Lock size={13} className="text-amber-400" /> Paid Tiers ({QRONOS_MODELS.length - freeCount})
           </button>
           <button
             type="button"

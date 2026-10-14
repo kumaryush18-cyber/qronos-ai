@@ -6,7 +6,7 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { RouteLoader } from "./components/RouteLoader";
 import { SupportChatWidget } from "./components/SupportChatWidget";
-import "./tokenforge-refresh.css";
+import "./qronos-refresh.css";
 
 function lazyWithRetry<T extends React.ComponentType<any>>(
   factory: () => Promise<{ default: T }>

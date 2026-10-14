@@ -4,12 +4,14 @@ import { ArrowRight, CheckCircle2, KeyRound, Sparkles } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link } from "wouter";
 
-const ONBOARDING_DISMISSED_KEY = "tokenforge_onboarding_dismissed";
+const ONBOARDING_DISMISSED_KEY = "qronos_onboarding_dismissed";
+const LEGACY_DISMISSED_KEY = "tokenforge_onboarding_dismissed";
 const NEW_ACCOUNT_WINDOW_MS = 5 * 60 * 1000;
 
 function dismissedAccountIds() {
   try {
-    const value = JSON.parse(localStorage.getItem(ONBOARDING_DISMISSED_KEY) ?? "[]") as unknown;
+    const raw = localStorage.getItem(ONBOARDING_DISMISSED_KEY) ?? localStorage.getItem(LEGACY_DISMISSED_KEY) ?? "[]";
+    const value = JSON.parse(raw) as unknown;
     return new Set(Array.isArray(value) ? value.filter((id): id is number => typeof id === "number") : []);
   } catch {
     return new Set<number>();

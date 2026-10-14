@@ -1161,8 +1161,8 @@ export function ClaudeOpus5ModelPoolPanel() {
           : current.map((value, index) => (index === detail.index ? detail.enabled !== false : value))
       );
     };
-    window.addEventListener("tokenforge-key-routing-state", handleKeyRoutingState);
-    return () => window.removeEventListener("tokenforge-key-routing-state", handleKeyRoutingState);
+    window.addEventListener("qronos-key-routing-state", handleKeyRoutingState);
+    return () => window.removeEventListener("qronos-key-routing-state", handleKeyRoutingState);
   }, []);
 
   const pendingQwenKeyDeletionSlots = useRef<number[]>([]);

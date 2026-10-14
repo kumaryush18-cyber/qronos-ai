@@ -5,7 +5,7 @@ import { MovingDotCard } from "@/components/ui/moving-dot-card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { trpc } from "@/lib/trpc";
-import { TOKENFORGE_MODELS } from "@/lib/modelCatalogue";
+import { QRONOS_MODELS } from "@/lib/modelCatalogue";
 import { coalesceDailyUsage } from "../../../shared/usageSeries";
 import { markApiKeyRevoked, prependCreatedApiKey } from "../../../shared/apiKeyListCache";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -66,9 +66,9 @@ import { TransactionsWorkspace } from "@/components/TransactionsWorkspace";
 import { PaymentsWorkspace } from "@/components/payments/PaymentsWorkspace";
 import { UserTierBadge } from "@/components/UserTierBadge";
 import VapourAccent from "@/components/ui/vapour-accent";
-import { buildTokenForgeCurl, buildTokenForgeJavaScript, buildTokenForgePython, TOKENFORGE_API_BASE_URL } from "../../../shared/tokenforgeApi";
+import { buildQronosCurl, buildQronosJavaScript, buildQronosPython, QRONOS_API_BASE_URL } from "../../../shared/qronosApi";
 import { clearOneTimeApiKey, getOneTimeApiKey, rememberOneTimeApiKey } from "../../../shared/oneTimeApiKey";
-import { buildReferralInviteUrl, TOKENFORGE_REFERRAL_REWARD_USD } from "../../../shared/referrals";
+import { buildReferralInviteUrl } from "../../../shared/referrals";
 
 type Section = "overview" | "keys" | "usage" | "playground" | "profile" | "referrals" | "models" | "model" | "transactions" | "payments" | "pricing";
 type UsageData = {
@@ -245,7 +245,7 @@ function ApiKeyCreatedModal({
 
 function CurlExample({ apiKey }: { apiKey?: string }) {
   const [copied, setCopied] = useState(false);
-  const command = buildTokenForgeCurl(apiKey);
+  const command = buildQronosCurl(apiKey);
   const copy = async () => {
     await navigator.clipboard.writeText(command);
     setCopied(true);
@@ -272,7 +272,7 @@ function CurlExample({ apiKey }: { apiKey?: string }) {
           {copied ? <Check size={14} /> : <Copy size={14} />}{copied ? "Copied" : "Copy cURL"}
         </Button>
       </div>
-      <p className="mt-3 break-all rounded-lg border border-white/10 bg-black/60 px-3 py-2 font-mono text-[10px] text-zinc-300">{TOKENFORGE_API_BASE_URL}</p>
+      <p className="mt-3 break-all rounded-lg border border-white/10 bg-black/60 px-3 py-2 font-mono text-[10px] text-zinc-300">{QRONOS_API_BASE_URL}</p>
       <pre className="mt-3 w-full min-w-0 max-w-full overflow-x-auto overscroll-x-contain rounded-lg border border-white/10 bg-black p-3"><code className="block min-w-max font-mono text-[11px] leading-5 text-zinc-200">{command}</code></pre>
     </section>
   );
@@ -285,7 +285,7 @@ function SdkQuickStart({ apiKey }: { apiKey?: string }) {
   const [copied, setCopied] = useState(false);
   const isJavaScript = language === "javascript";
   const installCommand = isJavaScript ? "npm install @anthropic-ai/sdk" : "pip install anthropic";
-  const code = isJavaScript ? buildTokenForgeJavaScript(apiKey) : buildTokenForgePython(apiKey);
+  const code = isJavaScript ? buildQronosJavaScript(apiKey) : buildQronosPython(apiKey);
   const copy = async () => {
     await navigator.clipboard.writeText(code);
     setCopied(true);
@@ -722,7 +722,7 @@ function ApiKeyList() {
                           variant="ghost"
                           className="h-6 text-[10px] text-zinc-300 hover:text-white cursor-pointer"
                           onClick={() => {
-                            navigator.clipboard.writeText(`export ANTHROPIC_BASE_URL="${TOKENFORGE_API_BASE_URL}"\nexport ANTHROPIC_API_KEY="${key.prefix}..."`);
+                            navigator.clipboard.writeText(`export ANTHROPIC_BASE_URL="${QRONOS_API_BASE_URL}"\nexport ANTHROPIC_API_KEY="${key.prefix}..."`);
                             toast.success("Snippet copied");
                           }}
                         >
@@ -730,7 +730,7 @@ function ApiKeyList() {
                         </Button>
                       </div>
                       <pre className="mt-2 text-[11px] font-mono text-zinc-300 overflow-x-auto leading-relaxed">
-                        <code>{`export ANTHROPIC_BASE_URL="${TOKENFORGE_API_BASE_URL}"\nexport ANTHROPIC_API_KEY="${key.prefix}..."`}</code>
+                        <code>{`export ANTHROPIC_BASE_URL="${QRONOS_API_BASE_URL}"\nexport ANTHROPIC_API_KEY="${key.prefix}..."`}</code>
                       </pre>
                     </div>
                   )}
@@ -876,20 +876,20 @@ function OverviewIntegrationDesk() {
   const getCodeSnippet = () => {
     switch (tab) {
       case "curl":
-        return buildTokenForgeCurl(apiKey ?? undefined);
+        return buildQronosCurl(apiKey ?? undefined);
       case "python":
-        return buildTokenForgePython(apiKey ?? undefined);
+        return buildQronosPython(apiKey ?? undefined);
       case "javascript":
-        return buildTokenForgeJavaScript(apiKey ?? undefined);
+        return buildQronosJavaScript(apiKey ?? undefined);
       case "cursor":
         return `// Cursor Settings -> Models -> OpenAI/Anthropic Base URL Override
 {
-  "anthropic.baseUrl": "${TOKENFORGE_API_BASE_URL}",
+  "anthropic.baseUrl": "${QRONOS_API_BASE_URL}",
   "anthropic.apiKey": "${effectiveKey}"
 }`;
       case "claude_code":
         return `# Point Claude Code CLI directly to Qronos AI
-export ANTHROPIC_BASE_URL="${TOKENFORGE_API_BASE_URL}"
+export ANTHROPIC_BASE_URL="${QRONOS_API_BASE_URL}"
 export ANTHROPIC_API_KEY="${effectiveKey}"
 claude`;
     }
@@ -1044,7 +1044,7 @@ claude`;
             <span className="h-2.5 w-2.5 rounded-full bg-white/20" />
             <span className="h-2.5 w-2.5 rounded-full bg-white/20" />
             <span className="h-2.5 w-2.5 rounded-full bg-white/20" />
-            <span className="text-[10px] font-mono text-zinc-400 ml-2">endpoint: {TOKENFORGE_API_BASE_URL}/v1</span>
+            <span className="text-[10px] font-mono text-zinc-400 ml-2">endpoint: {QRONOS_API_BASE_URL}/v1</span>
           </div>
           <span className="text-[10px] font-mono text-zinc-500 uppercase">UTF-8</span>
         </div>
@@ -1872,7 +1872,7 @@ function ReferralWorkspace() {
   };
 
   const shareText = encodeURIComponent(
-    `Deploy & route LLMs with sub-millisecond latency on Qronos AI. Sign up with my link to get a $${TOKENFORGE_REFERRAL_REWARD_USD} welcome compute credit:`
+    `Route Claude Opus 5.5, GLM-5.3 & DeepSeek with sub-millisecond failover on Qronos AI. Sign up with my link to get 10M free coding tokens:`
   );
 
   return (
@@ -1895,23 +1895,22 @@ function ReferralWorkspace() {
                 Affiliate Network Active
               </span>
               <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[10px] font-mono text-zinc-300">
-                <ShieldCheck size={12} className="text-emerald-400" />
-                Dual Account Incentive
+                <Zap size={12} className="text-emerald-400" />
+                25% Lifetime Recharge Cut
               </span>
             </div>
             <h1 className="mt-3.5 text-2xl sm:text-4xl font-extrabold tracking-tight text-white">
-              Invite Builders, Earn Compute
+              25% Lifetime Affiliate Program
             </h1>
             <p className="mt-2 text-xs sm:text-sm text-zinc-400 max-w-2xl leading-relaxed">
-              Share your personal referral link. When an eligible engineer signs up with your code, both of you receive{" "}
-              <strong className="text-white">${TOKENFORGE_REFERRAL_REWARD_USD}.00 USD</strong> in platform compute balance automatically.
+              Share your affiliate link. Whenever any developer who signs up via your link recharges their balance with Domestic UPI or Solana Pay, you receive <strong className="text-emerald-400">25% of their recharge amount</strong> automatically deposited into your Pay-As-You-Go compute balance.
             </p>
           </div>
 
           <div className="flex items-center gap-3 shrink-0">
             <div className="text-right hidden sm:block">
-              <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-500 block">Reward Per Invite</span>
-              <span className="text-2xl font-bold font-mono text-emerald-400">${TOKENFORGE_REFERRAL_REWARD_USD}.00</span>
+              <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-500 block">Commission Rate</span>
+              <span className="text-2xl font-bold font-mono text-emerald-400">25% Cut</span>
             </div>
           </div>
         </div>
@@ -1939,13 +1938,13 @@ function ReferralWorkspace() {
                       <p className="text-[11px] font-mono text-zinc-500">Affiliate code: {referral.code.toUpperCase()}</p>
                     </div>
                   </div>
-                  <Badge className="border-0 bg-white/[0.08] text-white font-mono text-[10px]">
-                    ${TOKENFORGE_REFERRAL_REWARD_USD}.00 / Referral
+                  <Badge className="border-0 bg-emerald-500/10 text-emerald-400 border border-emerald-500/25 font-mono text-[10px]">
+                    25% Payout / Recharge
                   </Badge>
                 </div>
 
                 <p className="mt-4 text-xs text-zinc-400 leading-relaxed">
-                  Anyone who joins through this link receives an instant ${TOKENFORGE_REFERRAL_REWARD_USD} starting balance to test Claude Opus 5, GLM-5.3, and frontier models.
+                  Anyone who joins through this link receives an automatic 10M free tokens grant upon login. Every time they recharge their balance, 25% of that payment lands in your PAYG balance instantly.
                 </p>
 
                 {/* Copy Link Input Bar */}
@@ -2010,7 +2009,7 @@ function ReferralWorkspace() {
             className="rounded-3xl border p-6 flex flex-col justify-between shadow-xl"
           >
             <div className="flex items-center justify-between text-zinc-400">
-              <span className="text-[10px] font-mono uppercase tracking-wider font-bold">Successful Invites</span>
+              <span className="text-[10px] font-mono uppercase tracking-wider font-bold">Referred Developers</span>
               <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-white/[0.06] border border-white/10 text-white">
                 <Users size={16} />
               </div>
@@ -2019,7 +2018,7 @@ function ReferralWorkspace() {
               <p className="text-3xl sm:text-4xl font-extrabold font-mono text-white tracking-tight">
                 {referral.referrals.length}
               </p>
-              <p className="mt-1 text-xs text-zinc-500 font-mono">Accounts onboarded with your link</p>
+              <p className="mt-1 text-xs text-zinc-500 font-mono">Bound developers in your network</p>
             </div>
           </div>
 
@@ -2032,7 +2031,7 @@ function ReferralWorkspace() {
             className="rounded-3xl border p-6 flex flex-col justify-between shadow-xl"
           >
             <div className="flex items-center justify-between text-zinc-400">
-              <span className="text-[10px] font-mono uppercase tracking-wider font-bold">Total Compute Earned</span>
+              <span className="text-[10px] font-mono uppercase tracking-wider font-bold">Total Commission Earned</span>
               <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-white/[0.06] border border-white/10 text-white">
                 <Coins size={16} />
               </div>
@@ -2041,11 +2040,101 @@ function ReferralWorkspace() {
               <p className="text-3xl sm:text-4xl font-extrabold font-mono text-emerald-400 tracking-tight">
                 {formatCredit(referral.totalRewardNanos)}
               </p>
-              <p className="mt-1 text-xs text-zinc-500 font-mono">Credited directly to wallet</p>
+              <p className="mt-1 text-xs text-zinc-500 font-mono">Credited directly to PAYG balance</p>
             </div>
           </div>
         </div>
       </div>
+
+      {/* 3. Step-by-Step Referral Process Cards */}
+      <section className="space-y-3" aria-label="How the 25% affiliate commission works">
+        <div className="flex items-center gap-2">
+          <Sparkles size={14} className="text-white" />
+          <p className="text-[10px] font-bold uppercase tracking-[.18em] font-mono text-zinc-400">
+            How The 25% Affiliate Commission Works
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {/* Card 1 */}
+          <div
+            style={{
+              backgroundColor: "oklch(0.14 0 0)",
+              borderColor: "oklch(0.24 0 0)",
+            }}
+            className="rounded-3xl border p-6 flex flex-col justify-between shadow-xl relative overflow-hidden group hover:border-white/30 transition-all"
+          >
+            <div className="flex items-center justify-between pb-3 border-b border-white/[0.06]">
+              <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-emerald-400 bg-emerald-500/10 border border-emerald-500/25 px-2.5 py-0.5 rounded-full">
+                Step 1 · Share Link
+              </span>
+              <span className="text-xs font-mono font-bold text-zinc-500">01</span>
+            </div>
+            <div className="mt-4">
+              <h3 className="text-base font-bold text-white tracking-tight">Invite Engineers & Teams</h3>
+              <p className="mt-2 text-xs text-zinc-400 leading-relaxed">
+                Copy your unique affiliate link and share it with peers, teammates, or communities building with LLMs and agents.
+              </p>
+            </div>
+            <div className="mt-4 pt-3 border-t border-white/[0.06] flex items-center gap-2 text-[11px] font-mono text-zinc-300">
+              <CheckCircle2 size={13} className="text-emerald-400" />
+              <span>Permanent account binding on signup</span>
+            </div>
+          </div>
+
+          {/* Card 2 */}
+          <div
+            style={{
+              backgroundColor: "oklch(0.14 0 0)",
+              borderColor: "oklch(0.24 0 0)",
+            }}
+            className="rounded-3xl border p-6 flex flex-col justify-between shadow-xl relative overflow-hidden group hover:border-white/30 transition-all"
+          >
+            <div className="flex items-center justify-between pb-3 border-b border-white/[0.06]">
+              <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-cyan-300 bg-cyan-500/10 border border-cyan-500/25 px-2.5 py-0.5 rounded-full">
+                Step 2 · They Recharge
+              </span>
+              <span className="text-xs font-mono font-bold text-zinc-500">02</span>
+            </div>
+            <div className="mt-4">
+              <h3 className="text-base font-bold text-white tracking-tight">On Every Balance Deposit</h3>
+              <p className="mt-2 text-xs text-zinc-400 leading-relaxed">
+                Whenever your invited developers recharge their PAYG compute balance or purchase a Token Plan via Domestic UPI or Solana Pay.
+              </p>
+            </div>
+            <div className="mt-4 pt-3 border-t border-white/[0.06] flex items-center gap-2 text-[11px] font-mono text-zinc-300">
+              <Zap size={13} className="text-cyan-400" />
+              <span>Lifetime commission on all future recharges</span>
+            </div>
+          </div>
+
+          {/* Card 3 */}
+          <div
+            style={{
+              backgroundColor: "oklch(0.14 0 0)",
+              borderColor: "oklch(0.24 0 0)",
+            }}
+            className="rounded-3xl border p-6 flex flex-col justify-between shadow-xl relative overflow-hidden group hover:border-white/30 transition-all"
+          >
+            <div className="flex items-center justify-between pb-3 border-b border-white/[0.06]">
+              <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-amber-300 bg-amber-500/10 border border-amber-500/25 px-2.5 py-0.5 rounded-full">
+                Step 3 · Instant 25% Payout
+              </span>
+              <span className="text-xs font-mono font-bold text-zinc-500">03</span>
+            </div>
+            <div className="mt-4">
+              <h3 className="text-base font-bold text-white tracking-tight">Direct PAYG Balance Deposit</h3>
+              <p className="mt-2 text-xs text-zinc-400 leading-relaxed">
+                You immediately receive <strong>25% of the recharged amount</strong> credited straight into your PAYG balance with real-time Notification Bell alerts.
+              </p>
+            </div>
+            <div className="mt-4 pt-3 border-t border-white/[0.06] flex items-center gap-2 text-[11px] font-mono text-zinc-300">
+              <Coins size={13} className="text-amber-400" />
+              <span>Zero threshold · Instant usable compute</span>
+            </div>
+          </div>
+        </div>
+      </section>
 
       {/* 3. Welcome Bonus Banner (if received) */}
       {referral.receivedRewardNanos > 0 && (
@@ -2128,7 +2217,7 @@ function ReferralWorkspace() {
               <Users className="mx-auto text-zinc-500 mb-3" size={28} />
               <p className="text-sm font-bold text-white font-mono">No referral attributions yet</p>
               <p className="mt-1 text-xs text-zinc-400 max-w-sm mx-auto">
-                Share your affiliate link above with engineers or teams. Both accounts will instantly receive ${TOKENFORGE_REFERRAL_REWARD_USD} on signup.
+                Invite developers with your referral link above. You will earn 25% lifetime commission on every credit recharge they complete, deposited instantly into your PAYG balance.
               </p>
             </div>
           )}

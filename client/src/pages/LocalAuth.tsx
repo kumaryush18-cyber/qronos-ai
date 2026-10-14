@@ -59,7 +59,6 @@ export default function LocalAuth({ mode }: LocalAuthProps) {
         origin.endsWith(".run.app") ||
         origin.includes("localhost") ||
         origin.includes("qronos") ||
-        origin.includes("tokenforge") ||
         origin.includes("manus.space");
 
       if (!isAllowedOrigin) return;

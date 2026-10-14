@@ -167,6 +167,11 @@ export default defineConfig({
   build: {
     outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,
+    reportCompressedSize: false,
+    sourcemap: false,
+    rollupOptions: {
+      maxParallelFileOps: 2,
+    },
   },
   server: {
     host: true,

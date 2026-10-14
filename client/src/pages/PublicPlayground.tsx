@@ -3,8 +3,9 @@ import { PublicNav } from "@/components/PublicNav";
 import { VortexHourglass } from "@/components/VortexHourglass";
 import { AIThinkingOrbInput } from "@/components/ui/ai-thiking-orb-and-input";
 import { Sparkles, Terminal, ArrowRight, Cpu, ChevronDown, Check } from "lucide-react";
-import { TOKENFORGE_MODELS } from "@/lib/modelCatalogue";
+import { QRONOS_MODELS } from "@/lib/modelCatalogue";
 import { trpc } from "@/lib/trpc";
+import { QRONOS_LOGOS } from "@/lib/logos";
 import "./infergate-landing.css";
 
 const FEATURED_MODELS = [
@@ -26,14 +27,14 @@ export default function PublicPlayground() {
 
   const allModels = availabilityQuery.data?.length
     ? availabilityQuery.data.map(m => {
-        const found = TOKENFORGE_MODELS.find(cat => cat.id === m.modelId);
+        const found = QRONOS_MODELS.find(cat => cat.id === m.modelId);
         return {
           id: m.modelId,
           label: found?.name || m.modelId,
           provider: found?.provider || "Qronos AI",
         };
       })
-    : TOKENFORGE_MODELS.map(m => ({ id: m.id, label: m.name, provider: m.provider }));
+    : QRONOS_MODELS.map(m => ({ id: m.id, label: m.name, provider: m.provider }));
 
   const activeModelMeta = allModels.find(m => m.id === activeModel) || {
     id: activeModel,

@@ -3,7 +3,7 @@ import { Link } from "wouter";
 import { PublicNav } from "@/components/PublicNav";
 import { PublicFooter } from "@/pages/Models";
 import { StarButton } from "@/components/StarButton";
-import { TOKENFORGE_MODELS } from "@/lib/modelCatalogue";
+import { QRONOS_MODELS } from "@/lib/modelCatalogue";
 import {
   Terminal,
   KeyRound,

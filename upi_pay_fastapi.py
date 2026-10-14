@@ -1,5 +1,5 @@
 """
-TokenForge UPI Payment Rail - Production FastAPI Router & Application
+Qronos AI UPI Payment Rail - Production FastAPI Router & Application
 ----------------------------------------------------------------------
 Zero-fee Indian domestic UPI payments using dynamic NPCI URIs and 12-digit UTR verification.
 Works directly with Google Pay, PhonePe, Paytm, and BHIM without intermediate gateway costs.
@@ -50,7 +50,7 @@ UTR_REGISTRY: set[str] = set()
 # ==============================================================================
 
 class CreateUPIOrderRequest(BaseModel):
-    user_id: Optional[str] = Field(default="guest", description="TokenForge user ID")
+    user_id: Optional[str] = Field(default="guest", description="Qronos AI user ID")
     tier_id: Optional[str] = Field(default="inr_starter", description="Tier identifier")
     amount_inr: float = Field(..., gt=0, description="Amount in INR (must be positive)")
     credits: int = Field(..., gt=0, description="Amount of API credits to award")
@@ -119,7 +119,7 @@ async def get_upi_config():
 async def create_upi_order(payload: CreateUPIOrderRequest):
     """
     Creates an order record and constructs the standard NPCI UPI URI:
-    upi://pay?pa=<UPI_ID>&pn=TokenForge&am=<AMOUNT>&cu=INR&tn=Order_<ORDER_ID>
+    upi://pay?pa=<UPI_ID>&pn=Qronos AI&am=<AMOUNT>&cu=INR&tn=Order_<ORDER_ID>
     """
     now_utc = datetime.now(timezone.utc)
     ts = int(now_utc.timestamp())
@@ -348,7 +348,7 @@ async def admin_reject_order(
 # ==============================================================================
 
 app = FastAPI(
-    title="TokenForge Direct UPI Payment Rail",
+    title="Qronos AI Direct UPI Payment Rail",
     description="Frictionless, zero-gateway Indian domestic UPI payment processing with UTR verification",
     version="1.0.0",
 )
@@ -379,7 +379,7 @@ app.include_router(payments_admin_router)
 async def health_check():
     return {
         "status": "healthy",
-        "service": "TokenForge UPI Rail",
+        "service": "Qronos AI UPI Rail",
         "upi_id": UPI_ID,
         "active_orders": len(ORDERS_DB),
     }

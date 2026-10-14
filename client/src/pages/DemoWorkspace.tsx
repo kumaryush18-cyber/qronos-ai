@@ -1,7 +1,7 @@
 import { PublicNav } from "@/components/PublicNav";
 import { QronosGlyph } from "@/components/QronosGlyph";
 import { Badge } from "@/components/ui/badge";
-import { demoSafetyNotice, publicModels } from "@/lib/tokenforgePresentation";
+import { demoSafetyNotice, publicModels } from "@/lib/qronosPresentation";
 import { ArrowRight, BarChart3, CircleAlert, KeyRound, LockKeyhole, Sparkles } from "lucide-react";
 import { Link } from "wouter";
 

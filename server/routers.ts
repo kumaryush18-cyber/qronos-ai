@@ -187,7 +187,7 @@ const playgroundMessage = z.object({
   content: z.string().trim().min(1, "Message content cannot be empty").max(20_000, "Each message must be 20,000 characters or fewer"),
 });
 const tokenForgeModelId = z.string()
-  .refine(isTokenForgeModelId, "The requested model is not in the active TokenForge catalogue.")
+  .refine(isTokenForgeModelId, "The requested model is not in the active Qronos AI catalogue.")
   .transform(model => model as TokenForgeModelId);
 const adminPasscodeInput = z.object({ passcode: z.string().min(4, "Enter the administrator passcode").max(128) });
 const adminAccountDirectoryInput = z.object({
@@ -204,12 +204,12 @@ const permanentAccountDeleteInput = z.object({ userId: z.number().int().positive
 const adminCreditGrantInput = z.object({
   userId: z.number().int().positive(),
   amountUsd: z.number().finite().positive().max(10_000_000).refine(value => Math.round(value * 100) === value * 100, "Use an amount with no more than two decimal places"),
-  balanceType: z.enum(["bundle", "payg", "tokens"]).default("bundle").optional(),
+  balanceType: z.enum(["payg", "tokens"]).default("payg").optional(),
 });
 const setAccountCreditInput = z.object({
   userId: z.number().int().positive(),
   targetAmountUsd: z.number().finite().min(0, "Amount cannot be negative").max(10_000_000, "Amount exceeds limit").refine(value => Math.round(value * 100) === value * 100, "Use an amount with no more than two decimal places"),
-  balanceType: z.enum(["bundle", "payg", "tokens"]).default("bundle").optional(),
+  balanceType: z.enum(["payg", "tokens"]).default("payg").optional(),
   note: z.string().trim().max(256, "Note must be 256 characters or fewer").optional(),
 });
 const setAllUsersCreditInput = z.object({
@@ -624,7 +624,7 @@ export const appRouter = router({
         const sessionVersion = await getAuthSessionVersion();
         const sessionToken = await sdk.createSessionToken(user.openId, {
           expiresInMs: LOCAL_SESSION_MAX_AGE_MS,
-          name: user.name ?? "TokenForge developer",
+          name: user.name ?? "Qronos developer",
           sessionVersion,
         });
 
@@ -699,7 +699,7 @@ export const appRouter = router({
         try {
           return await createApiKey(ctx.user.id, input.label, input.keyGroup);
         } catch (error) {
-          const message = error instanceof Error ? error.message : "TokenForge could not create this key";
+          const message = error instanceof Error ? error.message : "Qronos AI could not create this key";
           throw new TRPCError({
             code: message.includes("Maximum limit of 10") ? "BAD_REQUEST" : "INTERNAL_SERVER_ERROR",
             message,
@@ -830,7 +830,7 @@ export const appRouter = router({
           });
         } catch (error) {
           if (error instanceof TokenForgePlaygroundError) throw playgroundTrpcError(error);
-          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "TokenForge could not complete this Playground request" });
+          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Qronos AI could not complete this Playground request" });
         }
       }),
   }),
@@ -1346,7 +1346,7 @@ ${input.intent ? `Requested Notification Type: ${input.intent}` : ""}`;
       return { success: true } as const;
     }),
     addAccountCredit: adminProcedure.input(adminCreditGrantInput).mutation(async ({ ctx, input }) => {
-      const balanceType = input.balanceType ?? "bundle";
+      const balanceType = input.balanceType ?? "payg";
       const amountNanos = balanceType === "tokens" ? 0 : Math.round(input.amountUsd * 1_000_000_000);
       const amountTokens = balanceType === "tokens" ? Math.round(input.amountUsd * 1_000_000) : undefined;
       const result = await grantAdminAccountCredit({ userId: input.userId, amountNanos, amountTokens, actorUserId: ctx.user.id, balanceType });
@@ -1354,7 +1354,7 @@ ${input.intent ? `Requested Notification Type: ${input.intent}` : ""}`;
       await writeAuditEvent({
         actorUserId: ctx.user.id,
         targetUserId: input.userId,
-        action: balanceType === "tokens" ? "account.coding_tokens_granted" : balanceType === "payg" ? "account.payg_balance_granted" : "account.credit_granted",
+        action: balanceType === "tokens" ? "account.coding_tokens_granted" : "account.payg_balance_granted",
         entityType: "account",
         entityId: String(input.userId),
         metadata: { amountNanos: result.amountNanos, amountTokens: (result as any).amountTokens, balanceType, balanceNanos: result.balanceNanos, paygBalanceNanos: result.paygBalanceNanos, codingPlanTokens: (result as any).codingPlanTokens },
@@ -1362,7 +1362,7 @@ ${input.intent ? `Requested Notification Type: ${input.intent}` : ""}`;
       return result;
     }),
     setAccountCredit: adminProcedure.input(setAccountCreditInput).mutation(async ({ ctx, input }) => {
-      const balanceType = input.balanceType ?? "bundle";
+      const balanceType = input.balanceType ?? "payg";
       const targetAmountNanos = balanceType === "tokens" ? 0 : Math.round(input.targetAmountUsd * 1_000_000_000);
       const targetTokens = balanceType === "tokens" ? Math.round(input.targetAmountUsd * 1_000_000) : undefined;
       const result = await setAdminAccountCredit({
@@ -1377,7 +1377,7 @@ ${input.intent ? `Requested Notification Type: ${input.intent}` : ""}`;
       await writeAuditEvent({
         actorUserId: ctx.user.id,
         targetUserId: input.userId,
-        action: balanceType === "tokens" ? "account.coding_tokens_set" : balanceType === "payg" ? "account.payg_balance_set" : "account.credit_set",
+        action: balanceType === "tokens" ? "account.coding_tokens_set" : "account.payg_balance_set",
         entityType: "account",
         entityId: String(input.userId),
         metadata: {
@@ -1531,7 +1531,7 @@ ${input.intent ? `Requested Notification Type: ${input.intent}` : ""}`;
           await writeAuditEvent({ actorUserId: ctx.user.id, action: "email.allowlist.updated", entityType: "platform_setting", entityId: "email_allowlist", metadata: { entryCount: saved.entries.length } });
           return saved;
         } catch (error) {
-          throw new TRPCError({ code: "BAD_REQUEST", message: error instanceof Error ? error.message : "TokenForge could not save the email allowlist" });
+          throw new TRPCError({ code: "BAD_REQUEST", message: error instanceof Error ? error.message : "Qronos AI could not save the email allowlist" });
         }
       }),
     orcaRouterCredentials: adminProcedure.query(() => getOrcaRouterCredentialPoolStatus()),
@@ -1553,7 +1553,7 @@ ${input.intent ? `Requested Notification Type: ${input.intent}` : ""}`;
         });
         return settings;
       } catch (error) {
-        throw new TRPCError({ code: "BAD_REQUEST", message: error instanceof Error ? error.message : "TokenForge could not save Claude Fable 5.1 provider settings" });
+        throw new TRPCError({ code: "BAD_REQUEST", message: error instanceof Error ? error.message : "Qronos AI could not save Claude Fable 5.1 provider settings" });
       }
     }),
     claudeOpus5ProviderSettings: adminProcedure.query(() => getClaudeOpus5ProviderSettings()),
@@ -1565,7 +1565,7 @@ ${input.intent ? `Requested Notification Type: ${input.intent}` : ""}`;
         await writeAuditEvent({ actorUserId: ctx.user.id, action: "provider.claude_opus5.bailu_webshare_proxy_pool_updated", entityType: "provider", entityId: "bailu", metadata: { enabled: settings.enabled, proxyCount: settings.proxies.length } });
         return settings;
       } catch (error) {
-        throw new TRPCError({ code: "BAD_REQUEST", message: error instanceof Error ? error.message : "TokenForge could not save the Bailu Webshare proxy pool" });
+        throw new TRPCError({ code: "BAD_REQUEST", message: error instanceof Error ? error.message : "Qronos AI could not save the Bailu Webshare proxy pool" });
       }
     }),
     deepseekV4ProFailureLogs: adminProcedure.query(async () => (await getRecentDeepseekV4ProFailureLogs(200)).map(entry => ({ ...entry, publicMessage: PUBLIC_PROVIDER_ERROR_MESSAGE }))),
@@ -1609,7 +1609,7 @@ ${input.intent ? `Requested Notification Type: ${input.intent}` : ""}`;
         } catch (error) {
           throw new TRPCError({
             code: "BAD_REQUEST",
-            message: error instanceof Error ? error.message : "TokenForge could not save universal model provider settings",
+            message: error instanceof Error ? error.message : "Qronos AI could not save universal model provider settings",
           });
         }
       }),
@@ -1645,7 +1645,7 @@ ${input.intent ? `Requested Notification Type: ${input.intent}` : ""}`;
         });
         return settings;
       } catch (error) {
-        throw new TRPCError({ code: "BAD_REQUEST", message: error instanceof Error ? error.message : "TokenForge could not save Claude Opus 5 provider settings" });
+        throw new TRPCError({ code: "BAD_REQUEST", message: error instanceof Error ? error.message : "Qronos AI could not save Claude Opus 5 provider settings" });
       }
     }),
     setClaudeOpus5BaiPriority: adminProcedure.input(z.object({ enabled: z.boolean() })).mutation(async ({ ctx, input }) => {
@@ -1660,7 +1660,7 @@ ${input.intent ? `Requested Notification Type: ${input.intent}` : ""}`;
         });
         return settings;
       } catch (error) {
-        throw new TRPCError({ code: "BAD_REQUEST", message: error instanceof Error ? error.message : "TokenForge could not update b.ai priority" });
+        throw new TRPCError({ code: "BAD_REQUEST", message: error instanceof Error ? error.message : "Qronos AI could not update b.ai priority" });
       }
     }),
     deleteClaudeOpus5QwenModel: adminProcedure.input(claudeOpus5QwenModelDeleteInput).mutation(async ({ ctx, input }) => {
@@ -1669,7 +1669,7 @@ ${input.intent ? `Requested Notification Type: ${input.intent}` : ""}`;
         await writeAuditEvent({ actorUserId: ctx.user.id, action: "provider.claude_opus5.qwen_model_deleted", entityType: "provider", entityId: input.providerId, metadata: { modelEntryId: input.modelEntryId } });
         return settings;
       } catch (error) {
-        throw new TRPCError({ code: "BAD_REQUEST", message: error instanceof Error ? error.message : "TokenForge could not delete the Qwen model" });
+        throw new TRPCError({ code: "BAD_REQUEST", message: error instanceof Error ? error.message : "Qronos AI could not delete the Qwen model" });
       }
     }),
     deleteClaudeOpus5QwenApiKey: adminProcedure.input(claudeOpus5QwenApiKeyDeleteInput).mutation(async ({ ctx, input }) => {
@@ -1678,7 +1678,7 @@ ${input.intent ? `Requested Notification Type: ${input.intent}` : ""}`;
         await writeAuditEvent({ actorUserId: ctx.user.id, action: "provider.claude_opus5.qwen_key_deleted", entityType: "provider", entityId: input.providerId, metadata: { slot: input.slot } });
         return settings;
       } catch (error) {
-        throw new TRPCError({ code: "BAD_REQUEST", message: error instanceof Error ? error.message : "TokenForge could not delete the Qwen API key" });
+        throw new TRPCError({ code: "BAD_REQUEST", message: error instanceof Error ? error.message : "Qronos AI could not delete the Qwen API key" });
       }
     }),
     glm53ProviderSettings: adminProcedure.query(() => getGlm53ProviderSettings()),
@@ -1698,7 +1698,7 @@ ${input.intent ? `Requested Notification Type: ${input.intent}` : ""}`;
         });
         return settings;
       } catch (error) {
-        throw new TRPCError({ code: "BAD_REQUEST", message: error instanceof Error ? error.message : "TokenForge could not save GLM 5.3 provider settings" });
+        throw new TRPCError({ code: "BAD_REQUEST", message: error instanceof Error ? error.message : "Qronos AI could not save GLM 5.3 provider settings" });
       }
     }),
     sonnet46ProviderSettings: adminProcedure.query(() => getSonnet46ProviderSettings()),
@@ -1709,7 +1709,7 @@ ${input.intent ? `Requested Notification Type: ${input.intent}` : ""}`;
         await writeAuditEvent({ actorUserId: ctx.user.id, action: "provider.sonnet46.runtime_updated", entityType: "provider", entityId: "claude-sonnet-4.6", metadata: { providerGroups: input.providers.length, enabledProviderGroups: input.providers.filter(provider => provider.enabled !== false).length } });
         return settings;
       } catch (error) {
-        throw new TRPCError({ code: "BAD_REQUEST", message: error instanceof Error ? error.message : "TokenForge could not save Claude Sonnet 4.6 provider settings" });
+        throw new TRPCError({ code: "BAD_REQUEST", message: error instanceof Error ? error.message : "Qronos AI could not save Claude Sonnet 4.6 provider settings" });
       }
     }),
     deepseekV4ProProviderSettings: adminProcedure.query(() => getDeepseekV4ProProviderSettings()),
@@ -1735,7 +1735,7 @@ ${input.intent ? `Requested Notification Type: ${input.intent}` : ""}`;
         });
         return settings;
       } catch (error) {
-        throw new TRPCError({ code: "BAD_REQUEST", message: error instanceof Error ? error.message : "TokenForge could not save DeepSeek V4 Pro provider settings" });
+        throw new TRPCError({ code: "BAD_REQUEST", message: error instanceof Error ? error.message : "Qronos AI could not save DeepSeek V4 Pro provider settings" });
       }
     }),
     replaceOrcaRouterCredentials: adminProcedure

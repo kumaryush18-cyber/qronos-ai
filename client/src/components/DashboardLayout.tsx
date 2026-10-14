@@ -25,7 +25,7 @@ import { CSSProperties, useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { ThreeDButton } from "@/components/ui/3d-button";
-import { TOKENFORGE_POST_LOGOUT_PATH } from "../../../shared/authNavigation";
+import { QRONOS_POST_LOGOUT_PATH } from "../../../shared/authNavigation";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
 import { LoginWelcomeTour } from "./LoginWelcomeTour";
 import { AnnouncementBanner } from "./AnnouncementBanner";
@@ -131,7 +131,7 @@ function DashboardLayoutContent({
 
   const handleSignOut = async () => {
     await logout();
-    setLocation(TOKENFORGE_POST_LOGOUT_PATH);
+    setLocation(QRONOS_POST_LOGOUT_PATH);
   };
 
   useEffect(() => {

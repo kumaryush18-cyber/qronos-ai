@@ -1,11 +1,11 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ProviderMark } from "@/components/ProviderMark";
-import { TOKENFORGE_MODELS } from "@/lib/modelCatalogue";
+import { QRONOS_MODELS } from "@/lib/modelCatalogue";
 import { calculateSettledUsagePricingBreakdownNanos } from "@shared/usagePricing";
 import { trpc } from "@/lib/trpc";
 import { Link } from "wouter";
-import { Activity, ArrowDownLeft, ArrowUpRight, CalendarCheck, CalendarDays, CheckCircle2, ChevronDown, CircleDollarSign, Clock3, Code2, Coins, Filter, Gift, History, KeyRound, Loader2, Mail, Percent, ReceiptText, RotateCcw, ShieldCheck, Sparkles, Terminal, WalletCards, Zap } from "lucide-react";
+import { Activity, ArrowDownLeft, ArrowUpRight, CalendarCheck, CalendarDays, CheckCircle2, ChevronDown, CircleDollarSign, Clock, Clock3, Code2, Coins, Filter, Gift, History, KeyRound, Loader2, Mail, Percent, ReceiptText, RotateCcw, ShieldCheck, Sparkles, Terminal, WalletCards, Zap } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { SolanaPayButton } from "@/components/SolanaPayButton";
@@ -271,7 +271,7 @@ export function CreditOverview() {
 }
 
 function displayModel(modelId: string) {
-  return TOKENFORGE_MODELS.find(model => model.id === modelId)?.name ?? modelId;
+  return QRONOS_MODELS.find(model => model.id === modelId)?.name ?? modelId;
 }
 
 function formatLogDate(value: Date | string) {
@@ -283,7 +283,7 @@ function formatLogDate(value: Date | string) {
 }
 
 export function calculateUsagePricingBreakdown(modelId: string, inputTokens: number | string | null | undefined, outputTokens: number | string | null | undefined, chargeNanos: number | string | null | undefined) {
-  const model = TOKENFORGE_MODELS.find(candidate => candidate.id === modelId);
+  const model = QRONOS_MODELS.find(candidate => candidate.id === modelId);
   if (!model) return null;
   return calculateSettledUsagePricingBreakdownNanos({
     inputTokens: Number(inputTokens ?? 0),
@@ -463,7 +463,7 @@ export function UsageLogs() {
               className="w-full h-10 rounded-xl border px-3 text-xs text-white font-mono focus:border-white/30 focus:outline-none"
             >
               <option value="" className="bg-black text-white">All models</option>
-              {TOKENFORGE_MODELS.map((model) => (
+              {QRONOS_MODELS.map((model) => (
                 <option key={model.id} value={model.id} className="bg-black text-white">
                   {model.name} · {model.provider}
                 </option>
@@ -531,7 +531,7 @@ export function UsageLogs() {
                 const pricing = successful
                   ? calculateUsagePricingBreakdown(log.modelId, log.inputTokens, log.outputTokens, log.chargeNanos)
                   : null;
-                const modelInfo = TOKENFORGE_MODELS.find((candidate) => candidate.id === log.modelId);
+                const modelInfo = QRONOS_MODELS.find((candidate) => candidate.id === log.modelId);
                 const inTokens = Number(log.inputTokens || 0);
                 const outTokens = Number(log.outputTokens || 0);
                 const totalTokens = inTokens + outTokens;
@@ -568,16 +568,44 @@ export function UsageLogs() {
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-2 self-start sm:self-center">
-                        <Badge
-                          className={
-                            successful
-                              ? "border-0 bg-emerald-500/10 text-emerald-400 font-mono text-[9px]"
-                              : "border-0 bg-red-400/10 text-red-300 font-mono text-[9px]"
-                          }
-                        >
-                          {successful ? "● Settled" : log.status.replaceAll("_", " ")}
-                        </Badge>
+                      <div className="flex items-center gap-2 self-start sm:self-center flex-wrap">
+                        {(log as any).outcome ? (
+                          <Badge
+                            className={`border-0 font-mono text-[9px] ${
+                              (log as any).outcome === "success"
+                                ? "bg-emerald-500/10 text-emerald-400"
+                                : (log as any).outcome === "truncated"
+                                ? "bg-amber-500/10 text-amber-300"
+                                : (log as any).outcome === "client_disconnected"
+                                ? "bg-rose-500/10 text-rose-400"
+                                : "bg-red-400/10 text-red-300"
+                            }`}
+                          >
+                            ● {String((log as any).outcome).replaceAll("_", " ").toUpperCase()}
+                          </Badge>
+                        ) : (
+                          <Badge
+                            className={
+                              successful
+                                ? "border-0 bg-emerald-500/10 text-emerald-400 font-mono text-[9px]"
+                                : "border-0 bg-red-400/10 text-red-300 font-mono text-[9px]"
+                            }
+                          >
+                            {successful ? "● Settled" : log.status.replaceAll("_", " ")}
+                          </Badge>
+                        )}
+                        {(log as any).stopReason && (
+                          <Badge className="border border-white/10 bg-white/[0.04] text-zinc-300 font-mono text-[9px]">
+                            stop: {(log as any).stopReason}
+                          </Badge>
+                        )}
+                        {((log as any).ttftMs != null || (log as any).durationMs != null || log.latencyMs != null) && (
+                          <Badge className="border border-white/10 bg-white/[0.04] text-zinc-300 font-mono text-[9px]">
+                            <Clock size={9} className="mr-1 inline" />
+                            {(log as any).durationMs != null ? `${(log as any).durationMs}ms` : (log.latencyMs != null ? `${log.latencyMs}ms` : "—")}
+                            {(log as any).ttftMs != null && ` (TTFT: ${(log as any).ttftMs}ms)`}
+                          </Badge>
+                        )}
                         <Badge className="border border-white/10 bg-white/[0.04] text-zinc-300 font-mono text-[9px]">
                           {log.stream ? "Stream (SSE)" : "Standard"}
                         </Badge>

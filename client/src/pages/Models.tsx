@@ -6,7 +6,7 @@ import { ProviderMark } from "@/components/ProviderMark";
 import { StarBorderCard } from "@/components/StarBorderCard";
 import { StarButton } from "@/components/StarButton";
 import { Badge } from "@/components/ui/badge";
-import { TOKENFORGE_MODELS, CatalogueModel } from "@/lib/modelCatalogue";
+import { QRONOS_MODELS, CatalogueModel } from "@/lib/modelCatalogue";
 import { useDynamicModelPricing } from "@/lib/useDynamicModelPricing";
 import { trpc } from "@/lib/trpc";
 import {
@@ -57,12 +57,12 @@ export default function Models() {
 
   // Unique list of providers
   const providers = useMemo(() => {
-    const list = Array.from(new Set(TOKENFORGE_MODELS.map((m) => m.provider)));
+    const list = Array.from(new Set(QRONOS_MODELS.map((m) => m.provider)));
     return ["all", ...list];
   }, []);
 
   const filteredModels = useMemo(() => {
-    return TOKENFORGE_MODELS.filter((model) => {
+    return QRONOS_MODELS.filter((model) => {
       // Search filter
       const q = searchQuery.toLowerCase().trim();
       const matchesSearch =
@@ -91,14 +91,14 @@ export default function Models() {
   }, [searchQuery, selectedProvider, tierFilter, modelMetaMap]);
 
   const freeCount = useMemo(() => {
-    return TOKENFORGE_MODELS.filter((m) => (modelMetaMap.get(m.id)?.minTier ?? "free") === "free").length;
+    return QRONOS_MODELS.filter((m) => (modelMetaMap.get(m.id)?.minTier ?? "free") === "free").length;
   }, [modelMetaMap]);
 
   const tokenPlanCount = useMemo(() => {
-    return TOKENFORGE_MODELS.filter((m) => modelMetaMap.get(m.id)?.isTokenPlan === true).length;
+    return QRONOS_MODELS.filter((m) => modelMetaMap.get(m.id)?.isTokenPlan === true).length;
   }, [modelMetaMap]);
 
-  const paidCount = TOKENFORGE_MODELS.length - freeCount;
+  const paidCount = QRONOS_MODELS.length - freeCount;
 
   const copyModelId = (id: string) => {
     navigator.clipboard.writeText(id);
@@ -125,7 +125,7 @@ export default function Models() {
           </div>
 
           <h1 className="text-4xl sm:text-5xl lg:text-6xl font-light tracking-tight text-white leading-[1.05]">
-            {TOKENFORGE_MODELS.length} Frontier Models.
+            {QRONOS_MODELS.length} Frontier Models.
             <br />
             <span className="bg-gradient-to-b from-white via-zinc-300 to-zinc-500 bg-clip-text text-transparent font-medium">
               One Universal Gateway.
@@ -143,7 +143,7 @@ export default function Models() {
             <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/[0.08] backdrop-blur-sm">
               <div className="text-[11px] font-mono text-zinc-500 uppercase tracking-wider">Verified Routes</div>
               <div className="text-2xl sm:text-3xl font-light text-white font-mono mt-1">
-                {TOKENFORGE_MODELS.length}
+                {QRONOS_MODELS.length}
               </div>
             </div>
             <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/[0.08] backdrop-blur-sm">
@@ -198,7 +198,7 @@ export default function Models() {
                     : "text-zinc-400 hover:text-white hover:bg-white/[0.04]"
                 }`}
               >
-                All ({TOKENFORGE_MODELS.length})
+                All ({QRONOS_MODELS.length})
               </button>
               <button
                 type="button"
@@ -262,7 +262,7 @@ export default function Models() {
         {/* Results Counter */}
         <div className="text-xs font-mono text-zinc-500 mb-6 flex items-center justify-between">
           <span>
-            Showing <strong className="text-zinc-300">{filteredModels.length}</strong> of {TOKENFORGE_MODELS.length}{" "}
+            Showing <strong className="text-zinc-300">{filteredModels.length}</strong> of {QRONOS_MODELS.length}{" "}
             verified model routes
           </span>
           {searchQuery && (

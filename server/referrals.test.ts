@@ -25,10 +25,10 @@ const dashboardSource = readFileSync(path.resolve(import.meta.dirname, "../clien
 const discordSource = readFileSync(path.resolve(import.meta.dirname, "./discordOAuth.ts"), "utf8");
 
 describe("TokenForge referrals", () => {
-  it("uses the canonical hosted affiliate URL and an equal $20 reward for each eligible account", () => {
+  it("uses the canonical hosted affiliate URL and 25% recharge commission for each eligible account", () => {
     expect(QRONOS_PUBLIC_ORIGIN).toBeTruthy();
-    expect(TOKENFORGE_REFERRAL_REWARD_USD).toBe(20);
-    expect(TOKENFORGE_REFERRAL_REWARD_NANOS).toBe(20_000_000_000);
+    expect(TOKENFORGE_REFERRAL_REWARD_USD).toBe(0);
+    expect(TOKENFORGE_REFERRAL_REWARD_NANOS).toBe(0);
     expect(TOKENFORGE_AFFILIATE_CODE_LENGTH).toBe(4);
     expect(buildReferralInviteUrl("a7xp")).toContain("/sign-up?aff=a7xp");
   });
@@ -45,7 +45,7 @@ describe("TokenForge referrals", () => {
     expect(dbSource).toContain("!invitation || invitation.userId === referredUserId");
     expect(dbSource).toContain("reason: \"already_rewarded\"");
     expect(dbSource).toContain("referralAttributions");
-    expect(dbSource).toContain("kind: \"referral_reward\"");
+    expect(dbSource).toContain("kind: \"referral_commission\"");
     expect(dbSource).toContain("await awardReferralForNewUser(userId, input.referralCode)");
     expect(routerSource).not.toContain("referralCode: z.string().trim().max(100).optional()");
     expect(routerSource).toContain("getReferralOverview(ctx.user.id)");

@@ -37,8 +37,8 @@ export interface UPIOrder {
 const upiOrders = new Map<string, UPIOrder>();
 const processedUtrs = new Set<string>();
 
-export const DEFAULT_UPI_ID = "tokenforge@upi";
-export const DEFAULT_MERCHANT_NAME = "TokenForge";
+export const DEFAULT_UPI_ID = "qronos@upi";
+export const DEFAULT_MERCHANT_NAME = "Qronos AI";
 
 /** Strict regex pattern for UPI Virtual Payment Address (VPA) */
 export const UPI_VPA_REGEX = /^[a-zA-Z0-9.\-_]{2,256}@[a-zA-Z]{2,64}$/;

@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from "react";
-import { TOKENFORGE_MODELS, type CatalogueModel } from "@/lib/modelCatalogue";
+import { QRONOS_MODELS, type CatalogueModel } from "@/lib/modelCatalogue";
 import { useDynamicModelPricing } from "@/lib/useDynamicModelPricing";
 import { Search, Sparkles, Percent, ArrowUpRight, Check, Zap, HelpCircle } from "lucide-react";
 import { Link } from "wouter";
@@ -31,7 +31,7 @@ export function ModelPricingTable({ onOpenTopUpModal }: ModelPricingTableProps) 
   const { pricingMap } = useDynamicModelPricing();
 
   const filteredModels = useMemo(() => {
-    return TOKENFORGE_MODELS.filter((model) => {
+    return QRONOS_MODELS.filter((model) => {
       // Provider filter
       if (selectedProvider !== "all") {
         if (selectedProvider === "Claude") {

@@ -1,12 +1,12 @@
 """
-TokenForge Dual-Rail Payment Subsystem - Unified FastAPI Master Service
+Qronos AI Dual-Rail Payment Subsystem - Unified FastAPI Master Service
 ------------------------------------------------------------------------
 Cleanly separating:
 1. Global / International: Solana Pay (native SOL on Solana Mainnet-Beta via Helius)
 2. Domestic India: Direct UPI QR + UTR Verification (zero-fee via NPCI standard intent links)
 
 Run with:
-    uvicorn tokenforge_payments_fastapi:app --reload --port 8000
+    uvicorn qronos_payments_fastapi:app --reload --port 8000
 """
 
 import os
@@ -19,7 +19,7 @@ from upi_pay_fastapi import router as upi_router, admin_router as upi_admin_rout
 from dodo_pay_fastapi import router as dodo_router
 
 app = FastAPI(
-    title="TokenForge Unified Multi-Rail Payment Subsystem",
+    title="Qronos AI Unified Multi-Rail Payment Subsystem",
     description="Multi-rail payment processing: Dodo Payments (Global Cards/Apple Pay), Solana Pay (Crypto), & Direct UPI (India Domestic)",
     version="2.1.0",
 )
@@ -48,7 +48,7 @@ app.include_router(dodo_router)
 @app.get("/")
 async def payment_subsystem_info():
     return {
-        "service": "TokenForge Dual-Rail Payment Subsystem",
+        "service": "Qronos AI Dual-Rail Payment Subsystem",
         "status": "operational",
         "rails": {
             "global_crypto": {

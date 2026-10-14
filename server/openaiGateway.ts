@@ -457,7 +457,7 @@ export function cleanHeaderBearerToken(key: string | undefined | null): string {
 export function tokenForgeRequestIpHash(req: Pick<Request, "header" | "ip">) {
   // Use Express-validated req.ip first (backed by trust proxy) to prevent client header spoofing
   const ip = req.ip || req.header("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
-  return createHmac("sha256", process.env.JWT_SECRET ?? "tokenforge-local-ip-salt").update(ip).digest("hex");
+  return createHmac("sha256", process.env.JWT_SECRET ?? "qronos-local-ip-salt").update(ip).digest("hex");
 }
 
 export function tokenForgeRateHeaders(limit: number, remaining: number) {
@@ -983,7 +983,7 @@ export async function resolveModelCandidateProviders<T extends { id?: string; la
     isDocument ? "documents/PDFs" : null,
   ].filter(Boolean).join(" and ");
 
-  const errorMsg = `This request contains ${missingKinds || "multimodal"} data, but no provider attached to '${modelKey}' has ${isVisual ? "Vision" : ""}${isVisual && isDocument ? " / " : ""}${isDocument ? "Documents" : ""} enabled. In the TokenForge Admin panel (Universal Model Hub), please enable the Vision or Documents toggle on the providers attached to '${modelKey}'.`;
+  const errorMsg = `This request contains ${missingKinds || "multimodal"} data, but no provider attached to '${modelKey}' has ${isVisual ? "Vision" : ""}${isVisual && isDocument ? " / " : ""}${isDocument ? "Documents" : ""} enabled. In the Qronos AI Admin panel (Universal Model Hub), please enable the Vision or Documents toggle on the providers attached to '${modelKey}'.`;
 
   if (context) {
     context.rawErrorMessage = `[PRE-FLIGHT] No ${missingKinds || "multimodal"}-enabled providers attached to model '${modelKey}'.`;
@@ -1138,7 +1138,7 @@ function readWithIdleTimeout(reader: ReadableStreamDefaultReader<Uint8Array>) {
 
 async function forwardWithCredentialFailover(providerSlug: CredentialTelemetryProvider, input: ChatInput, signal: AbortSignal, selectCredential: () => CredentialSelection | null | Promise<CredentialSelection | null>, request: (credential: string) => Promise<globalThis.Response>) {
   const first = await selectCredential();
-  if (!first) throw new Error("TokenForge inference is not configured");
+  if (!first) throw new Error("Qronos AI inference is not configured");
   let candidate = first;
   let lastResponse: globalThis.Response | null = null;
   for (let attempt = 0; attempt < candidate.poolSize; attempt += 1) {
@@ -1173,7 +1173,7 @@ async function forwardWithCredentialFailover(providerSlug: CredentialTelemetryPr
 
 async function forwardFxqidianRequest(input: ChatInput, signal: AbortSignal) {
   const base = process.env.FXQIDIAN_BASE_URL?.replace(/\/$/, "");
-  if (!base) throw new Error("TokenForge inference is not configured");
+  if (!base) throw new Error("Qronos AI inference is not configured");
   return forwardWithCredentialFailover(FXQIDIAN_PROVIDER_SLUG, input, signal, () => selectNextFxqidianCredentialWithSlot(), secret => fetch(`${base}/v1/chat/completions`, {
     method: "POST",
     headers: { Authorization: `Bearer ${secret.replace(/[\r\n]+/g, '').trim()}`, "Content-Type": "application/json", Accept: input.stream ? "text/event-stream" : "application/json" },
@@ -1184,7 +1184,7 @@ async function forwardFxqidianRequest(input: ChatInput, signal: AbortSignal) {
 
 async function forwardClusterRequest(input: ChatInput, signal: AbortSignal) {
   const base = process.env.CLUSTER_PROTOCOL_BASE_URL?.replace(/\/$/, "");
-  if (!base) throw new Error("TokenForge Cluster Protocol inference is not configured");
+  if (!base) throw new Error("Qronos AI Cluster Protocol inference is not configured");
   const requestBody = input.stream
     ? { ...input, stream_options: { include_usage: true } }
     : input;
@@ -1200,7 +1200,7 @@ async function forwardTokenHarborRequest(input: ChatInput, signal: AbortSignal) 
   if (input.model === "deepseek-v4-pro") return forwardDedicatedDeepseekV4ProRequest(input, signal);
   const base = process.env.TOKENHARBOR_BASE_URL?.replace(/\/$/, "");
   const secret = process.env.TOKENHARBOR_API_KEY;
-  if (!base || !secret) throw new Error("TokenForge TokenHarbor inference is not configured");
+  if (!base || !secret) throw new Error("Qronos AI TokenHarbor inference is not configured");
   const upstreamModel = typeof input.model === "string" ? getTokenForgeUpstreamModelId(input.model) : undefined;
   const requestBody = upstreamModel ? { ...input, model: upstreamModel } : input;
   try {
@@ -1413,7 +1413,7 @@ async function forwardDedicatedGlm53Request(input: ChatInput, signal: AbortSigna
     }
   }
   if (lastStatus !== null) return publicManagedProviderFailureResponse(lastStatus);
-  throw lastError instanceof Error ? lastError : new Error("TokenForge GLM 5.3 inference is not configured or every provider is temporarily unavailable");
+  throw lastError instanceof Error ? lastError : new Error("Qronos AI GLM 5.3 inference is not configured or every provider is temporarily unavailable");
 }
 
 let deepseekV4ProProviderCursor = 0;
@@ -1663,7 +1663,7 @@ async function forwardDedicatedSonnet46Request(input: ChatInput, signal: AbortSi
     }
   }
   if (lastResponse) return lastResponse;
-  throw lastError instanceof Error ? lastError : new Error("TokenForge Claude Sonnet 4.6 inference is not configured or every provider is temporarily unavailable");
+  throw lastError instanceof Error ? lastError : new Error("Qronos AI Claude Sonnet 4.6 inference is not configured or every provider is temporarily unavailable");
 }
 
 let claudeOpus5ProviderCursor = 0;
@@ -2579,7 +2579,7 @@ async function tryForwardClaudeOpus5ThroughRenderSwarm(input: ChatInput, signal:
           Authorization: `Bearer ${runtime.apiKey.replace(/[\r\n]+/g, '').trim()}`,
           "Content-Type": "application/json",
           Accept: input.stream ? "text/event-stream" : "application/json",
-          "X-TokenForge-Integration": "authorized-render-capacity-router",
+          "X-Qronos-Integration": "authorized-render-capacity-router",
         },
         body: JSON.stringify({ ...input, model: runtime.model }),
         signal: requestSignal,
@@ -2873,7 +2873,7 @@ async function forwardDedicatedClaudeOpus5Request(input: ChatInput, signal: Abor
     }
     return publicManagedProviderFailureResponse(lastFailureStatus);
   }
-  const genericFallback = "TokenForge Claude Opus 5 inference is not configured or every provider is temporarily unavailable";
+  const genericFallback = "Qronos AI Claude Opus 5 inference is not configured or every provider is temporarily unavailable";
   if (context && !context.rawErrorMessage) {
     context.rawErrorMessage = `[PRE-FLIGHT] ${lastError instanceof Error ? lastError.message : genericFallback}`;
   }
@@ -2974,7 +2974,7 @@ async function forwardDedicatedClaudeFable5Request(input: ChatInput, signal: Abo
     }
   }
   if (lastStatus !== null) return publicManagedProviderFailureResponse(lastStatus);
-  throw lastError instanceof Error ? lastError : new Error("TokenForge Claude Fable 5.1 inference is not configured or every provider is temporarily unavailable");
+  throw lastError instanceof Error ? lastError : new Error("Qronos AI Claude Fable 5.1 inference is not configured or every provider is temporarily unavailable");
 }
 
 let qwen38MaxProviderCursor = 0;
@@ -3076,7 +3076,7 @@ async function forwardDedicatedQwen38MaxRequest(input: ChatInput, signal: AbortS
     }
   }
   if (lastStatus !== null) return publicManagedProviderFailureResponse(lastStatus);
-  throw lastError instanceof Error ? lastError : new Error("TokenForge Qwen 3.8 Max inference is not configured or every provider is temporarily unavailable");
+  throw lastError instanceof Error ? lastError : new Error("Qronos AI Qwen 3.8 Max inference is not configured or every provider is temporarily unavailable");
 }
 
 let gpt6AstraProviderCursor = 0;
@@ -3178,7 +3178,7 @@ async function forwardDedicatedGpt6AstraRequest(input: ChatInput, signal: AbortS
     }
   }
   if (lastStatus !== null) return publicManagedProviderFailureResponse(lastStatus);
-  throw lastError instanceof Error ? lastError : new Error("TokenForge GPT-6 Astra inference is not configured or every provider is temporarily unavailable");
+  throw lastError instanceof Error ? lastError : new Error("Qronos AI GPT-6 Astra inference is not configured or every provider is temporarily unavailable");
 }
 
 let kimiK3ProviderCursor = 0;
@@ -3280,7 +3280,7 @@ async function forwardDedicatedKimiK3Request(input: ChatInput, signal: AbortSign
     }
   }
   if (lastStatus !== null) return publicManagedProviderFailureResponse(lastStatus);
-  throw lastError instanceof Error ? lastError : new Error("TokenForge Kimi K3 inference is not configured or every provider is temporarily unavailable");
+  throw lastError instanceof Error ? lastError : new Error("Qronos AI Kimi K3 inference is not configured or every provider is temporarily unavailable");
 }
 
 const universalModelProviderCursors = new Map<string, number>();
@@ -3368,7 +3368,7 @@ export async function forwardUniversalModelRequest(
             Authorization: `Bearer ${selectedCredential.credential.replace(/[\r\n]+/g, '').trim()}`,
             "Content-Type": "application/json",
             Accept: input.stream ? "text/event-stream" : "application/json",
-            ...(isOpenRouterEndpoint(url) ? { "HTTP-Referer": "https://tokenforge.ai", "X-Title": "TokenForge" } : {}),
+            ...(isOpenRouterEndpoint(url) ? { "HTTP-Referer": "https://qronos.me", "X-Title": "Qronos AI" } : {}),
           },
           signal: responseStart.signal,
         }, sanitizedBody);
@@ -3471,14 +3471,14 @@ export async function forwardUniversalModelRequest(
   }
 
   if (lastStatus !== null) return publicManagedProviderFailureResponse(lastStatus);
-  throw lastError instanceof Error ? lastError : new Error(`TokenForge ${displayName} inference is not configured or every provider is temporarily unavailable`);
+  throw lastError instanceof Error ? lastError : new Error(`Qronos AI ${displayName} inference is not configured or every provider is temporarily unavailable`);
 }
 
 /** OrcaRouter remains only for the separately configured Qwen3.8 27B route. */
 async function forwardOrcaRouterRequest(input: ChatInput, signal: AbortSignal, context?: ProviderRequestContext) {
   const base = process.env.CLAUDE_OPUS5_BASE_URL?.replace(/\/$/, "");
   const upstreamModel = typeof input.model === "string" ? getTokenForgeUpstreamModelId(input.model) : undefined;
-  if (!base || !upstreamModel) throw new Error("TokenForge OrcaRouter inference is not configured");
+  if (!base || !upstreamModel) throw new Error("Qronos AI OrcaRouter inference is not configured");
   setContextCandidateProvider(context, "OrcaRouter");
   const requestBody = sanitizeUpstreamChatInput({ ...input, model: upstreamModel });
   return forwardWithCredentialFailover(CLAUDE_OPUS5_PROVIDER_SLUG, input, signal, selectNextOrcaRouterCredentialWithSlot, credential =>
@@ -3504,7 +3504,7 @@ async function forwardTokenRouterRequest(input: ChatInput, signal: AbortSignal, 
   const base = process.env.TOKENROUTER_BASE_URL?.replace(/\/$/, "");
   const configuredModel = process.env.TOKENROUTER_MODEL?.trim();
   const upstreamModel = getTokenForgeUpstreamModelId(String(input.model));
-  if (!base || !upstreamModel) throw new Error("TokenForge TokenRouter inference is not configured");
+  if (!base || !upstreamModel) throw new Error("Qronos AI TokenRouter inference is not configured");
   const requestBody = sanitizeUpstreamChatInput({ ...input, model: upstreamModel });
   return forwardWithCredentialFailover(TOKENROUTER_PROVIDER_SLUG, input, signal, selectNextTokenRouterCredentialWithSlot, credential =>
     fetch(`${base}/v1/chat/completions`, {
@@ -3524,7 +3524,7 @@ export async function forwardTokenRouterAnthropicMessagesRequest(input: { model:
   const configuredClaudeFable5Model = process.env.TOKENROUTER_CLAUDE_FABLE5_MODEL?.trim();
   const configuredClaudeOpus5Model = process.env.TOKENROUTER_CLAUDE_OPUS5_MODEL?.trim();
   const upstreamModel = input.model === "claude-opus-5" ? configuredClaudeOpus5Model : configuredClaudeFable5Model;
-  if (!base || !upstreamModel) throw new Error("TokenForge native TokenRouter Messages inference is not configured");
+  if (!base || !upstreamModel) throw new Error("Qronos AI native TokenRouter Messages inference is not configured");
   const requestBody = { ...input, model: upstreamModel };
   const response = await forwardWithCredentialFailover(TOKENROUTER_PROVIDER_SLUG, input, signal, selectNextTokenRouterCredentialWithSlot, credential =>
     fetch(`${base}/v1/messages`, {
@@ -3905,7 +3905,7 @@ export async function forwardProviderRequest(rawModel: TokenForgeModelId, rawInp
   }
   if (provider === CLAUDE_OPUS5_PROVIDER_SLUG) return forwardOrcaRouterRequest(effectiveInput, signal, context);
   if (provider === TOKENROUTER_PROVIDER_SLUG) return forwardTokenRouterRequest(effectiveInput, signal, context);
-  throw new Error(`TokenForge does not support model '${rawModel}'. The model was renamed, retired, or is not in the active TokenForge catalogue.`);
+  throw new Error(`Qronos AI does not support model '${rawModel}'. The model was renamed, retired, or is not in the active Qronos AI catalogue.`);
 }
 
 export function upstreamError(payload: unknown, status?: number) {
@@ -4271,8 +4271,9 @@ export async function runPlaygroundCompletion(input: {
     if (!upstream.ok) {
       const payload = await upstream.json().catch(() => null);
       const message = publicProviderErrorMessage(upstream.status);
+      const durationMs = Date.now() - startedAt;
       await settleReservedCredit({ userId: input.userId, requestId, reservedNanos, finalChargeNanos: 0, releaseReason: "Provider request was not completed" });
-      await recordUsage({ requestId, userId: input.userId, modelId: input.model, source: "playground", stream: false, status: "provider_error", sourceIpHash: input.sourceIpHash, provider: providerContext.providerLabel, latencyMs: Date.now() - startedAt, errorMessage: message });
+      await recordUsage({ requestId, userId: input.userId, modelId: input.model, source: "playground", stream: false, status: "provider_error", outcome: "upstream_error", sourceIpHash: input.sourceIpHash, provider: providerContext.providerLabel, latencyMs: durationMs, durationMs, ttftMs: durationMs, errorMessage: message });
       throw new TokenForgePlaygroundError("provider_unavailable", message);
     }
     const payload = await upstream.json().catch(() => null);
@@ -4280,8 +4281,9 @@ export async function runPlaygroundCompletion(input: {
     const content = textContentFrom(publicPayload);
     if (!payload || isManagedProviderFailurePayload(payload) || !content || ((input.model === "claude-opus-5" || input.model === "claude-fable-5.1" || input.model === "gpt-6-astra") && isClaudeOpus5ZeroOutputFailure(payload))) {
       const message = publicProviderErrorMessage();
+      const durationMs = Date.now() - startedAt;
       await settleReservedCredit({ userId: input.userId, requestId, reservedNanos, finalChargeNanos: 0, releaseReason: "Provider response was invalid" });
-      await recordUsage({ requestId, userId: input.userId, modelId: input.model, source: "playground", stream: false, status: "provider_error", sourceIpHash: input.sourceIpHash, provider: providerContext.providerLabel, latencyMs: Date.now() - startedAt, errorMessage: message });
+      await recordUsage({ requestId, userId: input.userId, modelId: input.model, source: "playground", stream: false, status: "provider_error", outcome: "upstream_error", sourceIpHash: input.sourceIpHash, provider: providerContext.providerLabel, latencyMs: durationMs, durationMs, ttftMs: durationMs, errorMessage: message });
       throw new TokenForgePlaygroundError("provider_unavailable", message);
     }
     const thinking = input.model === "qwen3.8-max" || input.model === "claude-fable-5.1" ? reasoningContentFrom(publicPayload) : null;
@@ -4289,7 +4291,27 @@ export async function runPlaygroundCompletion(input: {
     const tokens = normalizedTokens(usageFrom(payload), estimatedInputTokens, fallbackText);
     const chargeNanos = calculateCreditChargeNanos(input.model, tokens.inputTokens, tokens.outputTokens, playgroundTier);
     const settlement = await settleReservedCredit({ userId: input.userId, requestId, reservedNanos, finalChargeNanos: chargeNanos });
-    await recordUsage({ requestId, userId: input.userId, modelId: input.model, source: "playground", stream: false, status: "success", ...tokens, chargeNanos: settlement.chargedNanos, sourceIpHash: input.sourceIpHash, provider: providerContext.providerLabel, latencyMs: Date.now() - startedAt });
+    const durationMs = Date.now() - startedAt;
+    const stopReason = (publicPayload as any)?.choices?.[0]?.finish_reason || "stop";
+    const outcome = (stopReason === "max_tokens" || stopReason === "length") ? "truncated" : "success";
+
+    await recordUsage({
+      requestId,
+      userId: input.userId,
+      modelId: input.model,
+      source: "playground",
+      stream: false,
+      status: "success",
+      ...tokens,
+      chargeNanos: settlement.chargedNanos,
+      sourceIpHash: input.sourceIpHash,
+      provider: providerContext.providerLabel,
+      latencyMs: durationMs,
+      durationMs,
+      ttftMs: durationMs,
+      stopReason,
+      outcome,
+    });
     if (await isUserMessageLoggingEnabled(input.userId)) {
       void recordUserInteractionLog({
         userId: input.userId,
@@ -4362,7 +4384,7 @@ async function streamPlaygroundCompletion(input: {
     throw new TokenForgePlaygroundError("platform_maintenance", PLAYGROUND_MAINTENANCE_ERROR_MESSAGE);
   }
   if (!(await isModelAvailable(input.model))) {
-    throw new TokenForgePlaygroundError("model_unavailable", "The requested model is currently unavailable in the active TokenForge catalogue.");
+    throw new TokenForgePlaygroundError("model_unavailable", "The requested model is currently unavailable in the active Qronos AI catalogue.");
   }
   const userTier = await getUserTier(input.userId);
   const minTier = await getModelMinTier(input.model);
@@ -4454,11 +4476,27 @@ async function streamPlaygroundCompletion(input: {
     let streamedOutputText = "";
     let streamFailed = false;
     let streamFailedMessage: string | undefined;
-    input.req.on("close", () => aborter.abort());
+    let clientDisconnected = false;
+    let firstTokenAt: number | null = null;
+    let stopReason = "none";
+
+    const onClientClose = () => {
+      if (!input.res.writableEnded) {
+        clientDisconnected = true;
+        streamFailed = true;
+        streamFailedMessage = "Client disconnected before stream completed.";
+        aborter.abort();
+        try { reader.cancel().catch(() => {}); } catch {}
+      }
+    };
+    input.req.on("close", onClientClose);
+    input.res.on("close", onClientClose);
+
     try {
       while (true) {
         const chunk = await readWithIdleTimeout(reader);
         if (chunk.done) break;
+        if (firstTokenAt === null) firstTokenAt = Date.now();
         const value = decoder.decode(chunk.value, { stream: true });
         buffer += value;
         const lines = buffer.split("\n");
@@ -4470,7 +4508,11 @@ async function streamPlaygroundCompletion(input: {
           try {
             const parsed = JSON.parse(payload);
             finalUsage = { ...finalUsage, ...usageFrom(parsed) };
-            const delta = parsed.choices?.[0]?.delta;
+            const choice = parsed.choices?.[0];
+            if (choice?.finish_reason) {
+              stopReason = choice.finish_reason;
+            }
+            const delta = choice?.delta;
             if (typeof delta?.content === "string") streamedOutputText += delta.content;
             if (typeof delta?.reasoning_content === "string") streamedOutputText += delta.reasoning_content;
             if (typeof delta?.reasoning === "string") streamedOutputText += delta.reasoning;
@@ -4489,10 +4531,49 @@ async function streamPlaygroundCompletion(input: {
       streamFailedMessage = "The selected provider stream did not complete.";
     } finally {
       clearTimeout(timeout);
+      const durationMs = Date.now() - startedAt;
+      const ttftMs = firstTokenAt !== null ? firstTokenAt - startedAt : null;
+      let outcome: "success" | "truncated" | "client_disconnected" | "upstream_error" | "rejected";
+      if (clientDisconnected) {
+        outcome = "client_disconnected";
+      } else if (streamFailed) {
+        outcome = "upstream_error";
+      } else if (stopReason === "max_tokens" || stopReason === "length") {
+        outcome = "truncated";
+      } else {
+        outcome = "success";
+      }
+
       const tokens = normalizedTokens(finalUsage, estimatedInputTokens, streamedOutputText);
-      const chargeNanos = streamFailed ? 0 : calculateCreditChargeNanos(input.model, tokens.inputTokens, tokens.outputTokens, playgroundTier);
-      const settlement = await settleReservedCredit({ userId: input.userId, requestId, reservedNanos, finalChargeNanos: chargeNanos, releaseReason: streamFailed ? "Playground streaming request was cancelled" : undefined });
-      await recordUsage({ requestId, userId: input.userId, modelId: input.model, source: "playground", stream: true, status: streamFailed ? "cancelled" : "success", ...tokens, chargeNanos: settlement.chargedNanos, sourceIpHash: input.sourceIpHash, provider: providerContext.providerLabel, latencyMs: Date.now() - startedAt, errorMessage: streamFailed ? (streamFailedMessage ?? "The selected provider stream was cancelled.") : undefined });
+      const chargeNanos = (streamFailed || clientDisconnected) ? 0 : calculateCreditChargeNanos(input.model, tokens.inputTokens, tokens.outputTokens, playgroundTier);
+      const settlement = await settleReservedCredit({
+        userId: input.userId,
+        requestId,
+        reservedNanos,
+        finalChargeNanos: chargeNanos,
+        releaseReason: clientDisconnected
+          ? "Playground client disconnected; reservation released"
+          : (streamFailed ? "Playground streaming request was cancelled" : undefined),
+      });
+      await recordUsage({
+        requestId,
+        userId: input.userId,
+        modelId: input.model,
+        source: "playground",
+        stream: true,
+        status: clientDisconnected ? "cancelled" : (streamFailed ? "provider_error" : "success"),
+        ...tokens,
+        chargeNanos: settlement.chargedNanos,
+        sourceIpHash: input.sourceIpHash,
+        provider: providerContext.providerLabel,
+        latencyMs: durationMs,
+        durationMs,
+        ttftMs,
+        stopReason,
+        outcome,
+        errorMessage: clientDisconnected ? "Client disconnected before stream completed." : (streamFailed ? (streamFailedMessage ?? "The selected provider stream was cancelled.") : undefined),
+        rawErrorMessage: clientDisconnected ? "[CLIENT_DISCONNECT] Caller closed socket before stream completion" : undefined,
+      });
       if (!streamFailed && (await isUserMessageLoggingEnabled(input.userId))) {
         void recordUserInteractionLog({
           userId: input.userId,
@@ -4817,6 +4898,10 @@ export function registerOpenAiGateway(app: Express) {
       const reasoningDiagnosticTag = isReasoningOnly
         ? "[ReasoningFallback: content was empty, returned reasoning]"
         : undefined;
+      const durationMs = Date.now() - startedAt;
+      const stopReason = (publicPayload as any)?.choices?.[0]?.finish_reason || "stop";
+      const outcome = (stopReason === "max_tokens" || stopReason === "length") ? "truncated" : "success";
+
       await recordUsage({
         requestId,
         userId: key.userId,
@@ -4829,7 +4914,11 @@ export function registerOpenAiGateway(app: Express) {
         chargeNanos: settlement.chargedNanos,
         sourceIpHash: ipHash,
         provider: finalizeProviderLabel(providerContext.providerLabel, providerContext),
-        latencyMs: Date.now() - startedAt,
+        latencyMs: durationMs,
+        durationMs,
+        ttftMs: durationMs,
+        stopReason,
+        outcome,
         rawErrorMessage: reasoningDiagnosticTag,
         reasoningReturned: isReasoningOnly,
       });
@@ -4863,8 +4952,8 @@ export function registerOpenAiGateway(app: Express) {
         }).catch(() => undefined);
       }
       res.setHeader("x-request-id", requestId);
-      res.setHeader("x-tokenforge-credit-balance", String(settlement.balanceNanos));
-      res.setHeader("x-tokenforge-credit-charge", String(settlement.chargedNanos));
+      res.setHeader("x-qronos-credit-balance", String(settlement.balanceNanos));
+      res.setHeader("x-qronos-credit-charge", String(settlement.chargedNanos));
       return res.status(200).json(publicPayload);
     }
 
@@ -4891,11 +4980,27 @@ export function registerOpenAiGateway(app: Express) {
     let isStreamReasoningPromoted = false;
     let streamFailed = false;
     let streamFailedMessage: string | undefined;
-    req.on("close", () => aborter.abort());
+    let clientDisconnected = false;
+    let firstTokenAt: number | null = null;
+    let stopReason = "none";
+
+    const onClientClose = () => {
+      if (!res.writableEnded) {
+        clientDisconnected = true;
+        streamFailed = true;
+        streamFailedMessage = "Client disconnected before stream completed.";
+        aborter.abort();
+        try { reader.cancel().catch(() => {}); } catch {}
+      }
+    };
+    req.on("close", onClientClose);
+    res.on("close", onClientClose);
+
     try {
       while (true) {
         const chunk = await reader.read();
         if (chunk.done) break;
+        if (firstTokenAt === null) firstTokenAt = Date.now();
         const value = decoder.decode(chunk.value, { stream: true });
         buffer += value;
         const lines = buffer.split("\n");
@@ -4907,7 +5012,11 @@ export function registerOpenAiGateway(app: Express) {
           try {
             const parsed = JSON.parse(payload);
             finalUsage = { ...finalUsage, ...usageFrom(parsed) };
-            const delta = parsed.choices?.[0]?.delta;
+            const choice = parsed.choices?.[0];
+            if (choice?.finish_reason) {
+              stopReason = choice.finish_reason;
+            }
+            const delta = choice?.delta;
             if (typeof delta?.content === "string") {
               streamedContentText += delta.content;
               streamedOutputText += delta.content;
@@ -4944,8 +5053,21 @@ export function registerOpenAiGateway(app: Express) {
       streamFailedMessage = "The selected provider stream did not complete.";
     } finally {
       clearTimeout(timeout);
+      const durationMs = Date.now() - startedAt;
+      const ttftMs = firstTokenAt !== null ? firstTokenAt - startedAt : null;
+      let outcome: "success" | "truncated" | "client_disconnected" | "upstream_error" | "rejected";
+      if (clientDisconnected) {
+        outcome = "client_disconnected";
+      } else if (streamFailed) {
+        outcome = "upstream_error";
+      } else if (stopReason === "max_tokens" || stopReason === "length") {
+        outcome = "truncated";
+      } else {
+        outcome = "success";
+      }
+
       const tokens = normalizedTokens(finalUsage, estimatedInputTokens, streamedOutputText);
-      const chargeNanos = streamFailed ? 0 : calculateCreditChargeNanos(input.model as TokenForgeModelId, tokens.inputTokens, tokens.outputTokens, pricingTier);
+      const chargeNanos = (streamFailed || clientDisconnected) ? 0 : calculateCreditChargeNanos(input.model as TokenForgeModelId, tokens.inputTokens, tokens.outputTokens, pricingTier);
       const settlement = await settleReservedCredit({
         userId: key.userId,
         requestId,
@@ -4953,7 +5075,9 @@ export function registerOpenAiGateway(app: Express) {
         finalChargeNanos: chargeNanos,
         usedTokens: tokens.totalTokens ?? (tokens.inputTokens + tokens.outputTokens),
         keyGroup,
-        releaseReason: streamFailed ? "Streaming request was cancelled" : undefined,
+        releaseReason: clientDisconnected
+          ? "Client disconnected prematurely; reservation released"
+          : (streamFailed ? "Streaming request was cancelled" : undefined),
       });
       const streamReasoningTag = isStreamReasoningPromoted
         ? "[ReasoningFallback: content was empty, returned reasoning]"
@@ -4965,14 +5089,18 @@ export function registerOpenAiGateway(app: Express) {
         modelId: input.model,
         source: "api",
         stream: true,
-        status: streamFailed ? "cancelled" : "success",
+        status: clientDisconnected ? "cancelled" : (streamFailed ? "provider_error" : "success"),
         ...tokens,
         chargeNanos: settlement.chargedNanos,
         sourceIpHash: ipHash,
         provider: finalizeProviderLabel(providerContext.providerLabel, providerContext),
-        latencyMs: Date.now() - startedAt,
-        errorMessage: streamFailed ? (streamFailedMessage ?? "The selected provider stream was cancelled.") : undefined,
-        rawErrorMessage: streamFailed ? (streamFailedMessage ?? "The selected provider stream was cancelled.") : streamReasoningTag,
+        latencyMs: durationMs,
+        durationMs,
+        ttftMs,
+        stopReason,
+        outcome,
+        errorMessage: clientDisconnected ? "Client disconnected before stream completed." : (streamFailed ? (streamFailedMessage ?? "The selected provider stream was cancelled.") : undefined),
+        rawErrorMessage: clientDisconnected ? "[CLIENT_DISCONNECT] Caller closed socket before stream completion" : (streamFailed ? (streamFailedMessage ?? "The selected provider stream was cancelled.") : streamReasoningTag),
         reasoningReturned: isStreamReasoningPromoted,
       });
       if (isCacheDebugEnabled()) {

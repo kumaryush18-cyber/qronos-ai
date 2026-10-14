@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Loader2,
   Radio,
@@ -11,9 +11,17 @@ import {
   CheckCircle2,
   XCircle,
   Smartphone,
+  Search,
+  Filter,
+  Layers,
+  Clock,
+  Zap,
+  Flame,
+  X,
+  ArrowUpDown,
 } from "lucide-react";
 
-type LiveRequest = {
+export type LiveRequest = {
   requestId: string;
   userId: number;
   modelId: string;
@@ -22,7 +30,12 @@ type LiveRequest = {
   stream: boolean;
   inputTokens: number;
   outputTokens: number;
+  totalTokens?: number;
   latencyMs?: number;
+  ttftMs?: number | null;
+  durationMs?: number | null;
+  stopReason?: string | null;
+  outcome?: "success" | "truncated" | "client_disconnected" | "upstream_error" | "rejected";
   provider?: string;
   errorMessage?: string;
   rawErrorMessage?: string;
@@ -31,12 +44,42 @@ type LiveRequest = {
   reasoningReturned?: boolean;
 };
 
-const STATUS_LABEL: Record<LiveRequest["status"], { text: string; cls: string; dot: string }> = {
-  success: { text: "Success", cls: "text-emerald-400 bg-emerald-500/10 border-emerald-500/25", dot: "bg-emerald-400" },
-  provider_error: { text: "Provider error", cls: "text-red-300 bg-red-400/10 border-red-300/25", dot: "bg-red-500" },
-  rejected: { text: "Rejected", cls: "text-amber-200 bg-amber-300/10 border-amber-300/25", dot: "bg-amber-400" },
-  cancelled: { text: "Cancelled", cls: "text-zinc-400 bg-white/6 border-white/12", dot: "bg-zinc-400" },
+const OUTCOME_LABEL: Record<string, { text: string; cls: string; dot: string }> = {
+  success: {
+    text: "Success",
+    cls: "text-emerald-400 bg-emerald-500/10 border-emerald-500/25",
+    dot: "#10b981",
+  },
+  truncated: {
+    text: "Truncated",
+    cls: "text-amber-300 bg-amber-500/10 border-amber-500/25",
+    dot: "#f59e0b",
+  },
+  client_disconnected: {
+    text: "Client Disconnected",
+    cls: "text-rose-400 bg-rose-500/10 border-rose-500/25",
+    dot: "#f43f5e",
+  },
+  upstream_error: {
+    text: "Upstream Error",
+    cls: "text-red-400 bg-red-500/10 border-red-500/25",
+    dot: "#ef4444",
+  },
+  rejected: {
+    text: "Rejected",
+    cls: "text-orange-300 bg-orange-500/10 border-orange-500/25",
+    dot: "#f97316",
+  },
 };
+
+function resolveOutcome(row: LiveRequest): "success" | "truncated" | "client_disconnected" | "upstream_error" | "rejected" {
+  if (row.outcome) return row.outcome;
+  if (row.rawErrorMessage?.includes("[CLIENT_DISCONNECT]") || row.status === "cancelled") return "client_disconnected";
+  if (row.stopReason === "max_tokens" || row.stopReason === "length") return "truncated";
+  if (row.status === "rejected") return "rejected";
+  if (row.status === "provider_error") return "upstream_error";
+  return "success";
+}
 
 const MAX_ROWS = 300;
 
@@ -47,7 +90,6 @@ function playAlertChime() {
     const ctx = new AudioContextClass();
     const now = ctx.currentTime;
 
-    // Tone 1: 587.33 Hz (D5 alert)
     const osc1 = ctx.createOscillator();
     const gain1 = ctx.createGain();
     osc1.type = "sine";
@@ -59,7 +101,6 @@ function playAlertChime() {
     osc1.start(now);
     osc1.stop(now + 0.2);
 
-    // Tone 2: 440 Hz (A4 alert low tone)
     const osc2 = ctx.createOscillator();
     const gain2 = ctx.createGain();
     osc2.type = "triangle";
@@ -75,18 +116,13 @@ function playAlertChime() {
   }
 }
 
-/**
- * Dispatches an OS-level mobile/desktop notification.
- * On Android Chrome and mobile browsers, this MUST use ServiceWorkerRegistration.showNotification()
- * so the notification pops up in the Android notification tray, heads-up banner, and lock screen.
- */
 async function sendSystemNotification(req: LiveRequest) {
   if (typeof window === "undefined") return;
   if (!("Notification" in window) || Notification.permission !== "granted") return;
 
+  const outcome = resolveOutcome(req);
   const userDisplay = req.userName ? `${req.userName} (User #${req.userId})` : `User #${req.userId}`;
   const providerDisplay = req.provider || "Default Provider";
-  const statusDisplay = req.status === "provider_error" ? "Provider Error (5xx)" : "Rejected Request";
   const errorDisplay = req.rawErrorMessage
     ? `\nDiagnostic: ${req.rawErrorMessage}`
     : req.errorMessage
@@ -94,13 +130,13 @@ async function sendSystemNotification(req: LiveRequest) {
     : "";
 
   const title = `🚨 Live Failure: ${req.modelId}`;
-  const body = `User: ${userDisplay}\nModel: ${req.modelId}\nProvider: ${providerDisplay}\nStatus: ${statusDisplay}${errorDisplay}`;
+  const body = `User: ${userDisplay}\nModel: ${req.modelId}\nProvider: ${providerDisplay}\nOutcome: ${outcome}${errorDisplay}`;
 
   const notificationOptions = {
     body,
     icon: "/favicon/favicon-192x192.png",
     badge: "/favicon/favicon-32x32.png",
-    vibrate: [300, 100, 300, 100, 300], // Vibrates Android phone/tablet
+    vibrate: [300, 100, 300, 100, 300],
     tag: `live-fail-${req.requestId}`,
     renotify: true,
     requireInteraction: true,
@@ -110,7 +146,6 @@ async function sendSystemNotification(req: LiveRequest) {
     },
   };
 
-  // Primary Path: ServiceWorkerRegistration (Required for Android / Mobile Chrome)
   if ("serviceWorker" in navigator) {
     try {
       const reg = await navigator.serviceWorker.ready;
@@ -118,9 +153,7 @@ async function sendSystemNotification(req: LiveRequest) {
         await reg.showNotification(title, notificationOptions);
         return;
       }
-    } catch {
-      // fallback to message or standard constructor
-    }
+    } catch {}
 
     if (navigator.serviceWorker.controller) {
       navigator.serviceWorker.controller.postMessage({
@@ -132,16 +165,13 @@ async function sendSystemNotification(req: LiveRequest) {
     }
   }
 
-  // Fallback Path: Standard desktop Notification constructor
   try {
     const notif = new Notification(title, notificationOptions);
     notif.onclick = () => {
       window.focus();
       notif.close();
     };
-  } catch {
-    /* ignore fallback errors */
-  }
+  } catch {}
 }
 
 export default function LiveRequestLog() {
@@ -150,6 +180,12 @@ export default function LiveRequestLog() {
   const [autoScroll, setAutoScroll] = useState(true);
   const [sessionFailures, setSessionFailures] = useState(0);
   const [lastAlert, setLastAlert] = useState<{ title: string; detail: string; time: string } | null>(null);
+
+  // Filters
+  const [outcomeFilter, setOutcomeFilter] = useState<string>("all");
+  const [nonSuccessOnly, setNonSuccessOnly] = useState<boolean>(false);
+  const [selectedProvider, setSelectedProvider] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState<string>("");
 
   // Notification & Audio states
   const [notifPermission, setNotifPermission] = useState<NotificationPermission>(() => {
@@ -161,13 +197,13 @@ export default function LiveRequestLog() {
 
   const [desktopAlerts, setDesktopAlerts] = useState<boolean>(() => {
     if (typeof window === "undefined") return false;
-    const stored = localStorage.getItem("tokenforge_live_req_notif");
+    const stored = localStorage.getItem("qronos_live_req_notif") ?? localStorage.getItem("tokenforge_live_req_notif");
     return stored === "true";
   });
 
   const [soundAlerts, setSoundAlerts] = useState<boolean>(() => {
     if (typeof window === "undefined") return true;
-    const stored = localStorage.getItem("tokenforge_live_req_sound");
+    const stored = localStorage.getItem("qronos_live_req_sound") ?? localStorage.getItem("tokenforge_live_req_sound");
     return stored !== "false";
   });
 
@@ -176,14 +212,10 @@ export default function LiveRequestLog() {
   const desktopAlertsRef = useRef(desktopAlerts);
   const soundAlertsRef = useRef(soundAlerts);
 
-  const reasoningFallbackCount = rows.filter(r => r.reasoningReturned || (r.rawErrorMessage && r.rawErrorMessage.includes("[ReasoningFallback"))).length;
-
   // Register Service Worker for Mobile & Desktop OS notifications
   useEffect(() => {
     if (typeof window !== "undefined" && "serviceWorker" in navigator) {
-      navigator.serviceWorker.register("/sw.js", { scope: "/" }).then(() => {
-        // Service worker active
-      }).catch((err) => {
+      navigator.serviceWorker.register("/sw.js", { scope: "/" }).catch((err) => {
         console.warn("ServiceWorker registration notice:", err);
       });
     }
@@ -191,15 +223,14 @@ export default function LiveRequestLog() {
 
   useEffect(() => {
     desktopAlertsRef.current = desktopAlerts;
-    localStorage.setItem("tokenforge_live_req_notif", desktopAlerts ? "true" : "false");
+    localStorage.setItem("qronos_live_req_notif", desktopAlerts ? "true" : "false");
   }, [desktopAlerts]);
 
   useEffect(() => {
     soundAlertsRef.current = soundAlerts;
-    localStorage.setItem("tokenforge_live_req_sound", soundAlerts ? "true" : "false");
+    localStorage.setItem("qronos_live_req_sound", soundAlerts ? "true" : "false");
   }, [soundAlerts]);
 
-  // Request browser / mobile notification permission
   const handleToggleDesktopAlerts = async () => {
     if (typeof window === "undefined" || !("Notification" in window)) {
       alert("System notifications are not supported by this browser.");
@@ -212,7 +243,7 @@ export default function LiveRequestLog() {
     }
 
     if (Notification.permission === "denied") {
-      alert("Notifications are blocked in your browser or device settings. Please go to Site Settings in your mobile/desktop browser to allow notifications for Qronos AI.");
+      alert("Notifications are blocked in your browser settings. Please allow notifications for Qronos AI.");
       return;
     }
 
@@ -221,63 +252,34 @@ export default function LiveRequestLog() {
       setNotifPermission(result);
       if (result === "granted") {
         setDesktopAlerts(true);
-        // Fire a test confirmation system notification right away
-        await sendSystemNotification({
-          requestId: "test-welcome-" + Date.now(),
-          userId: 1,
-          userName: "Admin",
-          modelId: "Live Alert Ready",
-          provider: "Qronos AI",
-          status: "provider_error",
-          source: "api",
-          stream: false,
-          inputTokens: 0,
-          outputTokens: 0,
-          errorMessage: "System notifications are active! You will receive mobile/desktop alerts when any request fails.",
-          createdAt: new Date().toISOString(),
-        });
-      } else {
-        setDesktopAlerts(false);
       }
-    } catch {
-      /* ignore */
-    }
+    } catch {}
   };
 
-  const handleTestAlert = async () => {
-    if (soundAlerts) {
-      playAlertChime();
-    }
+  const handleTestAlert = () => {
     const sampleReq: LiveRequest = {
-      requestId: "sample-" + Date.now(),
-      userId: 42,
-      userName: "baba40404",
-      modelId: "claude-opus-5",
-      provider: "Kiro",
+      requestId: "test-alert-id",
+      userId: 1,
+      userName: "Administrator",
+      modelId: "claude-opus-5.5",
+      provider: "Direct High-Speed Slot",
       status: "provider_error",
+      outcome: "upstream_error",
       source: "api",
       stream: true,
-      inputTokens: 1200,
+      inputTokens: 120,
       outputTokens: 0,
-      latencyMs: 342,
-      errorMessage: "502 Bad Gateway: Upstream provider connection timeout",
+      errorMessage: "Diagnostic: Simulated test alert notification",
       createdAt: new Date().toISOString(),
     };
 
-    if (Notification.permission === "default") {
-      const perm = await Notification.requestPermission();
-      setNotifPermission(perm);
-      if (perm === "granted") {
-        setDesktopAlerts(true);
-        await sendSystemNotification(sampleReq);
-      }
-    } else if (Notification.permission === "granted") {
-      await sendSystemNotification(sampleReq);
+    if (soundAlerts) playAlertChime();
+    if (desktopAlerts && Notification.permission === "granted") {
+      sendSystemNotification(sampleReq);
     }
-
     setLastAlert({
-      title: `Test Alert Triggered: ${sampleReq.modelId}`,
-      detail: `User: ${sampleReq.userName} · Provider: ${sampleReq.provider} · ${sampleReq.errorMessage}`,
+      title: "Test System Alert Triggered",
+      detail: `User: Administrator · Provider: Direct High-Speed Slot · Simulated 5xx`,
       time: new Date().toLocaleTimeString(),
     });
   };
@@ -306,31 +308,25 @@ export default function LiveRequestLog() {
         const row = JSON.parse(event.data) as LiveRequest;
         setRows(prev => [row, ...prev].slice(0, MAX_ROWS));
 
-        const isFailure = row.status === "provider_error" || row.status === "rejected";
+        const outcome = resolveOutcome(row);
+        const isFailure = outcome === "upstream_error" || outcome === "rejected" || outcome === "client_disconnected" || row.status === "provider_error";
 
         if (isFailure) {
           setSessionFailures(n => n + 1);
 
-          // Only trigger audible/browser notifications for real-time incoming failures (not backlog snapshot)
           if (isSnapshotDoneRef.current) {
-            if (soundAlertsRef.current) {
-              playAlertChime();
-            }
-
+            if (soundAlertsRef.current) playAlertChime();
             if (desktopAlertsRef.current && Notification.permission === "granted") {
               sendSystemNotification(row);
             }
-
             setLastAlert({
               title: `Live Failure · ${row.modelId}`,
-              detail: `User: ${row.userName ?? `User #${row.userId}`} · Provider: ${row.provider ?? "Default"} · ${row.errorMessage || row.status}`,
+              detail: `User: ${row.userName ?? `User #${row.userId}`} · Provider: ${row.provider ?? "Default"} · ${outcome}`,
               time: new Date().toLocaleTimeString(),
             });
           }
         }
-      } catch {
-        /* ignore malformed event */
-      }
+      } catch {}
     });
 
     return () => {
@@ -344,6 +340,76 @@ export default function LiveRequestLog() {
     }
   }, [rows, autoScroll]);
 
+  // Provider Metrics Breakdown
+  const providerStats = useMemo(() => {
+    const map = new Map<string, { total: number; success: number; truncated: number; failed: number; ttftSum: number; ttftCount: number }>();
+
+    for (const r of rows) {
+      const p = (r.provider || "Default").split("(")[0].trim();
+      const current = map.get(p) || { total: 0, success: 0, truncated: 0, failed: 0, ttftSum: 0, ttftCount: 0 };
+      current.total += 1;
+
+      const outcome = resolveOutcome(r);
+      if (outcome === "success") current.success += 1;
+      else if (outcome === "truncated") current.truncated += 1;
+      else current.failed += 1;
+
+      if (r.ttftMs && r.ttftMs > 0) {
+        current.ttftSum += r.ttftMs;
+        current.ttftCount += 1;
+      }
+
+      map.set(p, current);
+    }
+
+    return Array.from(map.entries()).map(([name, data]) => ({
+      name,
+      total: data.total,
+      success: data.success,
+      truncated: data.truncated,
+      failed: data.failed,
+      successPct: Math.round((data.success / data.total) * 100),
+      truncatedPct: Math.round((data.truncated / data.total) * 100),
+      failedPct: Math.round((data.failed / data.total) * 100),
+      avgTtftMs: data.ttftCount > 0 ? Math.round(data.ttftSum / data.ttftCount) : null,
+    })).sort((a, b) => b.total - a.total);
+  }, [rows]);
+
+  const nonSuccessCount = useMemo(() => {
+    return rows.filter(r => resolveOutcome(r) !== "success").length;
+  }, [rows]);
+
+  const filteredRows = useMemo(() => {
+    return rows.filter(row => {
+      const outcome = resolveOutcome(row);
+      const isSuccess = outcome === "success";
+
+      if (nonSuccessOnly && isSuccess) return false;
+
+      if (outcomeFilter !== "all") {
+        if (outcomeFilter === "non_success" && isSuccess) return false;
+        if (outcomeFilter !== "non_success" && outcome !== outcomeFilter) return false;
+      }
+
+      if (selectedProvider) {
+        const p = (row.provider || "Default").split("(")[0].trim();
+        if (p !== selectedProvider) return false;
+      }
+
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        const matchesModel = row.modelId.toLowerCase().includes(q);
+        const matchesUser = (row.userName || "").toLowerCase().includes(q) || String(row.userId).includes(q);
+        const matchesReq = row.requestId.toLowerCase().includes(q);
+        const matchesErr = (row.rawErrorMessage || row.errorMessage || "").toLowerCase().includes(q);
+        const matchesProvider = (row.provider || "").toLowerCase().includes(q);
+        if (!matchesModel && !matchesUser && !matchesReq && !matchesErr && !matchesProvider) return false;
+      }
+
+      return true;
+    });
+  }, [rows, nonSuccessOnly, outcomeFilter, selectedProvider, searchQuery]);
+
   return (
     <section
       style={{
@@ -351,7 +417,7 @@ export default function LiveRequestLog() {
         borderColor: "oklch(0.26 0 0)",
         boxShadow: "0 25px 60px rgba(0,0,0,0.85), inset 0 1px 0 rgba(255,255,255,0.06)",
       }}
-      className="rounded-3xl border p-5 sm:p-7 shadow-2xl space-y-4"
+      className="rounded-3xl border p-5 sm:p-7 shadow-2xl space-y-6"
     >
       {/* Top Header */}
       <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-white/[0.08]">
@@ -363,15 +429,10 @@ export default function LiveRequestLog() {
                 <AlertTriangle size={11} /> {sessionFailures} {sessionFailures === 1 ? "failure" : "failures"} in session
               </span>
             )}
-            {reasoningFallbackCount > 0 && (
-              <span className="flex items-center gap-1 rounded-full border border-amber-400/30 bg-amber-500/15 px-2 py-0.5 text-[10px] font-mono font-semibold text-amber-300">
-                ⚡ {reasoningFallbackCount} reasoning {reasoningFallbackCount === 1 ? "fallback" : "fallbacks"}
-              </span>
-            )}
           </div>
-          <h2 className="mt-1 text-xl font-extrabold text-white tracking-tight">Real-time requests & failure alerts</h2>
+          <h2 className="mt-1 text-xl font-extrabold text-white tracking-tight">Real-Time Telemetry & Provider Diagnostics</h2>
           <p className="mt-1 text-xs text-zinc-400">
-            Instant mobile & desktop system push notifications with vibration whenever a request fails.
+            Real-time SSE token stream monitoring, client-disconnect cancellation, and per-provider latency percentiles.
           </p>
         </div>
 
@@ -387,36 +448,20 @@ export default function LiveRequestLog() {
           <button
             type="button"
             onClick={handleToggleDesktopAlerts}
-            title={
-              notifPermission === "denied"
-                ? "Notifications blocked in device settings"
-                : desktopAlerts
-                ? "Click to disable mobile/system notifications"
-                : "Click to enable mobile/system push notifications"
-            }
             className={`flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-mono font-medium transition-colors cursor-pointer ${
               desktopAlerts && notifPermission === "granted"
                 ? "border-white/30 bg-white text-black font-bold shadow-md"
-                : notifPermission === "denied"
-                ? "border-red-500/30 bg-red-500/10 text-red-300"
                 : "border-white/12 bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-white"
             }`}
           >
             {desktopAlerts && notifPermission === "granted" ? <Smartphone size={13} /> : <BellOff size={13} />}
-            <span>
-              {notifPermission === "denied"
-                ? "Alerts Blocked"
-                : desktopAlerts && notifPermission === "granted"
-                ? "Device: ON"
-                : "Device: OFF"}
-            </span>
+            <span>{desktopAlerts && notifPermission === "granted" ? "Device: ON" : "Device: OFF"}</span>
           </button>
 
           {/* Sound alert toggle */}
           <button
             type="button"
             onClick={() => setSoundAlerts(v => !v)}
-            title="Toggle audio tone chime on failure"
             className={`flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-mono font-medium transition-colors cursor-pointer ${
               soundAlerts
                 ? "border-white/30 bg-white text-black font-bold shadow-md"
@@ -431,7 +476,6 @@ export default function LiveRequestLog() {
           <button
             type="button"
             onClick={handleTestAlert}
-            title="Trigger a test phone/system alert notification & audio chime"
             className="flex items-center gap-1.5 rounded-xl border border-white/15 bg-white/10 px-3 py-1.5 text-xs font-mono font-bold text-white hover:bg-white/20 transition-colors cursor-pointer shadow-sm"
           >
             <Play size={11} className="fill-current text-white" /> Test Alert
@@ -474,173 +518,361 @@ export default function LiveRequestLog() {
         </div>
       )}
 
-      {/* Live Table */}
+      {/* =========================================================
+          PER-PROVIDER PERFORMANCE CARDS (ANALYTICS BENTO)
+      ========================================================= */}
+      {providerStats.length > 0 && (
+        <div className="space-y-2">
+          <div className="flex items-center justify-between text-xs font-mono text-zinc-400">
+            <div className="flex items-center gap-1.5 font-bold uppercase tracking-wider text-[11px] text-white">
+              <Layers size={13} className="text-[#c9ff73]" />
+              <span>Provider Performance Breakdown ({providerStats.length} Active Upstreams)</span>
+            </div>
+            {selectedProvider && (
+              <button
+                type="button"
+                onClick={() => setSelectedProvider(null)}
+                className="flex items-center gap-1 text-[11px] text-emerald-400 hover:underline cursor-pointer"
+              >
+                <span>Filtered: {selectedProvider}</span>
+                <X size={12} />
+              </button>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            {providerStats.map((stat) => {
+              const isSelected = selectedProvider === stat.name;
+              return (
+                <div
+                  key={stat.name}
+                  onClick={() => setSelectedProvider(isSelected ? null : stat.name)}
+                  style={{
+                    backgroundColor: isSelected ? "oklch(0.20 0 0)" : "oklch(0.16 0 0)",
+                    borderColor: isSelected ? "#c9ff73" : "oklch(0.24 0 0)",
+                  }}
+                  className={`rounded-2xl border p-3.5 transition-all cursor-pointer hover:border-white/30 shadow-md ${
+                    isSelected ? "ring-1 ring-[#c9ff73]/50" : ""
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-bold text-xs text-white truncate font-mono">{stat.name}</span>
+                    <span className="font-mono text-[10px] text-zinc-400 bg-white/5 px-2 py-0.5 rounded-md">
+                      {stat.total} reqs
+                    </span>
+                  </div>
+
+                  {/* Multi-Segment Proportion Bar */}
+                  <div className="mt-2.5 h-1.5 w-full rounded-full bg-white/10 overflow-hidden flex">
+                    <div style={{ width: `${stat.successPct}%` }} className="bg-emerald-400 h-full" title={`Success: ${stat.successPct}%`} />
+                    <div style={{ width: `${stat.truncatedPct}%` }} className="bg-amber-400 h-full" title={`Truncated: ${stat.truncatedPct}%`} />
+                    <div style={{ width: `${stat.failedPct}%` }} className="bg-rose-500 h-full" title={`Failed: ${stat.failedPct}%`} />
+                  </div>
+
+                  <div className="mt-2.5 flex items-center justify-between text-[10px] font-mono">
+                    <div className="flex items-center gap-2">
+                      <span className="text-emerald-400 font-bold">{stat.successPct}% ok</span>
+                      {stat.failedPct > 0 && <span className="text-rose-400 font-bold">{stat.failedPct}% err</span>}
+                      {stat.truncatedPct > 0 && <span className="text-amber-300 font-bold">{stat.truncatedPct}% tr</span>}
+                    </div>
+                    <div>
+                      {stat.avgTtftMs !== null ? (
+                        <span
+                          className={`font-semibold ${
+                            stat.avgTtftMs > 10000
+                              ? "text-rose-400"
+                              : stat.avgTtftMs > 3000
+                              ? "text-amber-300"
+                              : "text-zinc-400"
+                          }`}
+                        >
+                          TTFT: {stat.avgTtftMs}ms
+                        </span>
+                      ) : (
+                        <span className="text-zinc-600">TTFT: —</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* =========================================================
+          CONTROLS & COMPREHENSIVE FILTER BAR
+      ========================================================= */}
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-2">
+        <div className="flex flex-wrap items-center gap-2 flex-1">
+          {/* Quick "Non-Success Only" Toggle Button with Count Badge */}
+          <button
+            type="button"
+            onClick={() => setNonSuccessOnly(v => !v)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-mono transition-all cursor-pointer ${
+              nonSuccessOnly
+                ? "bg-rose-500/20 text-rose-300 border-rose-500/40 font-bold shadow-sm"
+                : "bg-white/5 border-white/10 text-zinc-400 hover:text-white hover:bg-white/10"
+            }`}
+          >
+            <AlertTriangle size={12} className={nonSuccessOnly ? "text-rose-400" : "text-zinc-500"} />
+            <span>Non-Success Only</span>
+            {nonSuccessCount > 0 && (
+              <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
+                nonSuccessOnly ? "bg-rose-500 text-white" : "bg-white/10 text-zinc-300"
+              }`}>
+                {nonSuccessCount}
+              </span>
+            )}
+          </button>
+
+          {/* Outcome Category Select Dropdown */}
+          <div className="relative">
+            <select
+              aria-label="Filter by outcome category"
+              value={outcomeFilter}
+              onChange={(e) => setOutcomeFilter(e.target.value)}
+              className="h-8 pl-3 pr-7 rounded-xl border border-white/10 bg-black/60 text-xs font-mono text-zinc-300 focus:outline-none focus:border-white/30 cursor-pointer appearance-none"
+            >
+              <option value="all" className="bg-neutral-900 text-white">All Outcomes</option>
+              <option value="non_success" className="bg-neutral-900 text-white">Non-Success (Any)</option>
+              <option value="success" className="bg-neutral-900 text-white">Success Only</option>
+              <option value="truncated" className="bg-neutral-900 text-white">Truncated (max_tokens)</option>
+              <option value="client_disconnected" className="bg-neutral-900 text-white">Client Disconnected</option>
+              <option value="upstream_error" className="bg-neutral-900 text-white">Upstream Error (5xx)</option>
+              <option value="rejected" className="bg-neutral-900 text-white">Rejected (Preflight)</option>
+            </select>
+            <Filter size={11} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none" />
+          </div>
+
+          {/* Active Provider Filter Indicator */}
+          {selectedProvider && (
+            <div className="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-[#c9ff73]/15 border border-[#c9ff73]/30 text-[#c9ff73] text-xs font-mono">
+              <span>Provider: {selectedProvider}</span>
+              <button
+                type="button"
+                onClick={() => setSelectedProvider(null)}
+                className="hover:text-white cursor-pointer ml-1"
+              >
+                <X size={12} />
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Search input */}
+        <div className="relative min-w-[240px] max-w-sm">
+          <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search model, user, request ID..."
+            className="w-full pl-8 pr-3 py-1.5 rounded-xl border border-white/10 bg-black/60 text-xs font-mono text-white placeholder:text-zinc-500 focus:outline-none focus:border-white/30"
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => setSearchQuery("")}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-white"
+            >
+              <X size={12} />
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* =========================================================
+          LIVE STREAM TABLE
+      ========================================================= */}
       <div className="max-h-[34rem] overflow-y-auto overscroll-contain rounded-xl border border-white/8 bg-[#121413]/50" ref={scrollRef}>
-        <table className="w-full min-w-[900px] border-collapse text-left text-[11px]">
+        <table className="w-full min-w-[1050px] border-collapse text-left text-[11px]">
           <thead className="sticky top-0 z-10 bg-[#171a18] shadow-sm">
             <tr className="text-[9px] uppercase tracking-[.1em] text-[#858697]">
-              <th className="px-3 py-2 w-8">Status</th>
+              <th className="px-3 py-2 w-6"></th>
               <th className="px-3 py-2">Time</th>
               <th className="px-3 py-2">User</th>
               <th className="px-3 py-2">Model</th>
               <th className="px-3 py-2">Provider</th>
-              <th className="px-3 py-2">Source</th>
-              <th className="px-3 py-2">Status</th>
+              <th className="px-3 py-2">Outcome</th>
+              <th className="px-3 py-2">Finish Reason</th>
               <th className="px-3 py-2 text-right">In / Out</th>
-              <th className="px-3 py-2 text-right">Latency</th>
-              <th className="px-3 py-2 min-w-[18rem]">Error Diagnostic & Raw Upstream</th>
+              <th className="px-3 py-2 text-right">TTFT</th>
+              <th className="px-3 py-2 text-right">Duration</th>
+              <th className="px-3 py-2 min-w-[16rem]">Diagnostic / Error</th>
             </tr>
           </thead>
           <tbody>
-            {rows.length === 0 ? (
+            {filteredRows.length === 0 ? (
               <tr>
-                <td colSpan={10} className="px-3 py-12 text-center text-[#858697]">
+                <td colSpan={11} className="px-3 py-12 text-center text-[#858697]">
                   <div className="mx-auto flex w-max items-center gap-2 text-[12px]">
-                    <Loader2 className="animate-spin text-[#c9ff73]" size={15} /> Listening for live incoming requests…
+                    {rows.length === 0 ? (
+                      <>
+                        <Loader2 className="animate-spin text-[#c9ff73]" size={15} /> Listening for live incoming requests…
+                      </>
+                    ) : (
+                      <span>No requests match the active filters ({rows.length} requests in session).</span>
+                    )}
                   </div>
                 </td>
               </tr>
             ) : (
-              rows.map(row => {
-                const status = STATUS_LABEL[row.status] ?? STATUS_LABEL.cancelled;
-                const isFail = row.status === "provider_error" || row.status === "rejected";
+              filteredRows.map(row => {
+                const outcome = resolveOutcome(row);
+                const outcomeConfig = OUTCOME_LABEL[outcome] || OUTCOME_LABEL.success;
+                const isFail = outcome === "upstream_error" || outcome === "rejected" || outcome === "client_disconnected" || row.status === "provider_error";
+
+                const stopReason = row.stopReason || (outcome === "success" ? "end_turn" : "none");
+                const ttft = row.ttftMs;
+                const duration = row.durationMs ?? row.latencyMs;
+
                 return (
                   <tr
                     key={row.requestId}
                     className={`border-t border-white/6 transition-colors ${
-                      isFail ? "bg-red-500/[0.04] hover:bg-red-500/[0.08]" : "hover:bg-white/[.02]"
+                      isFail
+                        ? outcome === "client_disconnected"
+                          ? "bg-rose-500/[0.04] hover:bg-rose-500/[0.08]"
+                          : "bg-red-500/[0.04] hover:bg-red-500/[0.08]"
+                        : outcome === "truncated"
+                        ? "bg-amber-500/[0.03] hover:bg-amber-500/[0.06]"
+                        : "hover:bg-white/[.02]"
                     }`}
                   >
+                    {/* Status Dot */}
                     <td className="px-3 py-2">
-                      <span className="live-dot" style={{ background: status.dot }} aria-hidden="true" />
-                      <span className="sr-only">{status.text}</span>
+                      <span
+                        className="inline-block h-2 w-2 rounded-full shadow-xs"
+                        style={{ background: outcomeConfig.dot }}
+                        aria-hidden="true"
+                        title={outcomeConfig.text}
+                      />
                     </td>
+
+                    {/* Time */}
                     <td className="whitespace-nowrap px-3 py-2 font-mono text-[10px] text-[#a9aab8]">
                       {new Date(row.createdAt).toLocaleTimeString()}
                     </td>
-                    <td className="max-w-[10rem] truncate px-3 py-2 font-medium text-[#e6e6ee]" title={row.userName ? `${row.userName} (ID: ${row.userId})` : `User #${row.userId}`}>
+
+                    {/* User */}
+                    <td className="max-w-[8rem] truncate px-3 py-2 font-medium text-[#e6e6ee]" title={row.userName ? `${row.userName} (ID: ${row.userId})` : `User #${row.userId}`}>
                       {row.userName ?? `user:${row.userId}`}
                     </td>
-                    <td className="max-w-[11rem] truncate px-3 py-2 font-mono text-[#e6e6ee]" title={row.modelId}>
+
+                    {/* Model with Compaction & Reasoning Badges */}
+                    <td className="max-w-[12rem] truncate px-3 py-2 font-mono text-[#e6e6ee]" title={row.modelId}>
                       <div className="flex items-center gap-1.5 flex-wrap">
-                        <span>{row.modelId}</span>
+                        <span className="font-semibold">{row.modelId}</span>
                         {row.rawErrorMessage && row.rawErrorMessage.includes("[CompactTrigger") && (
                           <span
-                            className="inline-flex items-center rounded border border-purple-400/40 bg-purple-500/20 px-1.5 py-0.2 text-[9px] font-bold tracking-wide text-purple-200 shadow-sm"
+                            className="inline-flex items-center rounded border border-purple-400/40 bg-purple-500/20 px-1.5 py-0.2 text-[8.5px] font-bold tracking-wide text-purple-200 shadow-sm"
                             title={row.rawErrorMessage}
                           >
-                            COMPACTED (980k)
+                            COMPACTED
                           </span>
                         )}
                         {(row.reasoningReturned || (row.rawErrorMessage && row.rawErrorMessage.includes("[ReasoningFallback"))) && (
                           <span
-                            className="inline-flex items-center gap-1 rounded border border-amber-400/40 bg-amber-500/20 px-1.5 py-0.2 text-[9px] font-bold tracking-wide text-amber-300 shadow-sm"
+                            className="inline-flex items-center gap-1 rounded border border-amber-400/40 bg-amber-500/20 px-1.5 py-0.2 text-[8.5px] font-bold tracking-wide text-amber-300 shadow-sm"
                             title="Reasoning fallback: model returned empty content, output reasoning was returned to user"
                           >
-                            ⚡ REASONING RETURNED
+                            ⚡ REASONING
                           </span>
                         )}
                       </div>
                     </td>
-                    <td className="max-w-[15rem] truncate px-3 py-2 font-medium text-[#c9ff73]" title={row.provider ?? "Default"}>
-                      {row.provider ? (
-                        <span className="inline-flex items-center gap-1.5 flex-wrap">
-                          {row.provider.includes("(") ? (() => {
-                            const [name, ...rest] = row.provider.split("(");
-                            const rawTag = rest.join("(").replace(/\)+$/, "").trim();
-                            const isCurrent = rawTag.toLowerCase().includes("current");
-                            const isHistorical = rawTag.toLowerCase().includes("back");
-                            const badgeCls = isCurrent
-                              ? "border-emerald-400/40 bg-emerald-500/15 text-emerald-300"
-                              : isHistorical
-                              ? "border-amber-400/40 bg-amber-500/15 text-amber-300"
-                              : "border-sky-400/30 bg-sky-500/15 text-sky-300";
-                            return (
-                              <>
-                                <span>{name.trim()}</span>
-                                <span className={`inline-flex items-center rounded border px-1.5 py-0.5 text-[9px] font-semibold tracking-wide ${badgeCls}`}>
-                                  {rawTag}
-                                </span>
-                              </>
-                            );
-                          })() : (
-                            row.provider
-                          )}
-                        </span>
-                      ) : (
-                        "—"
-                      )}
+
+                    {/* Provider */}
+                    <td className="max-w-[11rem] truncate px-3 py-2 font-medium text-[#c9ff73]" title={row.provider ?? "Default"}>
+                      <span className="truncate">{row.provider ? row.provider.split("(")[0].trim() : "Default"}</span>
                     </td>
-                    <td className="px-3 py-2 text-[#a9aab8]">{row.source}</td>
-                    <td className="px-3 py-2">
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[9px] font-bold ${status.cls}`}>
-                          {status.text}
-                        </span>
-                        {(row.reasoningReturned || (row.rawErrorMessage && row.rawErrorMessage.includes("[ReasoningFallback"))) && (
-                          <span
-                            className="inline-flex items-center rounded border border-amber-400/40 bg-amber-500/15 px-1.5 py-0.5 text-[9px] font-semibold text-amber-300"
-                            title="Fallback reasoning returned to caller"
-                          >
-                            Reasoning
-                          </span>
-                        )}
-                      </div>
+
+                    {/* Outcome Badge */}
+                    <td className="whitespace-nowrap px-3 py-2">
+                      <span className={`inline-flex items-center rounded-md border px-2 py-0.5 text-[10px] font-mono font-bold ${outcomeConfig.cls}`}>
+                        {outcomeConfig.text}
+                      </span>
                     </td>
+
+                    {/* Finish Reason Badge */}
+                    <td className="whitespace-nowrap px-3 py-2 font-mono text-[10px]">
+                      <span className={`inline-flex items-center rounded border px-1.5 py-0.5 text-[9px] ${
+                        stopReason === "max_tokens" || stopReason === "length"
+                          ? "border-amber-400/40 bg-amber-500/15 text-amber-300 font-bold"
+                          : stopReason === "tool_use" || stopReason === "tool_calls"
+                          ? "border-cyan-400/40 bg-cyan-500/15 text-cyan-300 font-bold"
+                          : stopReason === "refusal"
+                          ? "border-rose-400/40 bg-rose-500/15 text-rose-300 font-bold"
+                          : "border-white/10 bg-white/5 text-zinc-400"
+                      }`}>
+                        {stopReason}
+                      </span>
+                    </td>
+
+                    {/* In / Out Tokens */}
                     <td className="whitespace-nowrap px-3 py-2 text-right font-mono text-[10px] tabular-nums text-[#e6e6ee]">
                       {row.inputTokens.toLocaleString()} / {row.outputTokens.toLocaleString()}
                     </td>
-                    <td className="whitespace-nowrap px-3 py-2 text-right font-mono text-[10px] tabular-nums text-[#a9aab8]">
-                      {row.latencyMs != null ? `${row.latencyMs}ms` : "—"}
+
+                    {/* TTFT (Time To First Token) */}
+                    <td className="whitespace-nowrap px-3 py-2 text-right font-mono text-[10px] tabular-nums">
+                      {ttft != null ? (
+                        <span
+                          className={`${
+                            ttft > 30000
+                              ? "text-red-400 font-bold bg-red-500/20 px-1 py-0.5 rounded"
+                              : ttft > 10000
+                              ? "text-amber-300 font-bold bg-amber-500/20 px-1 py-0.5 rounded"
+                              : "text-[#a9aab8]"
+                          }`}
+                          title={`Time To First Token: ${ttft}ms`}
+                        >
+                          {ttft}ms
+                        </span>
+                      ) : (
+                        <span className="text-zinc-600">—</span>
+                      )}
                     </td>
+
+                    {/* Total Duration */}
+                    <td className="whitespace-nowrap px-3 py-2 text-right font-mono text-[10px] tabular-nums text-[#a9aab8]">
+                      {duration != null ? `${duration}ms` : "—"}
+                    </td>
+
+                    {/* Diagnostic / Error */}
                     <td
-                      className={`max-w-[24rem] px-3 py-2 text-[10px] ${
+                      className={`max-w-[20rem] px-3 py-2 text-[10px] ${
                         isFail ? "text-red-300" : "text-[#858697]"
                       }`}
                       title={row.rawErrorMessage || row.errorMessage || undefined}
                     >
                       {row.rawErrorMessage ? (
                         <div className="flex flex-col gap-0.5">
-                          {row.rawErrorMessage.includes("[CompactTrigger") ? (
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <span className="inline-flex items-center rounded border border-purple-400/40 bg-purple-500/15 px-1.5 py-0.5 text-[9px] font-semibold tracking-wide text-purple-200">
-                                AUTO COMPACT
-                              </span>
-                              <span className="font-mono text-[10px] text-purple-300">
-                                {row.rawErrorMessage}
-                              </span>
-                            </div>
-                          ) : row.rawErrorMessage.includes("[ReasoningFallback") ? (
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <span className="inline-flex items-center rounded border border-amber-400/40 bg-amber-500/15 px-1.5 py-0.5 text-[9px] font-semibold tracking-wide text-amber-300">
-                                REASONING FALLBACK
-                              </span>
-                              <span className="font-mono text-[10px] text-amber-200">
-                                Content was empty · Served model reasoning
-                              </span>
-                            </div>
-                          ) : (
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <span
-                                className={`inline-flex items-center rounded border px-1.5 py-0.5 text-[9px] font-semibold tracking-wide ${
-                                  row.rawErrorMessage.includes("[PRE-FLIGHT]")
-                                    ? "border-amber-400/40 bg-amber-500/15 text-amber-300"
-                                    : row.rawErrorMessage.includes("Timeout")
-                                    ? "border-orange-400/40 bg-orange-500/15 text-orange-300"
-                                    : "border-red-400/40 bg-red-500/15 text-red-200"
-                                }`}
-                              >
-                                {row.rawErrorMessage.includes("[PRE-FLIGHT]")
-                                  ? "PRE-FLIGHT"
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span
+                              className={`inline-flex items-center rounded border px-1.5 py-0.5 text-[9px] font-semibold tracking-wide ${
+                                row.rawErrorMessage.includes("[CLIENT_DISCONNECT]") || outcome === "client_disconnected"
+                                  ? "border-rose-400/40 bg-rose-500/15 text-rose-300"
+                                  : row.rawErrorMessage.includes("[PRE-FLIGHT]")
+                                  ? "border-amber-400/40 bg-amber-500/15 text-amber-300"
                                   : row.rawErrorMessage.includes("Timeout")
-                                  ? "TIMEOUT"
-                                  : "UPSTREAM"}
-                              </span>
-                              <span className="font-mono font-medium text-red-200 break-all">
-                                {row.rawErrorMessage.replace(/^\[(?:PRE-FLIGHT|TIMEOUT|UPSTREAM)\]\s*/, "")}
-                              </span>
-                            </div>
-                          )}
+                                  ? "border-orange-400/40 bg-orange-500/15 text-orange-300"
+                                  : "border-red-400/40 bg-red-500/15 text-red-200"
+                              }`}
+                            >
+                              {row.rawErrorMessage.includes("[CLIENT_DISCONNECT]") || outcome === "client_disconnected"
+                                ? "CLIENT"
+                                : row.rawErrorMessage.includes("[PRE-FLIGHT]")
+                                ? "PRE-FLIGHT"
+                                : row.rawErrorMessage.includes("Timeout")
+                                ? "TIMEOUT"
+                                : "UPSTREAM"}
+                            </span>
+                            <span className="font-mono font-medium text-red-200 break-all text-[10px]">
+                              {row.rawErrorMessage.replace(/^\[(?:CLIENT_DISCONNECT|PRE-FLIGHT|TIMEOUT|UPSTREAM)\]\s*/, "")}
+                            </span>
+                          </div>
                           {row.errorMessage && row.errorMessage !== row.rawErrorMessage && (
                             <span className="text-[9px] text-[#858697] truncate block">
                               Client: {row.errorMessage}
@@ -659,12 +891,13 @@ export default function LiveRequestLog() {
         </table>
       </div>
 
+      {/* Footer Status */}
       <div className="flex flex-wrap items-center justify-between gap-2 border-t border-white/8 pt-3 text-[10px] text-[#858697]">
         <p>
-          Capturing up to {MAX_ROWS} live requests in memory. Phone & system notifications pop up on your device lock screen and notification tray.
+          Showing {filteredRows.length} of {rows.length} requests in session memory. Immediate socket abortion active.
         </p>
         <p className="flex items-center gap-1 text-[#a9aab8]">
-          <CheckCircle2 size={11} className="text-[#c9ff73]" /> System Service Worker notification engine active
+          <CheckCircle2 size={11} className="text-[#c9ff73]" /> Telemetry stream active · Zero client payload storage
         </p>
       </div>
     </section>

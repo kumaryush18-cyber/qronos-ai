@@ -18,7 +18,7 @@ export type CatalogueModel = {
 
 const model = (id: string, name: string, provider: string, providerMark: string, tone: CatalogueModel["tone"], inputUsdPerMillion: number, outputUsdPerMillion: number, eyebrow: string, description: string, capabilities: string[], pricingSource: string, pricingUrl: string, isPremium?: boolean): CatalogueModel => ({ id, name, provider, providerMark, tone, inputUsdPerMillion, outputUsdPerMillion, eyebrow, description, capabilities, pricingSource, pricingUrl, ...(isPremium ? { isPremium: true } : {}) });
 
-export const TOKENFORGE_MODELS: CatalogueModel[] = [
+export const QRONOS_MODELS: CatalogueModel[] = [
   model("claude-opus-5.5", "Claude Opus 5.5", "Claude", "AI", "violet", 15, 75, "Anthropic frontier reasoning", "Next-generation Anthropic frontier model featuring deep reasoning, exceptional code synthesis, and autonomous multi-step problem solving.", ["Reasoning", "Thinking", "Streaming", "Coding"], "Qronos AI Claude Opus 5.5 pricing", "PRICING_URL", true),
   model("gpt-6-sol", "GPT 6 Sol", "OpenAI", "O", "sky", 15, 75, "Next-gen Sol frontier reasoning", "Next-generation OpenAI frontier reasoning model featuring Sol high-velocity inference, autonomous software engineering, and extended chain-of-thought.", ["Reasoning", "Thinking", "Streaming", "Coding"], "Qronos AI GPT 6 Sol pricing", "PRICING_URL", true),
   model("gpt-6-astra", "GPT-6 Astra", "OpenAI", "O", "sky", 15, 75, "Next-gen frontier reasoning", "Next-generation OpenAI frontier reasoning model featuring ultra-deep Astra chain-of-thought, code synthesis, and multimodal capability.", ["Reasoning", "Thinking", "Streaming", "Coding"], "Qronos AI GPT-6 Astra pricing", "PRICING_URL", true),
@@ -56,10 +56,17 @@ export function prioritizePlaygroundModels<T extends { id: string }>(models: rea
   return [...featured, ...models.filter(model => !PLAYGROUND_FEATURED_MODEL_IDS.includes(model.id as (typeof PLAYGROUND_FEATURED_MODEL_IDS)[number]))];
 }
 
+export const TOKENFORGE_MODELS = QRONOS_MODELS;
+
 export const formatUsdPerMillion = (value: number) => `$${value.toFixed(2)}`;
-export const TOKENFORGE_PLATFORM_CHARGE_MULTIPLIER = 2.0;
-export const tokenForgeCreditRatePerMillion = (upstreamRate: number, modelId?: string) => {
+export const QRONOS_PLATFORM_CHARGE_MULTIPLIER = 2.0;
+export const TOKENFORGE_PLATFORM_CHARGE_MULTIPLIER = QRONOS_PLATFORM_CHARGE_MULTIPLIER;
+
+export const qronosCreditRatePerMillion = (upstreamRate: number, modelId?: string) => {
   if (modelId === "gpt-6-astra" || modelId === "claude-opus-5" || modelId === "claude-opus-5.5" || modelId === "gpt-6-sol") return upstreamRate;
-  return upstreamRate * TOKENFORGE_PLATFORM_CHARGE_MULTIPLIER;
+  return upstreamRate * QRONOS_PLATFORM_CHARGE_MULTIPLIER;
 };
-export const formatTokenForgeCreditRatePerMillion = (upstreamRate: number, modelId?: string) => `$${tokenForgeCreditRatePerMillion(upstreamRate, modelId).toFixed(4).replace(/0+$/, "").replace(/\.$/, "")}`;
+export const tokenForgeCreditRatePerMillion = qronosCreditRatePerMillion;
+
+export const formatQronosCreditRatePerMillion = (upstreamRate: number, modelId?: string) => `$${qronosCreditRatePerMillion(upstreamRate, modelId).toFixed(4).replace(/0+$/, "").replace(/\.$/, "")}`;
+export const formatTokenForgeCreditRatePerMillion = formatQronosCreditRatePerMillion;

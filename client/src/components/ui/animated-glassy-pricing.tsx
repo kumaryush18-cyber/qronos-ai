@@ -32,7 +32,7 @@ export const ShaderCanvas = ({ className }: { className?: string } = {}) => {
   useEffect(() => {
     const root = document.documentElement;
     const updateColor = () => {
-      const isDark = root.classList.contains("dark") || true; // dark by default in TokenForge
+      const isDark = root.classList.contains("dark") || true; // dark by default in Qronos AI
       setBackgroundColor(isDark ? [0.05, 0.05, 0.08] : [1.0, 1.0, 1.0]);
     };
     updateColor();

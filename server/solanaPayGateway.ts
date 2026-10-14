@@ -25,7 +25,7 @@ export async function getSolPriceUsd(): Promise<number> {
   }
   try {
     const res = await fetch("https://api.binance.com/api/v3/ticker/price?symbol=SOLUSDT", {
-      headers: { "User-Agent": "TokenForge-SolanaPay/1.0", Accept: "application/json" },
+      headers: { "User-Agent": "Qronos-SolanaPay/1.0", Accept: "application/json" },
       signal: AbortSignal.timeout(6000),
     });
     if (res.ok) {
@@ -147,7 +147,7 @@ export function registerSolanaPayGateway(app: Express) {
       const expiresAt = new Date(now.getTime() + ORDER_EXPIRY_SECONDS * 1000);
       const orderId = `tf_ord_${Date.now()}_${randomBytes(4).toString("hex")}`;
 
-      const paymentLabel = label || "TokenForge";
+      const paymentLabel = label || "Qronos AI";
       const paymentMessage = message || (is_coding_plan ? "Coding Plan" : "API Credits");
 
       const amountStr = calculatedSol.toFixed(5).replace(/\.?0+$/, "");

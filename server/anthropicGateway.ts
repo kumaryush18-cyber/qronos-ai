@@ -999,11 +999,33 @@ async function handleNativeTokenRouterMessagesRequest(req: Request, res: Respons
       ? `[CompactTrigger: ${realTotalInput.toLocaleString()} -> 980k (ua: ${userAgent})]`
       : undefined;
 
-    await recordUsage({ requestId, userId: key.userId, apiKeyId: key.id, modelId: model, source: "api", stream: false, status: "success", ...tokens, chargeNanos: settlement.chargedNanos, sourceIpHash: ipHash, provider: finalizeProviderLabel(providerLabel, multimodalTag || isMultimodal), latencyMs: Date.now() - startedAt, rawErrorMessage: compactDiagnosticTag });
+    const durationMs = Date.now() - startedAt;
+    const stopReason = response.stop_reason || "end_turn";
+    const outcome = stopReason === "max_tokens" ? "truncated" : "success";
+
+    await recordUsage({
+      requestId,
+      userId: key.userId,
+      apiKeyId: key.id,
+      modelId: model,
+      source: "api",
+      stream: false,
+      status: "success",
+      ...tokens,
+      chargeNanos: settlement.chargedNanos,
+      sourceIpHash: ipHash,
+      provider: finalizeProviderLabel(providerLabel, multimodalTag || isMultimodal),
+      latencyMs: durationMs,
+      durationMs,
+      ttftMs: durationMs,
+      stopReason,
+      outcome,
+      rawErrorMessage: compactDiagnosticTag,
+    });
     res.setHeader("request-id", requestId);
     res.setHeader("x-request-id", requestId);
-    res.setHeader("x-tokenforge-credit-balance", String(settlement.balanceNanos));
-    res.setHeader("x-tokenforge-credit-charge", String(settlement.chargedNanos));
+    res.setHeader("x-qronos-credit-balance", String(settlement.balanceNanos));
+    res.setHeader("x-qronos-credit-charge", String(settlement.chargedNanos));
     return res.status(200).json(response);
   }
 
@@ -1026,11 +1048,27 @@ async function handleNativeTokenRouterMessagesRequest(req: Request, res: Respons
   let streamedOutputText = "";
   let failed = false;
   let failedMessage: string | undefined;
-  res.on("close", () => { if (!res.writableEnded) aborter.abort(); });
+  let clientDisconnected = false;
+  let firstTokenAt: number | null = null;
+  let stopReason = "none";
+
+  const onClientDisconnect = () => {
+    if (!res.writableEnded) {
+      clientDisconnected = true;
+      failed = true;
+      failedMessage = "Client disconnected before stream completed.";
+      aborter.abort();
+      try { reader.cancel().catch(() => {}); } catch {}
+    }
+  };
+  req.on("close", onClientDisconnect);
+  res.on("close", onClientDisconnect);
+
   try {
     while (true) {
       const next = await readWithIdleTimeout(reader);
       if (next.done) break;
+      if (firstTokenAt === null) firstTokenAt = Date.now();
       buffer += decoder.decode(next.value, { stream: true });
       const lines = buffer.split("\n");
       buffer = lines.pop() ?? "";
@@ -1045,9 +1083,11 @@ async function handleNativeTokenRouterMessagesRequest(req: Request, res: Respons
           continue;
         }
         try {
-          const event = JSON.parse(serialized) as { type?: unknown; message?: { model?: unknown; usage?: Usage }; usage?: Usage; delta?: { text?: string; reasoning_content?: string } };
+          const event = JSON.parse(serialized) as { type?: unknown; message?: { model?: unknown; usage?: Usage; stop_reason?: string }; usage?: Usage; delta?: { text?: string; reasoning_content?: string; stop_reason?: string } };
           if (event.type === "error") { failed = true; failedMessage = "Upstream stream reported an error."; }
           usage = { ...usage, ...(event.message?.usage ?? {}), ...(event.usage ?? {}) };
+          if (event.delta?.stop_reason) stopReason = event.delta.stop_reason;
+          if (event.message?.stop_reason) stopReason = event.message.stop_reason;
           if (typeof event.delta?.text === "string") streamedOutputText += event.delta.text;
           if (typeof event.delta?.reasoning_content === "string") streamedOutputText += event.delta.reasoning_content;
           if (event.type === "message_start" && event.message) {
@@ -1082,13 +1122,56 @@ async function handleNativeTokenRouterMessagesRequest(req: Request, res: Respons
     failed = true;
   } finally {
     clearTimeout(timeout);
+    const durationMs = Date.now() - startedAt;
+    const ttftMs = firstTokenAt !== null ? firstTokenAt - startedAt : null;
+    let outcome: "success" | "truncated" | "client_disconnected" | "upstream_error" | "rejected";
+    if (clientDisconnected) {
+      outcome = "client_disconnected";
+    } else if (failed) {
+      outcome = "upstream_error";
+    } else if (stopReason === "max_tokens") {
+      outcome = "truncated";
+    } else {
+      outcome = "success";
+    }
+
     const tokens = normalizedTokens(usage, estimatedInputTokens, streamedOutputText);
-    const chargeNanos = failed ? 0 : calculateCreditChargeNanos(model, tokens.inputTokens, tokens.outputTokens, pricingTier);
-    const settlement = await settleReservedCredit({ userId: key.userId, requestId, reservedNanos, finalChargeNanos: chargeNanos, keyGroup, ...(failed ? { releaseReason: "Native TokenRouter Messages stream did not complete" } : {}) });
+    const chargeNanos = (failed || clientDisconnected) ? 0 : calculateCreditChargeNanos(model, tokens.inputTokens, tokens.outputTokens, pricingTier);
+    const settlement = await settleReservedCredit({
+      userId: key.userId,
+      requestId,
+      reservedNanos,
+      finalChargeNanos: chargeNanos,
+      keyGroup,
+      ...(clientDisconnected
+        ? { releaseReason: "Client disconnected prematurely; reservation released" }
+        : failed
+        ? { releaseReason: "Native TokenRouter Messages stream did not complete" }
+        : {}),
+    });
     const streamCompactTag = didCompactScalingTrigger
       ? `[CompactTrigger: ${((tokens.inputTokens ?? 0) + Number((usage as any).cached_tokens ?? (usage as any).prompt_tokens_details?.cached_tokens ?? (usage as any).cache_read_input_tokens ?? 0) + Number((usage as any).cache_creation_input_tokens ?? (usage as any).prompt_tokens_details?.cache_creation_tokens ?? (usage as any).prompt_cache_miss_tokens ?? 0)).toLocaleString()} -> 980k (ua: ${userAgent})]`
       : undefined;
-    await recordUsage({ requestId, userId: key.userId, apiKeyId: key.id, modelId: model, source: "api", stream: true, status: failed ? "provider_error" : "success", ...tokens, chargeNanos: settlement.chargedNanos, sourceIpHash: ipHash, provider: finalizeProviderLabel(providerLabel, isMultimodal), latencyMs: Date.now() - startedAt, errorMessage: failed ? (failedMessage ?? "The selected provider stream did not complete.") : undefined, rawErrorMessage: failed ? (failedMessage ?? "The selected provider stream did not complete.") : streamCompactTag });
+    await recordUsage({
+      requestId,
+      userId: key.userId,
+      apiKeyId: key.id,
+      modelId: model,
+      source: "api",
+      stream: true,
+      status: clientDisconnected ? "cancelled" : (failed ? "provider_error" : "success"),
+      ...tokens,
+      chargeNanos: settlement.chargedNanos,
+      sourceIpHash: ipHash,
+      provider: finalizeProviderLabel(providerLabel, isMultimodal),
+      latencyMs: durationMs,
+      durationMs,
+      ttftMs,
+      stopReason,
+      outcome,
+      errorMessage: clientDisconnected ? "Client disconnected before stream completed." : (failed ? (failedMessage ?? "The selected provider stream did not complete.") : undefined),
+      rawErrorMessage: clientDisconnected ? "[CLIENT_DISCONNECT] Caller closed socket before stream completion" : (failed ? (failedMessage ?? "The selected provider stream did not complete.") : streamCompactTag),
+    });
     if (!failed && (await isUserMessageLoggingEnabled(key.userId))) {
       void recordUserInteractionLog({
         userId: key.userId,
@@ -1484,8 +1567,8 @@ export function registerAnthropicMessagesGateway(app: Express) {
         }
         res.setHeader("request-id", requestId);
         res.setHeader("x-request-id", requestId);
-        res.setHeader("x-tokenforge-credit-balance", String(settlement.balanceNanos));
-        res.setHeader("x-tokenforge-credit-charge", String(settlement.chargedNanos));
+        res.setHeader("x-qronos-credit-balance", String(settlement.balanceNanos));
+        res.setHeader("x-qronos-credit-charge", String(settlement.chargedNanos));
         return res.status(200).json(response);
       } catch (error) {
         const message = publicProviderErrorMessage();
@@ -1554,9 +1637,14 @@ export function registerAnthropicMessagesGateway(app: Express) {
     let streamedOutputText = "";
     let streamedReasoningText = "";
     let isStreamReasoningPromoted = false;
+    let clientDisconnected = false;
+    let firstTokenAt: number | null = null;
+    let finalStopReason = "none";
+
     const finish = (reason: string = "end_turn") => {
       if (stopped) return;
       stopped = true;
+      finalStopReason = reason;
       if (!failed && textIndex === null && toolIndexes.size === 0 && streamedReasoningText.trim()) {
         isStreamReasoningPromoted = true;
         textIndex = nextIndex++;
@@ -1629,11 +1717,24 @@ export function registerAnthropicMessagesGateway(app: Express) {
       });
       writeSse(res, "message_stop", { type: "message_stop" });
     };
-    res.on("close", () => { if (!res.writableEnded) aborter.abort(); });
+
+    const onClientClose = () => {
+      if (!res.writableEnded && !stopped) {
+        clientDisconnected = true;
+        failed = true;
+        failedMessage = "Client closed connection before stream completed.";
+        aborter.abort();
+        try { reader.cancel().catch(() => {}); } catch {}
+      }
+    };
+    req.on("close", onClientClose);
+    res.on("close", onClientClose);
+
     try {
       while (true) {
         const next = await readWithIdleTimeout(reader);
         if (next.done) break;
+        if (firstTokenAt === null) firstTokenAt = Date.now();
         buffer += decoder.decode(next.value, { stream: true });
         const lines = buffer.split("\n");
         buffer = lines.pop() ?? "";
@@ -1732,8 +1833,20 @@ export function registerAnthropicMessagesGateway(app: Express) {
           }
         }
       }
+      const durationMs = Date.now() - startedAt;
+      const ttftMs = firstTokenAt !== null ? firstTokenAt - startedAt : null;
+      let outcome: "success" | "truncated" | "client_disconnected" | "upstream_error" | "rejected";
+      if (clientDisconnected) {
+        outcome = "client_disconnected";
+      } else if (failed) {
+        outcome = "upstream_error";
+      } else if (finalStopReason === "max_tokens") {
+        outcome = "truncated";
+      } else {
+        outcome = "success";
+      }
       const tokens = normalizedTokens(usage, estimatedInputTokens, streamedOutputText);
-      const chargeNanos = failed ? 0 : calculateCreditChargeNanos(model, tokens.inputTokens, tokens.outputTokens, pricingTier);
+      const chargeNanos = (failed || clientDisconnected) ? 0 : calculateCreditChargeNanos(model, tokens.inputTokens, tokens.outputTokens, pricingTier);
       const settlement = await settleReservedCredit({
         userId: key.userId,
         requestId,
@@ -1741,7 +1854,9 @@ export function registerAnthropicMessagesGateway(app: Express) {
         finalChargeNanos: chargeNanos,
         usedTokens: tokens.totalTokens ?? (tokens.inputTokens + tokens.outputTokens),
         keyGroup,
-        releaseReason: failed ? "Anthropic Messages stream was cancelled" : undefined,
+        releaseReason: clientDisconnected
+          ? "Client disconnected prematurely; reservation released"
+          : (failed ? "Anthropic Messages stream was cancelled" : undefined),
       });
       const streamCompactTag = didCompactScalingTrigger
         ? `[CompactTrigger: ${((tokens.inputTokens ?? 0) + Number((usage as any).cached_tokens ?? (usage as any).prompt_tokens_details?.cached_tokens ?? (usage as any).cache_read_input_tokens ?? 0) + Number((usage as any).cache_creation_input_tokens ?? (usage as any).prompt_tokens_details?.cache_creation_tokens ?? (usage as any).prompt_cache_miss_tokens ?? 0)).toLocaleString()} -> 980k (ua: ${userAgent})]`
@@ -1756,14 +1871,18 @@ export function registerAnthropicMessagesGateway(app: Express) {
         modelId: model,
         source: "api",
         stream: true,
-        status: failed ? "cancelled" : "success",
+        status: clientDisconnected ? "cancelled" : (failed ? "provider_error" : "success"),
         ...tokens,
         chargeNanos: settlement.chargedNanos,
         sourceIpHash: ipHash,
         provider: finalizeProviderLabel(providerContext.providerLabel, providerContext),
-        latencyMs: Date.now() - startedAt,
-        errorMessage: failed ? (failedMessage ?? "The selected provider stream was cancelled.") : undefined,
-        rawErrorMessage: failed ? (failedMessage ?? "The selected provider stream was cancelled.") : (streamReasoningTag ?? streamCompactTag),
+        latencyMs: durationMs,
+        durationMs,
+        ttftMs,
+        stopReason: finalStopReason,
+        outcome,
+        errorMessage: clientDisconnected ? "Client disconnected before stream completed." : (failed ? (failedMessage ?? "The selected provider stream was cancelled.") : undefined),
+        rawErrorMessage: clientDisconnected ? "[CLIENT_DISCONNECT] Caller closed socket before stream completion" : (failed ? (failedMessage ?? "The selected provider stream was cancelled.") : (streamReasoningTag ?? streamCompactTag)),
         reasoningReturned: isStreamReasoningPromoted,
       });
       if (isCacheDebugEnabled()) {

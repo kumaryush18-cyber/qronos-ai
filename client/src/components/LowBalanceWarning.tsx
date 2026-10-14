@@ -43,7 +43,7 @@ export interface LowBalanceWarningProps {
 }
 
 const NANO_DOLLARS = 1_000_000_000;
-const SESSION_DISMISS_KEY = "tokenforge_low_balance_dismissed_at";
+const SESSION_DISMISS_KEY = "qronos_low_balance_dismissed_at";
 
 export function LowBalanceWarning({
   thresholdCredits = 500,

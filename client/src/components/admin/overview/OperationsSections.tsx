@@ -92,7 +92,7 @@ export function downloadAuditCsv(exportData: { columns: string[]; rows: string[]
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = url;
-  anchor.download = `tokenforge-admin-audit-${new Date().toISOString().slice(0, 10)}.csv`;
+  anchor.download = `qronos-admin-audit-${new Date().toISOString().slice(0, 10)}.csv`;
   anchor.click();
   URL.revokeObjectURL(url);
 }

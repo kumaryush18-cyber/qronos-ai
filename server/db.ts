@@ -1289,42 +1289,124 @@ export async function awardReferralForNewUser(referredUserId: number, rawReferra
       const inserted = await tx.insert(referralAttributions).values({
         referrerUserId: invitation.userId,
         referredUserId,
-        rewardNanos: TOKENFORGE_REFERRAL_REWARD_NANOS,
+        rewardNanos: 0,
       });
       const referralId = Number(inserted[0].insertId);
-      await tx.update(creditAccounts)
-        .set({ balanceNanos: sql`${creditAccounts.balanceNanos} + ${TOKENFORGE_REFERRAL_REWARD_NANOS}` })
-        .where(inArray(creditAccounts.userId, [invitation.userId, referredUserId]));
-      const accounts = await tx.select().from(creditAccounts).where(inArray(creditAccounts.userId, [invitation.userId, referredUserId]));
-      const balances = new Map(accounts.map(account => [account.userId, account.balanceNanos]));
-      await tx.insert(creditLedger).values([
-        {
-          userId: invitation.userId,
-          kind: "referral_reward",
-          amountNanos: TOKENFORGE_REFERRAL_REWARD_NANOS,
-          balanceAfterNanos: balances.get(invitation.userId) ?? TOKENFORGE_REFERRAL_REWARD_NANOS,
-          referenceId: `referral:${referralId}:inviter`,
-          note: "Referral reward for an eligible new member",
-        },
-        {
-          userId: referredUserId,
-          kind: "referral_reward",
-          amountNanos: TOKENFORGE_REFERRAL_REWARD_NANOS,
-          balanceAfterNanos: balances.get(referredUserId) ?? TOKENFORGE_REFERRAL_REWARD_NANOS,
-          referenceId: `referral:${referralId}:new-member`,
-          note: "Welcome reward from a valid referral",
-        },
-      ]);
+
+      const inviter = (await tx.select({ email: users.email }).from(users).where(eq(users.id, invitation.userId)).limit(1))[0];
+      if (inviter?.email) {
+        await tx.insert(systemNotifications).values({
+          title: "New Affiliate Referral Joined",
+          message: `A new developer joined using your affiliate link! You will earn 25% lifetime commission on every balance recharge they make.`,
+          type: "update",
+          targetAudience: "SPECIFIC_EMAILS",
+          targetEmails: normalizeEmail(inviter.email),
+          createdByUserId: referredUserId,
+          createdAt: new Date(),
+        });
+      }
+
       return { awarded: true as const, referralId, referrerUserId: invitation.userId };
     });
     if (outcome.awarded) {
-      await writeAuditEvent({ actorUserId: outcome.referrerUserId, targetUserId: referredUserId, action: "referral_reward_awarded", entityType: "referral", entityId: String(outcome.referralId), metadata: { rewardNanos: TOKENFORGE_REFERRAL_REWARD_NANOS } });
+      await writeAuditEvent({ actorUserId: outcome.referrerUserId, targetUserId: referredUserId, action: "referral_bound", entityType: "referral", entityId: String(outcome.referralId), metadata: { rewardNanos: 0 } });
     }
     return outcome;
   } catch (error: any) {
     if (error?.code === "ER_DUP_ENTRY") return { awarded: false as const, reason: "already_rewarded" as const };
     throw error;
   }
+}
+
+/**
+ * Deposits 25% affiliate commission into the inviter's PAYG balance on every recharge made by a referred user.
+ */
+export async function applyReferralCommissionForRecharge(
+  tx: any,
+  payingUserId: number,
+  rechargeAmountNanos: number,
+  orderId: string,
+  paymentMethod: string
+) {
+  if (rechargeAmountNanos <= 0) return null;
+
+  const attribution = (
+    await tx
+      .select({
+        id: referralAttributions.id,
+        referrerUserId: referralAttributions.referrerUserId,
+      })
+      .from(referralAttributions)
+      .where(eq(referralAttributions.referredUserId, payingUserId))
+      .limit(1)
+  )[0];
+
+  if (!attribution || !attribution.referrerUserId || attribution.referrerUserId === payingUserId) {
+    return null;
+  }
+
+  const referrerUserId = attribution.referrerUserId;
+  const commissionNanos = Math.round(rechargeAmountNanos * 0.25);
+  if (commissionNanos <= 0) return null;
+
+  await tx.insert(creditAccounts).values({
+    userId: referrerUserId,
+    balanceNanos: 0,
+    paygBalanceNanos: 0,
+    codingPlanTokens: 0,
+  }).onDuplicateKeyUpdate({ set: { userId: referrerUserId } });
+
+  await tx
+    .update(creditAccounts)
+    .set({ paygBalanceNanos: sql`${creditAccounts.paygBalanceNanos} + ${commissionNanos}` })
+    .where(eq(creditAccounts.userId, referrerUserId));
+
+  const referrerAccount = (
+    await tx
+      .select({ paygBalanceNanos: creditAccounts.paygBalanceNanos })
+      .from(creditAccounts)
+      .where(eq(creditAccounts.userId, referrerUserId))
+      .limit(1)
+  )[0];
+
+  const commissionUsd = (commissionNanos / 1_000_000_000).toFixed(2);
+  const rechargeUsd = (rechargeAmountNanos / 1_000_000_000).toFixed(2);
+
+  await tx.insert(creditLedger).values({
+    userId: referrerUserId,
+    kind: "referral_commission",
+    amountNanos: commissionNanos,
+    balanceAfterNanos: referrerAccount?.paygBalanceNanos ?? commissionNanos,
+    referenceId: `ref_comm:${orderId}:${payingUserId}`,
+    note: `25% Affiliate Commission from referral recharge ($${rechargeUsd} ${paymentMethod}). +$${commissionUsd} PAYG credit.`,
+  });
+
+  await tx
+    .update(referralAttributions)
+    .set({ rewardNanos: sql`${referralAttributions.rewardNanos} + ${commissionNanos}` })
+    .where(eq(referralAttributions.id, attribution.id));
+
+  const referrerUser = (
+    await tx
+      .select({ email: users.email })
+      .from(users)
+      .where(eq(users.id, referrerUserId))
+      .limit(1)
+  )[0];
+
+  if (referrerUser?.email) {
+    await tx.insert(systemNotifications).values({
+      title: "Referral Commission Received",
+      message: `You earned $${commissionUsd} (25% commission) from a referred user's $${rechargeUsd} ${paymentMethod} recharge! Deposited to your PAYG balance.`,
+      type: "update",
+      targetAudience: "SPECIFIC_EMAILS",
+      targetEmails: normalizeEmail(referrerUser.email),
+      createdByUserId: payingUserId,
+      createdAt: new Date(),
+    });
+  }
+
+  return { referrerUserId, commissionNanos };
 }
 
 export async function getReferralOverview(userId: number) {
@@ -1891,37 +1973,24 @@ export async function creditAccountFromSolanaPay(input: {
         referenceId: `solana_coding:${input.orderId}`,
         note: `Coding Plan: ${input.planName || "Coding Plan"} (+${mTokens}M Tokens). tx: ${input.signature.slice(0, 8)}...`,
       });
+      await applyReferralCommissionForRecharge(tx, input.userId, amountNanos, input.orderId, "Solana Pay");
       return { balanceNanos, paygBalanceNanos, codingPlanTokens };
-    } else if (input.isPayg) {
+    } else {
       const creditGrantNanos = amountNanos;
       await tx.update(creditAccounts).set({ paygBalanceNanos: sql`${creditAccounts.paygBalanceNanos} + ${creditGrantNanos}` }).where(eq(creditAccounts.userId, input.userId));
       const account = (await tx.select().from(creditAccounts).where(eq(creditAccounts.userId, input.userId)).limit(1))[0];
-      const balanceNanos = account?.balanceNanos ?? 0;
+      const balanceNanos = 0;
       const paygBalanceNanos = Number(account?.paygBalanceNanos ?? creditGrantNanos);
       const codingPlanTokens = Number((account as any)?.codingPlanTokens ?? 0);
       await tx.insert(creditLedger).values({
-        userId,
+        userId: input.userId,
         kind: "manual_adjustment",
         amountNanos: creditGrantNanos,
         balanceAfterNanos: paygBalanceNanos,
         referenceId: `solana_payg:${input.orderId}`,
         note: `PAYG USD Deposit (${input.assetLabel ?? "USD"}) with 60% Model Discount. tx: ${input.signature.slice(0, 8)}...`,
       });
-      return { balanceNanos, paygBalanceNanos, codingPlanTokens };
-    } else {
-      await tx.update(creditAccounts).set({ balanceNanos: sql`${creditAccounts.balanceNanos} + ${amountNanos}` }).where(eq(creditAccounts.userId, input.userId));
-      const account = (await tx.select().from(creditAccounts).where(eq(creditAccounts.userId, input.userId)).limit(1))[0];
-      const balanceNanos = account?.balanceNanos ?? amountNanos;
-      const paygBalanceNanos = Number(account?.paygBalanceNanos ?? 0);
-      const codingPlanTokens = Number((account as any)?.codingPlanTokens ?? 0);
-      await tx.insert(creditLedger).values({
-        userId: input.userId,
-        kind: "manual_adjustment",
-        amountNanos,
-        balanceAfterNanos: balanceNanos,
-        referenceId: `solana_pay:${input.orderId}`,
-        note: `Solana Pay settlement (${input.assetLabel ?? "Mainnet SOL"}) tx: ${input.signature.slice(0, 8)}...`,
-      });
+      await applyReferralCommissionForRecharge(tx, input.userId, amountNanos, input.orderId, input.assetLabel ?? "Solana Pay");
       return { balanceNanos, paygBalanceNanos, codingPlanTokens };
     }
   });
@@ -1976,12 +2045,13 @@ export async function creditAccountFromUPIPay(input: {
           referenceId: `upi_coding:${input.orderId}`,
           note: `Coding Plan: ${input.planName || "Coding Plan"} (+${mTokens}M Tokens). UTR: ${input.utr}`,
         });
+        await applyReferralCommissionForRecharge(tx, input.userId, amountNanos, input.orderId, "Domestic UPI");
         return { balanceNanos, paygBalanceNanos, codingPlanTokens };
-      } else if (input.isPayg) {
+      } else {
         const creditGrantNanos = amountNanos;
         await tx.update(creditAccounts).set({ paygBalanceNanos: sql`${creditAccounts.paygBalanceNanos} + ${creditGrantNanos}` }).where(eq(creditAccounts.userId, input.userId));
         const account = (await tx.select().from(creditAccounts).where(eq(creditAccounts.userId, input.userId)).limit(1))[0];
-        const balanceNanos = account?.balanceNanos ?? 0;
+        const balanceNanos = 0;
         const paygBalanceNanos = Number(account?.paygBalanceNanos ?? creditGrantNanos);
         const codingPlanTokens = Number((account as any)?.codingPlanTokens ?? 0);
         await tx.insert(creditLedger).values({
@@ -1992,21 +2062,7 @@ export async function creditAccountFromUPIPay(input: {
           referenceId: `upi_payg:${input.orderId}`,
           note: `PAYG USD Deposit (${input.assetLabel ?? "UPI INR"}) with 60% Model Discount. UTR: ${input.utr}`,
         });
-        return { balanceNanos, paygBalanceNanos, codingPlanTokens };
-      } else {
-        await tx.update(creditAccounts).set({ balanceNanos: sql`${creditAccounts.balanceNanos} + ${amountNanos}` }).where(eq(creditAccounts.userId, input.userId));
-        const account = (await tx.select().from(creditAccounts).where(eq(creditAccounts.userId, input.userId)).limit(1))[0];
-        const balanceNanos = account?.balanceNanos ?? amountNanos;
-        const paygBalanceNanos = Number(account?.paygBalanceNanos ?? 0);
-        const codingPlanTokens = Number((account as any)?.codingPlanTokens ?? 0);
-        await tx.insert(creditLedger).values({
-          userId: input.userId,
-          kind: "manual_adjustment",
-          amountNanos,
-          balanceAfterNanos: balanceNanos,
-          referenceId: `upi_pay:${input.orderId}`,
-          note: `UPI payment verified (${input.assetLabel ?? "UPI INR"}) UTR: ${input.utr}`,
-        });
+        await applyReferralCommissionForRecharge(tx, input.userId, amountNanos, input.orderId, input.assetLabel ?? "Domestic UPI");
         return { balanceNanos, paygBalanceNanos, codingPlanTokens };
       }
     });
@@ -2042,36 +2098,21 @@ export async function creditAccountFromDodoPay(input: {
 
     return await db.transaction(async tx => {
       await tx.insert(creditAccounts).values({ userId: input.userId, balanceNanos: 0, paygBalanceNanos: 0 }).onDuplicateKeyUpdate({ set: { userId: input.userId } });
-      if (input.isPayg) {
-        const creditGrantNanos = amountNanos;
-        await tx.update(creditAccounts).set({ paygBalanceNanos: sql`${creditAccounts.paygBalanceNanos} + ${creditGrantNanos}` }).where(eq(creditAccounts.userId, input.userId));
-        const account = (await tx.select().from(creditAccounts).where(eq(creditAccounts.userId, input.userId)).limit(1))[0];
-        const balanceNanos = account?.balanceNanos ?? 0;
-        const paygBalanceNanos = Number(account?.paygBalanceNanos ?? creditGrantNanos);
-        await tx.insert(creditLedger).values({
-          userId: input.userId,
-          kind: "manual_adjustment",
-          amountNanos: creditGrantNanos,
-          balanceAfterNanos: paygBalanceNanos,
-          referenceId: `dodo_payg:${input.paymentId || input.orderId}`,
-          note: `PAYG USD Deposit (${input.assetLabel ?? (input.planName || "Card Deposit")}) with 60% Model Discount. payment_id: ${input.paymentId}`,
-        });
-        return { balanceNanos, paygBalanceNanos };
-      } else {
-        await tx.update(creditAccounts).set({ balanceNanos: sql`${creditAccounts.balanceNanos} + ${amountNanos}` }).where(eq(creditAccounts.userId, input.userId));
-        const account = (await tx.select().from(creditAccounts).where(eq(creditAccounts.userId, input.userId)).limit(1))[0];
-        const balanceNanos = account?.balanceNanos ?? amountNanos;
-        const paygBalanceNanos = Number(account?.paygBalanceNanos ?? 0);
-        await tx.insert(creditLedger).values({
-          userId: input.userId,
-          kind: "manual_adjustment",
-          amountNanos,
-          balanceAfterNanos: balanceNanos,
-          referenceId: `dodo_pay:${input.paymentId || input.orderId}`,
-          note: `Dodo Payments settlement (${input.assetLabel ?? (input.planName || "Card Top-Up")}) payment_id: ${input.paymentId}`,
-        });
-        return { balanceNanos, paygBalanceNanos };
-      }
+      const creditGrantNanos = amountNanos;
+      await tx.update(creditAccounts).set({ paygBalanceNanos: sql`${creditAccounts.paygBalanceNanos} + ${creditGrantNanos}` }).where(eq(creditAccounts.userId, input.userId));
+      const account = (await tx.select().from(creditAccounts).where(eq(creditAccounts.userId, input.userId)).limit(1))[0];
+      const balanceNanos = 0;
+      const paygBalanceNanos = Number(account?.paygBalanceNanos ?? creditGrantNanos);
+      await tx.insert(creditLedger).values({
+        userId: input.userId,
+        kind: "manual_adjustment",
+        amountNanos: creditGrantNanos,
+        balanceAfterNanos: paygBalanceNanos,
+        referenceId: `dodo_payg:${input.paymentId || input.orderId}`,
+        note: `PAYG USD Deposit (${input.assetLabel ?? (input.planName || "Card Deposit")}) with 60% Model Discount. payment_id: ${input.paymentId}`,
+      });
+      await applyReferralCommissionForRecharge(tx, input.userId, amountNanos, input.paymentId || input.orderId, "Card Payment");
+      return { balanceNanos, paygBalanceNanos };
     });
   } catch (error: any) {
     markDatabaseUnhealthy(error?.message ?? String(error));
@@ -2233,6 +2274,7 @@ export async function getDb(): Promise<ReturnType<typeof drizzle> | null> {
         void ensureUserCreditsEnabledColumn(_pool);
         void ensureCreditAccountsColumns(_pool);
         void ensureUsageEventsRequestIdIndex(_pool);
+        void ensureUsageEventsOutcomeColumns(_pool);
         void ensureNotificationTables(_pool);
       }
     } catch (error: any) {
@@ -2440,6 +2482,25 @@ async function ensureUsageEventsRequestIdIndex(pool: mysql.Pool) {
   } catch (err: any) {
     if (err?.errno !== 1061 && !String(err?.message).includes("Duplicate key")) {
       console.warn("[Database] Note on ensureUsageEventsRequestIdIndex:", err?.message ?? err);
+    }
+  }
+}
+
+let _usageEventsOutcomeColumnsEnsured = false;
+async function ensureUsageEventsOutcomeColumns(pool: mysql.Pool) {
+  if (_usageEventsOutcomeColumnsEnsured) return;
+  _usageEventsOutcomeColumnsEnsured = true;
+  const queries = [
+    "ALTER TABLE usage_events ADD COLUMN outcome VARCHAR(32) DEFAULT 'success'",
+    "ALTER TABLE usage_events ADD COLUMN stopReason VARCHAR(32) NULL",
+    "ALTER TABLE usage_events ADD COLUMN ttftMs INT NULL",
+    "ALTER TABLE usage_events ADD COLUMN durationMs INT NULL",
+  ];
+  for (const q of queries) {
+    try {
+      await pool.query(q);
+    } catch {
+      // ER_DUP_FIELDNAME (1060) is expected if column already exists
     }
   }
 }
@@ -4524,6 +4585,7 @@ export async function getRecentKimiK3FailureLogs(limit = 100) {
 }
 
 export const MANAGED_PROVIDER_FAILURE_LOG_RETENTION_MS = 28 * 60 * 60 * 1_000;
+export const USAGE_EVENTS_RETENTION_MS = 48 * 60 * 60 * 1_000; // 48 hours
 
 /** Removes credential-redacted provider diagnostics after their 28-hour administrator retention window. */
 export async function pruneExpiredManagedProviderFailureLogs(now = new Date()) {
@@ -4534,10 +4596,25 @@ export async function pruneExpiredManagedProviderFailureLogs(now = new Date()) {
   return { cutoff, deleted: true };
 }
 
-// Auto-prune old failure logs every 6 hours so ephemeral rows do not accumulate
+/** Automatically removes raw live request logs older than 48 hours to preserve TiDB RUs and disk space. */
+export async function pruneExpiredUsageEvents(now = new Date()) {
+  const db = await getDb();
+  const cutoff = new Date(now.getTime() - USAGE_EVENTS_RETENTION_MS);
+  if (!db) return { cutoff, deleted: false };
+  try {
+    await db.delete(usageEvents).where(lt(usageEvents.createdAt, cutoff));
+    return { cutoff, deleted: true };
+  } catch (err) {
+    console.warn("[UsageEvents Prune] Cleanup failed:", err);
+    return { cutoff, deleted: false };
+  }
+}
+
+// Auto-prune old failure logs and raw usage events older than 48 hours every 6 hours
 if (typeof setInterval !== "undefined") {
   const _failurePruneInterval = setInterval(() => {
     void pruneExpiredManagedProviderFailureLogs().catch(() => undefined);
+    void pruneExpiredUsageEvents().catch(() => undefined);
   }, 6 * 60 * 60 * 1000);
   if (_failurePruneInterval.unref) _failurePruneInterval.unref();
 }
@@ -6378,6 +6455,10 @@ export async function recordUsage(input: {
   chargeNanos?: number;
   sourceIpHash?: string;
   latencyMs?: number;
+  ttftMs?: number | null;
+  durationMs?: number | null;
+  stopReason?: string | null;
+  outcome?: "success" | "truncated" | "client_disconnected" | "upstream_error" | "rejected";
   errorMessage?: string;
   rawErrorMessage?: string;
   provider?: string;
@@ -6398,6 +6479,25 @@ export async function recordUsage(input: {
     : input.provider;
   const rawErrorMessage = input.rawErrorMessage ?? input.errorMessage;
 
+  let outcome = input.outcome;
+  if (!outcome) {
+    if (input.status === "rejected") {
+      outcome = "rejected";
+    } else if (input.status === "provider_error") {
+      outcome = "upstream_error";
+    } else if (input.status === "cancelled") {
+      outcome = "client_disconnected";
+    } else if (input.stopReason === "max_tokens" || input.stopReason === "length") {
+      outcome = "truncated";
+    } else {
+      outcome = "success";
+    }
+  }
+
+  const durationMs = input.durationMs ?? input.latencyMs ?? null;
+  const ttftMs = input.ttftMs ?? null;
+  const stopReason = input.stopReason ?? (outcome === "success" ? "end_turn" : "none");
+
   _pendingUsageEvents.push({
     ...input,
     provider,
@@ -6406,6 +6506,10 @@ export async function recordUsage(input: {
     totalTokens,
     chargeNanos,
     rawErrorMessage,
+    outcome,
+    stopReason,
+    ttftMs,
+    durationMs,
   });
 
   const rollupKey = `${input.userId}:${input.apiKeyId ?? 0}:${day.toISOString().slice(0, 10)}:${input.modelId}`;
@@ -6450,6 +6554,10 @@ export async function recordUsage(input: {
     chargeNanos,
     sourceIpHash: input.sourceIpHash,
     latencyMs: input.latencyMs,
+    ttftMs,
+    durationMs,
+    stopReason,
+    outcome,
     errorMessage: input.errorMessage,
     rawErrorMessage: input.rawErrorMessage,
     provider: input.provider,
@@ -6479,6 +6587,10 @@ export async function getRecentLiveRequests(limit = 25): Promise<LiveRequestEven
       chargeNanos: usageEvents.chargeNanos,
       sourceIpHash: usageEvents.sourceIpHash,
       latencyMs: usageEvents.latencyMs,
+      ttftMs: usageEvents.ttftMs,
+      durationMs: usageEvents.durationMs,
+      stopReason: usageEvents.stopReason,
+      outcome: usageEvents.outcome,
       errorMessage: usageEvents.errorMessage,
       rawErrorMessage: usageEvents.rawErrorMessage,
       provider: usageEvents.provider,
@@ -6503,6 +6615,10 @@ export async function getRecentLiveRequests(limit = 25): Promise<LiveRequestEven
     chargeNanos: row.chargeNanos,
     sourceIpHash: row.sourceIpHash ?? undefined,
     latencyMs: row.latencyMs ?? undefined,
+    ttftMs: row.ttftMs ?? undefined,
+    durationMs: row.durationMs ?? row.latencyMs ?? undefined,
+    stopReason: row.stopReason ?? undefined,
+    outcome: (row.outcome as any) ?? (row.status === "success" ? "success" : "upstream_error"),
     errorMessage: row.errorMessage ?? undefined,
     rawErrorMessage: row.rawErrorMessage ?? undefined,
     provider: row.provider ?? undefined,
@@ -6535,6 +6651,12 @@ export async function getUsageLogs(input: { userId: number; modelId?: string; so
       outputTokens: usageEvents.outputTokens,
       totalTokens: usageEvents.totalTokens,
       chargeNanos: usageEvents.chargeNanos,
+      latencyMs: usageEvents.latencyMs,
+      ttftMs: usageEvents.ttftMs,
+      durationMs: usageEvents.durationMs,
+      stopReason: usageEvents.stopReason,
+      outcome: usageEvents.outcome,
+      provider: usageEvents.provider,
       apiKeyLabel: apiKeys.label,
     })
     .from(usageEvents)
@@ -7775,7 +7897,7 @@ export async function grantAdminAccountCredit(input: {
   userId: number;
   amountNanos: number;
   actorUserId: number;
-  balanceType?: "bundle" | "payg" | "tokens";
+  balanceType?: "payg" | "tokens";
   amountTokens?: number;
 }) {
   const db = await getDb();
@@ -7786,7 +7908,7 @@ export async function grantAdminAccountCredit(input: {
   const user = (await db.select({ id: users.id }).from(users).where(eq(users.id, input.userId)).limit(1))[0];
   if (!user) return null;
   await ensureCreditAccount(input.userId);
-  const balanceType = input.balanceType ?? "bundle";
+  const balanceType = input.balanceType ?? "payg";
 
   return db.transaction(async tx => {
     const giveawayId = randomBytes(12).toString("hex");
@@ -7836,10 +7958,10 @@ export async function grantAdminAccountCredit(input: {
         codingPlanTokens,
         balanceType: "tokens" as const,
       };
-    } else if (balanceType === "payg") {
+    } else {
       await tx.update(creditAccounts).set({ paygBalanceNanos: sql`${creditAccounts.paygBalanceNanos} + ${amountNanos}` }).where(eq(creditAccounts.userId, input.userId));
       const account = (await tx.select().from(creditAccounts).where(eq(creditAccounts.userId, input.userId)).limit(1))[0];
-      const balanceNanos = account?.balanceNanos ?? 0;
+      const balanceNanos = 0;
       const paygBalanceNanos = Number(account?.paygBalanceNanos ?? amountNanos);
       const codingPlanTokens = Number((account as any)?.codingPlanTokens ?? 0);
       const usdAmount = (amountNanos / 1_000_000_000).toFixed(2);
@@ -7870,37 +7992,6 @@ export async function grantAdminAccountCredit(input: {
       }
 
       return { amountNanos, balanceNanos, paygBalanceNanos, codingPlanTokens, balanceType: "payg" as const };
-    } else {
-      const announcementNote = "An administrator added credits to your Qronos AI account.";
-      await tx.update(creditAccounts).set({ balanceNanos: sql`${creditAccounts.balanceNanos} + ${amountNanos}` }).where(eq(creditAccounts.userId, input.userId));
-      const account = (await tx.select().from(creditAccounts).where(eq(creditAccounts.userId, input.userId)).limit(1))[0];
-      const balanceNanos = account?.balanceNanos ?? amountNanos;
-      const paygBalanceNanos = Number(account?.paygBalanceNanos ?? 0);
-      const codingPlanTokens = Number((account as any)?.codingPlanTokens ?? 0);
-      await tx.insert(creditLedger).values({
-        userId: input.userId,
-        kind: "manual_adjustment",
-        amountNanos,
-        balanceAfterNanos: balanceNanos,
-        referenceId: `admin-credit:${giveawayId}:${input.userId}`,
-        note: announcementNote,
-      });
-
-      const recipientUser = (await tx.select().from(users).where(eq(users.id, input.userId)).limit(1))[0];
-      const targetEmail = recipientUser?.email ? normalizeEmail(recipientUser.email) : null;
-      if (targetEmail) {
-        await tx.insert(systemNotifications).values({
-          title: "Account Balance Credited",
-          message: announcementNote,
-          type: "update",
-          targetAudience: "SPECIFIC_EMAILS",
-          targetEmails: targetEmail,
-          createdByUserId: input.actorUserId,
-          createdAt: new Date(),
-        });
-      }
-
-      return { amountNanos, balanceNanos, paygBalanceNanos, codingPlanTokens, balanceType: "bundle" as const };
     }
   });
 }
@@ -7910,7 +8001,7 @@ export async function setAdminAccountCredit(input: {
   userId: number;
   targetAmountNanos: number;
   actorUserId: number;
-  balanceType?: "bundle" | "payg" | "tokens";
+  balanceType?: "payg" | "tokens";
   targetTokens?: number;
   note?: string;
 }) {
@@ -7921,7 +8012,7 @@ export async function setAdminAccountCredit(input: {
   const user = (await db.select({ id: users.id }).from(users).where(eq(users.id, input.userId)).limit(1))[0];
   if (!user) return null;
   await ensureCreditAccount(input.userId);
-  const balanceType = input.balanceType ?? "bundle";
+  const balanceType = input.balanceType ?? "payg";
 
   return db.transaction(async tx => {
     const existing = (
@@ -7984,7 +8075,7 @@ export async function setAdminAccountCredit(input: {
         codingPlanTokens: finalTargetTokens,
         balanceType: "tokens" as const,
       };
-    } else if (balanceType === "payg") {
+    } else {
       const targetUsd = (targetAmountNanos / 1_000_000_000).toFixed(2);
       const diffNanos = targetAmountNanos - currentPaygBalanceNanos;
       await tx
@@ -8027,36 +8118,6 @@ export async function setAdminAccountCredit(input: {
         paygBalanceNanos: targetAmountNanos,
         codingPlanTokens: currentCodingTokens,
         balanceType: "payg" as const,
-      };
-    } else {
-      const targetUsd = (targetAmountNanos / 1_000_000_000).toFixed(2);
-      const diffNanos = targetAmountNanos - currentBalanceNanos;
-      await tx
-        .update(creditAccounts)
-        .set({ balanceNanos: targetAmountNanos })
-        .where(eq(creditAccounts.userId, input.userId));
-
-      const defaultNote = diffNanos < 0
-        ? `Administrator reduced bundle credits to $${targetUsd}.`
-        : `Administrator adjusted bundle credits to $${targetUsd}.`;
-      const note = input.note?.trim() || defaultNote;
-
-      await tx.insert(creditLedger).values({
-        userId: input.userId,
-        kind: "manual_adjustment",
-        amountNanos: diffNanos,
-        balanceAfterNanos: targetAmountNanos,
-        referenceId: `admin-set-credit:${adjustmentId}:${input.userId}`,
-        note,
-      });
-
-      return {
-        targetAmountNanos,
-        diffNanos,
-        balanceNanos: targetAmountNanos,
-        paygBalanceNanos: currentPaygBalanceNanos,
-        codingPlanTokens: currentCodingTokens,
-        balanceType: "bundle" as const,
       };
     }
   });

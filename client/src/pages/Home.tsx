@@ -5,7 +5,7 @@ import { QronosGlyph } from "@/components/QronosGlyph";
 import { ProviderMark } from "@/components/ProviderMark";
 import { VortexHourglass } from "@/components/VortexHourglass";
 import { StarButton } from "@/components/StarButton";
-import { TOKENFORGE_MODELS, CatalogueModel } from "@/lib/modelCatalogue";
+import { QRONOS_MODELS, CatalogueModel } from "@/lib/modelCatalogue";
 import { trpc } from "@/lib/trpc";
 import {
   ArrowRight,
@@ -33,19 +33,7 @@ import {
   Server
 } from "lucide-react";
 import "./infergate-landing.css";
-
-const QRONOS_LOGOS = [
-  { src: "/images/logo-marquee/stripe.png", alt: "AnythingLLM" },
-  { src: "/images/logo-marquee/vercel.png", alt: "Relevance AI" },
-  { src: "/images/logo-marquee/bigquery.png", alt: "Cron schedules" },
-  { src: "/images/logo-marquee/slack.png", alt: "Webhooks" },
-  { src: "/images/logo-marquee/supabase.png", alt: "State storage" },
-  { src: "/images/logo-marquee/github.png", alt: "GitHub" },
-  { src: "/images/logo-marquee/hubspot.png", alt: "Tool access" },
-  { src: "/images/logo-marquee/zapier.png", alt: "Zapier" },
-  { src: "/images/logo-marquee/snowflake.png", alt: "Run memory" },
-  { src: "/images/logo-marquee/aws-s3.png", alt: "Generated files" },
-];
+import { QRONOS_LOGOS } from "@/lib/logos";
 
 const MARQUEE_ITEMS = [
   { label: "Anthropic Claude 3.7", icon: "🟣" },
@@ -421,7 +409,7 @@ function ModelShowcase() {
   const [filter, setFilter] = useState<"all" | "reasoning" | "coding" | "fast" | "flagship">("all");
   const [search, setSearch] = useState("");
 
-  const filteredModels = TOKENFORGE_MODELS.filter(m => {
+  const filteredModels = QRONOS_MODELS.filter(m => {
     const matchesSearch =
       m.name.toLowerCase().includes(search.toLowerCase()) ||
       m.provider.toLowerCase().includes(search.toLowerCase()) ||
@@ -441,7 +429,7 @@ function ModelShowcase() {
       <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-8">
         <div className="flex items-center gap-1.5 p-1 bg-white/[0.03] rounded-xl border border-white/[0.08] w-full sm:w-auto overflow-x-auto">
           {[
-            { id: "all", label: `All Models (${TOKENFORGE_MODELS.length})` },
+            { id: "all", label: `All Models (${QRONOS_MODELS.length})` },
             { id: "flagship", label: "Flagship Reasoning" },
             { id: "coding", label: "Coding & Agentic" },
             { id: "fast", label: "Ultra-Fast & Budget" },
@@ -531,7 +519,7 @@ function ModelShowcase() {
           href="/models"
           className="inline-flex items-center gap-2 text-sm font-semibold text-zinc-300 hover:text-white px-5 py-2.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 transition"
         >
-          <span>Explore All {TOKENFORGE_MODELS.length} Models & Published Pricing</span>
+          <span>Explore All {QRONOS_MODELS.length} Models & Published Pricing</span>
           <ExternalLink size={14} />
         </Link>
       </div>
@@ -713,7 +701,7 @@ export default function Home() {
             </div>
             <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-5">
               <p className="text-xs text-zinc-500">Verified models</p>
-              <p className="mt-2 font-mono text-2xl font-light text-white">{TOKENFORGE_MODELS.length}</p>
+              <p className="mt-2 font-mono text-2xl font-light text-white">{QRONOS_MODELS.length}</p>
             </div>
             <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-5">
               <p className="text-xs text-zinc-500">Failover latency</p>

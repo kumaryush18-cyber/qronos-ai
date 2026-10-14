@@ -1,17 +1,19 @@
 import { PUBLIC_ORIGIN } from "./const";
 export const QRONOS_PUBLIC_ORIGIN = PUBLIC_ORIGIN;
-export const QRONOS_REFERRAL_REWARD_USD = 20;
-export const TOKENFORGE_REFERRAL_REWARD_USD = QRONOS_REFERRAL_REWARD_USD;
-export const QRONOS_REFERRAL_REWARD_NANOS = QRONOS_REFERRAL_REWARD_USD * 1_000_000_000;
-export const TOKENFORGE_REFERRAL_REWARD_NANOS = QRONOS_REFERRAL_REWARD_NANOS;
-export const TOKENFORGE_AFFILIATE_CODE_LENGTH = 4;
+export const QRONOS_REFERRAL_COMMISSION_PERCENT = 25;
+export const QRONOS_REFERRAL_REWARD_USD = 0;
+export const TOKENFORGE_REFERRAL_REWARD_USD = 0;
+export const QRONOS_REFERRAL_REWARD_NANOS = 0;
+export const TOKENFORGE_REFERRAL_REWARD_NANOS = 0;
+export const QRONOS_AFFILIATE_CODE_LENGTH = 4;
+export const TOKENFORGE_AFFILIATE_CODE_LENGTH = QRONOS_AFFILIATE_CODE_LENGTH;
 /** Public reusable campaign marker; it deliberately does not identify an existing user. */
 export const SPECIAL_REFERRAL_CAMPAIGN_CODE = "bonus150";
 
 /** Affiliate codes are compact, lowercase, case-insensitive identifiers. Invalid input is ignored rather than persisted. */
 export function normalizeReferralCode(value: string | null | undefined) {
   const code = value?.trim().toLowerCase() ?? "";
-  return new RegExp(`^[a-z0-9]{${TOKENFORGE_AFFILIATE_CODE_LENGTH}}$`).test(code) ? code : undefined;
+  return new RegExp(`^[a-z0-9]{${QRONOS_AFFILIATE_CODE_LENGTH}}$`).test(code) ? code : undefined;
 }
 
 export function isSpecialReferralCampaignCode(value: string | null | undefined) {

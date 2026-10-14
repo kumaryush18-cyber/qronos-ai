@@ -88,7 +88,7 @@ export function DynamicProviderKeyPool({
       )
     );
     window.dispatchEvent(
-      new CustomEvent("tokenforge-key-routing-state", { detail: { providerName, index, enabled } })
+      new CustomEvent("qronos-key-routing-state", { detail: { providerName, index, enabled } })
     );
   };
 
@@ -184,7 +184,7 @@ export function DynamicProviderKeyPool({
                 onClick={() => {
                   onRemove(index);
                   window.dispatchEvent(
-                    new CustomEvent("tokenforge-key-routing-state", {
+                    new CustomEvent("qronos-key-routing-state", {
                       detail: { providerName, index, action: "remove" },
                     })
                   );

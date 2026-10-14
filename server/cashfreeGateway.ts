@@ -203,8 +203,8 @@ export function registerCashfreeGateway(app: Express) {
       } = req.body || {};
 
       const resolvedUserId = authUser?.id || (req.body?.user_id ? Number(req.body.user_id) : null);
-      const resolvedUserEmail = authUser?.email || req.body?.user_email || "developer@tokenforge.ai";
-      const resolvedUserName = authUser?.name || req.body?.user_name || "TokenForge Developer";
+      const resolvedUserEmail = authUser?.email || req.body?.user_email || "developer@qronos.me";
+      const resolvedUserName = authUser?.name || req.body?.user_name || "Qronos Developer";
 
       // Match tier or calculate amounts
       const selectedTierId = String(tier_id || tierId || "").trim();
@@ -265,7 +265,7 @@ export function registerCashfreeGateway(app: Express) {
         },
         order_note: isPaygDeposit
           ? `PAYG Deposit $${finalUsd} (₹${finalInr})`
-          : `TokenForge ${matchedTier?.name || "Credit"} Pack $${finalUsd} (₹${finalInr})`,
+          : `Qronos AI ${matchedTier?.name || "Credit"} Pack $${finalUsd} (₹${finalInr})`,
       };
 
       const cfRes = await fetch(`${baseUrl}/orders`, {

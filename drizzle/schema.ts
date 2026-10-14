@@ -232,6 +232,14 @@ export const usageEvents = mysqlTable(
     provider: varchar("provider", { length: 96 }),
     /** 1-based index or slot number of the provider credential used for routing. */
     credentialSlot: int("credentialSlot"),
+    /** Request outcome: "success" | "truncated" | "client_disconnected" | "upstream_error" | "rejected" */
+    outcome: varchar("outcome", { length: 32 }).default("success"),
+    /** Finish reason sent to client: "end_turn" | "tool_use" | "max_tokens" | "refusal" | "stop" | "tool_calls" | "length" | "none" */
+    stopReason: varchar("stopReason", { length: 32 }),
+    /** Time To First Token in milliseconds from request receipt to first flushed token. */
+    ttftMs: int("ttftMs"),
+    /** Total wall-clock duration in milliseconds from connection open to completion. */
+    durationMs: int("durationMs"),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
   },
   table => [

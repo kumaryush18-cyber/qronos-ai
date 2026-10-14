@@ -3,11 +3,11 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Loader2 } from "lucide-react";
 import { coalesceDailyUsage } from "../../../../../shared/usageSeries";
-import { TOKENFORGE_MODELS } from "@/lib/modelCatalogue";
+import { QRONOS_MODELS } from "@/lib/modelCatalogue";
 import { AdminAccountModelUsage, AdminGlobalModelUsage } from "../types";
 import { formatTokens } from "../common/AdminCommon";
 
-const modelNameById = new Map(TOKENFORGE_MODELS.map((model) => [model.id, model.name]));
+const modelNameById = new Map(QRONOS_MODELS.map((model) => [model.id, model.name]));
 
 export function AccountModelUsageChart({
   usage,

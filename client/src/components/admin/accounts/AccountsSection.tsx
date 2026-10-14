@@ -227,20 +227,16 @@ export function AccountRow({
         </div>
       </div>
       <div>
-        <div className="grid grid-cols-3 gap-1.5 pb-1 border-b border-white/5">
+        <div className="grid grid-cols-2 gap-3 pb-2 border-b border-white/5">
           <div>
-            <p className="text-[9px] uppercase tracking-[.10em] text-zinc-400 font-mono">Bundle ($)</p>
-            <p className="mt-0.5 text-[11px] font-bold font-mono text-white">{formatCredits(account.balanceNanos)}</p>
-          </div>
-          <div className="text-center">
-            <p className="text-[9px] uppercase tracking-[.10em] text-zinc-400 font-mono font-semibold">PAYG ($)</p>
-            <p className="mt-0.5 text-[11px] font-bold font-mono text-white">
+            <p className="text-[9px] uppercase tracking-[.10em] text-zinc-400 font-mono font-semibold">PAYG Balance ($)</p>
+            <p className="mt-0.5 text-xs font-bold font-mono text-white">
               {formatCredits(account.paygBalanceNanos ?? 0)}
             </p>
           </div>
           <div className="text-right">
-            <p className="text-[9px] uppercase tracking-[.10em] text-zinc-400 font-mono font-semibold">Tokens (M)</p>
-            <p className="mt-0.5 text-[11px] font-bold font-mono text-white">
+            <p className="text-[9px] uppercase tracking-[.10em] text-zinc-400 font-mono font-semibold">Coding Tokens (M)</p>
+            <p className="mt-0.5 text-xs font-bold font-mono text-emerald-400">
               {((account.codingPlanTokens ?? 0) / 1_000_000).toLocaleString()}M
             </p>
           </div>
