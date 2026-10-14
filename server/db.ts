@@ -98,8 +98,8 @@ export const PINNED_USER_ROUTING_POLICY_KEY = "pinned_user_routing_policy_v1";
 const PLAYGROUND_MAINTENANCE_SETTING_KEY = "playground_maintenance";
 const MAINTENANCE_COUNTDOWN_SETTING_KEY = "maintenance_countdown_v1";
 const PLATFORM_MAINTENANCE_MESSAGES_SETTING_KEY = "platform_maintenance_messages_v1";
-export const PLATFORM_MAINTENANCE_ERROR_MESSAGE = "Site entered in maintainence mode due to massive request.";
-export const PLAYGROUND_MAINTENANCE_ERROR_MESSAGE = "Playground is under maintenance because it is giving broken responses. Please try again shortly.";
+export const PLATFORM_MAINTENANCE_ERROR_MESSAGE = "Platform under maintenance, contact administrator on Discord";
+export const PLAYGROUND_MAINTENANCE_ERROR_MESSAGE = "Platform under maintenance, contact administrator on Discord";
 const CLAUDE_FABLE5_NVIDIA_RUNTIME_SETTING_KEY = "claude_fable5_nvidia_runtime_v1";
 const CLAUDE_OPUS5_TOKENREPLY_RUNTIME_SETTING_KEY = "claude_opus5_tokenreply_runtime_v1";
 const GLM53_RUNTIME_SETTING_KEY = "glm53_runtime_v1";
@@ -1293,11 +1293,41 @@ export async function awardReferralForNewUser(referredUserId: number, rawReferra
       });
       const referralId = Number(inserted[0].insertId);
 
+      // Award 1M tokens to the inviter and 5M tokens to the new joined account
+      const INVITER_REFERRAL_TOKENS = 1_000_000;
+      const REFERRED_USER_TOKENS = 5_000_000;
+      await tx.update(creditAccounts)
+        .set({ codingPlanTokens: sql`${creditAccounts.codingPlanTokens} + ${INVITER_REFERRAL_TOKENS}` })
+        .where(eq(creditAccounts.userId, invitation.userId));
+
+      await tx.update(creditAccounts)
+        .set({ codingPlanTokens: sql`${creditAccounts.codingPlanTokens} + ${REFERRED_USER_TOKENS}` })
+        .where(eq(creditAccounts.userId, referredUserId));
+
+      await tx.insert(creditLedger).values([
+        {
+          userId: invitation.userId,
+          kind: "referral_reward",
+          amountNanos: 0,
+          balanceAfterNanos: 0,
+          referenceId: `ref_tokens_inviter:${referralId}`,
+          note: `Referral Signup Bonus: +1,000,000 tokens (New referred developer joined).`,
+        },
+        {
+          userId: referredUserId,
+          kind: "referral_reward",
+          amountNanos: 0,
+          balanceAfterNanos: 0,
+          referenceId: `ref_tokens_referred:${referralId}`,
+          note: `Welcome Referral Bonus: +5,000,000 free tokens for joining via invitation link.`,
+        },
+      ]);
+
       const inviter = (await tx.select({ email: users.email }).from(users).where(eq(users.id, invitation.userId)).limit(1))[0];
       if (inviter?.email) {
         await tx.insert(systemNotifications).values({
-          title: "New Affiliate Referral Joined",
-          message: `A new developer joined using your affiliate link! You will earn 25% lifetime commission on every balance recharge they make.`,
+          title: "1M Referral Tokens & New Developer Joined",
+          message: `A new developer joined using your affiliate link! 1,000,000 free tokens have been credited to your balance. Plus, you will earn 25% lifetime commission on every balance recharge they make.`,
           type: "update",
           targetAudience: "SPECIFIC_EMAILS",
           targetEmails: normalizeEmail(inviter.email),
@@ -1306,10 +1336,23 @@ export async function awardReferralForNewUser(referredUserId: number, rawReferra
         });
       }
 
-      return { awarded: true as const, referralId, referrerUserId: invitation.userId };
+      const referredUser = (await tx.select({ email: users.email }).from(users).where(eq(users.id, referredUserId)).limit(1))[0];
+      if (referredUser?.email) {
+        await tx.insert(systemNotifications).values({
+          title: "Welcome Bonus: 5,000,000 Tokens Credited!",
+          message: `Welcome to Qronos AI! 5,000,000 free tokens have been credited to your account from your referral signup.`,
+          type: "update",
+          targetAudience: "SPECIFIC_EMAILS",
+          targetEmails: normalizeEmail(referredUser.email),
+          createdByUserId: invitation.userId,
+          createdAt: new Date(),
+        });
+      }
+
+      return { awarded: true as const, referralId, referrerUserId: invitation.userId, tokensAwarded: REFERRAL_SIGNUP_TOKENS };
     });
     if (outcome.awarded) {
-      await writeAuditEvent({ actorUserId: outcome.referrerUserId, targetUserId: referredUserId, action: "referral_bound", entityType: "referral", entityId: String(outcome.referralId), metadata: { rewardNanos: 0 } });
+      await writeAuditEvent({ actorUserId: outcome.referrerUserId, targetUserId: referredUserId, action: "referral_bound", entityType: "referral", entityId: String(outcome.referralId), metadata: { rewardNanos: 0, tokensAwarded: outcome.tokensAwarded } });
     }
     return outcome;
   } catch (error: any) {
@@ -2284,7 +2327,7 @@ export async function getDb(): Promise<ReturnType<typeof drizzle> | null> {
 
       // If connection was dropped/closed by remote server, reset pool so next request reopens fresh connection
       if (error?.code === "PROTOCOL_CONNECTION_LOST" || /connection lost|closed the connection|ETIMEDOUT|ECONNRESET/i.test(msg)) {
-        try { _pool?.end(); } catch {}
+        try { _pool?.end().catch(() => {}); } catch {}
         _pool = null;
         _db = null;
       }
@@ -2407,7 +2450,7 @@ async function ensureModelConfigsAccessColumns(pool: mysql.Pool) {
     await pool.query("UPDATE model_configs SET isBundle = TRUE WHERE isBundle IS NULL");
     // Guarantee premier coding models have Token Plan access enabled by default
     await pool.query(
-      "UPDATE model_configs SET isTokenPlan = TRUE WHERE modelId IN ('claude-opus-5.5', 'claude-opus-5', 'gpt-6-sol', 'glm-5.3', 'claude-sonnet-4.6', 'claude-fable-5.1', 'deepseek-v4-pro')"
+      "UPDATE model_configs SET isTokenPlan = TRUE WHERE modelId IN ('claude-opus-5.5', 'claude-sonnet-5.5', 'claude-haiku-5.5', 'gemini-4-argon', 'gpt-6-luna', 'claude-opus-5', 'gpt-6-sol', 'glm-5.3', 'glm-5.3-flash', 'claude-fable-5.1', 'deepseek-v4-pro')"
     );
     // Explicitly guarantee claude-opus-5 has BOTH bundle access ON and payg access ON
     await pool.query(
@@ -3299,7 +3342,7 @@ export async function loadAndCacheModelPricingOverrides(): Promise<void> {
 
 const MAX_MANAGED_PROVIDER_API_KEYS = 50;
 
-type ManagedDynamicProviderModel = "claude-fable-5.1" | "claude-opus-5" | "glm-5.3" | "claude-sonnet-4.6" | "deepseek-v4-pro" | "qwen3.8-max" | "gpt-6-astra";
+type ManagedDynamicProviderModel = string;
 type ManagedProviderCleanupDb = Pick<NonNullable<Awaited<ReturnType<typeof getDb>>>, "delete">;
 
 /**
@@ -5653,14 +5696,27 @@ export async function updateSonnet46ProviderSettings(input: { providers: Sonnet4
   return getSonnet46ProviderSettings();
 }
 
-export const MANAGED_PROVIDER_METRIC_MODEL_IDS = ["claude-fable-5.1", "claude-opus-5", "glm-5.3", "claude-sonnet-4.6", "deepseek-v4-pro", "qwen3.8-max", "gpt-6-astra", "kimi-k3"] as const;
+export const MANAGED_PROVIDER_METRIC_MODEL_IDS = [
+  "claude-opus-5.5",
+  "claude-sonnet-5.5",
+  "claude-haiku-5.5",
+  "gemini-4-argon",
+  "gpt-6-luna",
+  "claude-fable-5.1",
+  "claude-opus-5",
+  "glm-5.3",
+  "glm-5.3-flash",
+  "deepseek-v4-pro",
+  "qwen3.8-max",
+  "gpt-6-astra",
+  "kimi-k3",
+] as const;
 export type ManagedProviderMetricModel = typeof MANAGED_PROVIDER_METRIC_MODEL_IDS[number] | (string & {});
 
 export function managedProviderCredentialFingerprint(modelId: ManagedProviderMetricModel, credential: string, providerGroupId?: string) {
-  const secret = process.env.JWT_SECRET?.trim();
-  if (!secret) throw new Error("TokenForge provider metric vault is unavailable");
+  const secret = process.env.JWT_SECRET?.trim() || "qronos-default-metric-vault-secret";
   const groupScope = providerGroupId && providerGroupId !== "primary" ? `\u0000provider:${providerGroupId}` : "";
-  return createHmac("sha256", secret).update(`TokenForge:ProviderKeyMetrics:v1\u0000${modelId}${groupScope}\u0000${credential}`).digest("hex");
+  return createHmac("sha256", secret).update(`QronosAI:ProviderKeyMetrics:v1\u0000${modelId}${groupScope}\u0000${credential}`).digest("hex");
 }
 
 /** Records a per-key aggregate without storing key material, masks, or upstream identifiers in the database. */
@@ -6725,6 +6781,31 @@ export async function ensureCatalogue() {
             .where(eq(modelConfigs.modelId, "claude-fable-5"))
             .catch(() => undefined);
         }
+      }
+
+      // Migration: permanently delete retired models from database
+      const RETIRED_MODEL_IDS = [
+        "glm-5.2",
+        "grok-4.5",
+        "qwen3.8-27b",
+        "glm-5.1",
+        "claude-haiku-4.5",
+        "claude-opus-4.5",
+        "claude-opus-4.6",
+        "claude-opus-4.7",
+        "claude-sonnet-4.5",
+        "claude-sonnet-4.6",
+        "gpt-5",
+        "gpt-5-mini",
+        "gpt-5-nano",
+        "gpt-5.4",
+        "gpt-5.5",
+        "minimax-m2",
+        "minimax-m2-7",
+        "qwen3.7-max",
+      ];
+      for (const retiredId of RETIRED_MODEL_IDS) {
+        await db.delete(modelConfigs).where(eq(modelConfigs.modelId, retiredId)).catch(() => undefined);
       }
 
       // Seed & synchronize all catalogue definitions into modelConfigs

@@ -18,9 +18,9 @@ import {
   ArrowUpRight,
   Loader2,
   Building2,
-  CreditCard,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { StarButton } from "@/components/StarButton";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import {
@@ -35,7 +35,7 @@ import {
 export interface CheckoutModalProps {
   isOpen: boolean;
   onClose: () => void;
-  initialRail?: "crypto" | "upi" | "card";
+  initialRail?: "crypto" | "upi";
   initialPackageUsd?: number;
   initialAmountSol?: number;
   userId?: number;
@@ -88,8 +88,8 @@ export function CheckoutModal({
   onSuccess,
 }: CheckoutModalProps) {
   const [mounted, setMounted] = useState(false);
-  const [activeRail, setActiveRail] = useState<"upi" | "crypto" | "card">(
-    initialRail === "card" ? "upi" : (initialRail || "upi")
+  const [activeRail, setActiveRail] = useState<"upi" | "crypto">(
+    initialRail === "crypto" ? "crypto" : "upi"
   );
   const [selectedUsd, setSelectedUsd] = useState(initialPackageUsd);
 
@@ -445,22 +445,22 @@ export function CheckoutModal({
         onClick={(e) => e.stopPropagation()}
       >
         {/* Ambient Subtle Multi-Glow */}
-        <div className="pointer-events-none absolute -top-32 -right-32 w-72 h-72 bg-indigo-500/10 rounded-full blur-3xl" />
-        <div className="pointer-events-none absolute -bottom-32 -left-32 w-72 h-72 bg-emerald-500/10 rounded-full blur-3xl" />
+        <div className="pointer-events-none absolute -top-32 -right-32 w-72 h-72 bg-purple-500/10 rounded-full blur-3xl" />
+        <div className="pointer-events-none absolute -bottom-32 -left-32 w-72 h-72 bg-white/[0.04] rounded-full blur-3xl" />
 
         {/* Top Header */}
         <div className="relative px-6 py-5 border-b border-white/[0.08] flex items-center justify-between bg-black/40">
           <div className="flex items-center gap-3.5">
-            <div className="w-10 h-10 rounded-2xl flex items-center justify-center bg-white/10 border border-white/15 text-white shadow-lg">
-              <Zap size={18} className="text-[#c9ff73]" />
+            <div className="w-10 h-10 rounded-2xl flex items-center justify-center bg-gradient-to-b from-white/20 via-zinc-400/10 to-transparent border border-white/20 text-white shadow-[0_0_15px_rgba(255,255,255,0.08)]">
+              <Zap size={18} className="text-zinc-200 drop-shadow-[0_0_8px_rgba(255,255,255,0.5)]" />
             </div>
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="text-base sm:text-lg font-bold text-white tracking-tight">
                   {planName || (isCodingPlan ? `${matchedCodingPlan?.name || "Token"} Plan` : `PAYG Compute Recharge`)}
                 </h2>
-                <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded-full font-bold bg-white/10 border border-white/15 text-[#c9ff73]">
-                  {isCodingPlan ? `${matchedCodingPlan?.tokensMillions || 100}M Tokens` : "60% Off Rates"}
+                <span className="text-[10px] uppercase font-mono px-2.5 py-0.5 rounded-full font-bold border border-white/25 bg-white/[0.06] text-transparent bg-clip-text bg-gradient-to-b from-white via-zinc-200 to-zinc-400 shadow-sm">
+                  {isCodingPlan ? `${matchedCodingPlan?.tokensMillions || 100}M Tokens Receiving` : "60% Off Rates"}
                 </span>
               </div>
               <p className="text-xs text-zinc-400 font-mono mt-0.5">
@@ -492,7 +492,7 @@ export function CheckoutModal({
                   : "text-zinc-400 hover:text-white hover:bg-white/[0.04]"
               }`}
             >
-              <Smartphone size={14} className={activeRail === "upi" ? "text-emerald-700" : "text-emerald-400"} />
+              <Smartphone size={14} className={activeRail === "upi" ? "text-zinc-900" : "text-zinc-300"} />
               <span>Domestic UPI (₹)</span>
             </button>
 
@@ -533,7 +533,7 @@ export function CheckoutModal({
                 </div>
               ) : upiStatus === "CONFIRMED" ? (
                 <div className="py-10 text-center space-y-3">
-                  <div className="h-14 w-14 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 mx-auto flex items-center justify-center">
+                  <div className="h-14 w-14 rounded-2xl bg-white/10 border border-white/20 text-white shadow-[0_0_20px_rgba(255,255,255,0.15)] mx-auto flex items-center justify-center">
                     <CheckCircle2 size={32} />
                   </div>
                   <h3 className="text-lg font-bold text-white">Payment Confirmed!</h3>
@@ -547,11 +547,17 @@ export function CheckoutModal({
                   {/* Dynamic QR Box */}
                   <div className="p-5 rounded-2xl border border-white/10 bg-white/[0.02] flex flex-col sm:flex-row items-center gap-6 justify-between">
                     <div className="bg-white p-3 rounded-2xl shadow-xl shrink-0">
-                      <QRCodeSVG
-                        value={upiOrder?.upi_uri || `upi://pay?pa=qronos.ai@ybl&am=${totalInr}&pn=QronosAI`}
-                        size={140}
-                        level="M"
-                      />
+                      {upiOrder?.upi_uri ? (
+                        <QRCodeSVG
+                          value={upiOrder.upi_uri}
+                          size={140}
+                          level="M"
+                        />
+                      ) : (
+                        <div className="w-[140px] h-[140px] flex items-center justify-center bg-zinc-100 rounded-xl">
+                          <Loader2 className="animate-spin text-zinc-400" size={24} />
+                        </div>
+                      )}
                     </div>
 
                     <div className="space-y-2.5 text-center sm:text-left flex-1 min-w-0">
@@ -563,22 +569,14 @@ export function CheckoutModal({
                       </div>
 
                       <div className="flex items-center gap-1.5 justify-center sm:justify-start">
-                        <span className="text-xs font-mono text-zinc-300 bg-black/60 px-2.5 py-1 rounded-lg border border-white/10 truncate">
-                          {upiOrder?.upi_id || "qronos.ai@ybl"}
+                        <span className="text-xs font-mono text-zinc-300 bg-white/[0.04] border border-white/10 px-3 py-1.5 rounded-lg inline-flex items-center gap-2">
+                          <Smartphone size={13} className="text-zinc-400" />
+                          <span>GPay · PhonePe · Paytm · CRED</span>
                         </span>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => copyToClipboard(upiOrder?.upi_id || "qronos.ai@ybl", "UPI ID")}
-                          className="h-7 px-2 text-xs font-mono text-zinc-400 hover:text-white"
-                        >
-                          <Copy size={12} />
-                        </Button>
                       </div>
 
                       <p className="text-[11px] text-zinc-400 leading-snug">
-                        Compatible with Google Pay, PhonePe, Paytm, and CRED.
+                        Open your UPI app, scan the dynamic QR code, and submit the 12-digit UTR below.
                       </p>
                     </div>
                   </div>
@@ -640,7 +638,7 @@ export function CheckoutModal({
                 </div>
               ) : solVerificationStatus === "CONFIRMED" ? (
                 <div className="py-10 text-center space-y-3">
-                  <div className="h-14 w-14 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 mx-auto flex items-center justify-center">
+                  <div className="h-14 w-14 rounded-2xl bg-white/10 border border-white/20 text-white shadow-[0_0_20px_rgba(255,255,255,0.15)] mx-auto flex items-center justify-center">
                     <CheckCircle2 size={32} />
                   </div>
                   <h3 className="text-lg font-bold text-white">Payment Confirmed on Solana!</h3>
@@ -675,17 +673,24 @@ export function CheckoutModal({
                         Oracle: 1 SOL ≈ ${solLivePrice?.toFixed(2) || "145.00"} USD
                       </p>
 
-                      <div className="pt-1 flex items-center gap-2 justify-center sm:justify-start">
-                        <Button
+                      <div className="pt-2 flex items-center gap-2 justify-center sm:justify-start">
+                        <StarButton
                           type="button"
-                          size="sm"
                           onClick={handlePhantomPay}
                           disabled={isPhantomSending}
-                          className="h-8 px-3 rounded-lg bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-mono text-[11px] font-bold cursor-pointer"
+                          lightColor="#C084FC"
+                          backgroundColor="#0f0c1b"
+                          starColor="rgba(192, 132, 252, 0.4)"
+                          lightWidth={130}
+                          duration={3.2}
+                          className="h-10 px-5 rounded-full border border-purple-400/40 hover:border-purple-300 text-white font-mono text-xs font-bold shadow-[0_0_25px_rgba(168,85,247,0.35)] cursor-pointer"
                         >
-                          {isPhantomSending ? <Loader2 size={12} className="animate-spin mr-1" /> : <Wallet size={12} className="mr-1" />}
-                          <span>1-Click Phantom Pay</span>
-                        </Button>
+                          <span className="relative z-10 flex items-center gap-2">
+                            {isPhantomSending ? <Loader2 size={13} className="animate-spin text-purple-300" /> : <Wallet size={13} className="text-purple-300" />}
+                            <span>1-Click Phantom Pay</span>
+                            <span className="text-purple-300 font-bold ml-0.5">»</span>
+                          </span>
+                        </StarButton>
                       </div>
                     </div>
                   </div>
@@ -709,7 +714,7 @@ export function CheckoutModal({
         {/* Footer Guarantee Strip */}
         <div className="px-6 py-3.5 bg-black/60 border-t border-white/[0.08] flex items-center justify-between text-[10px] font-mono text-zinc-500">
           <span className="flex items-center gap-1.5">
-            <Lock size={11} className="text-emerald-400" />
+            <Lock size={11} className="text-zinc-400" />
             <span>256-bit Encrypted Checkout</span>
           </span>
           <span>Instant Token Allocation</span>

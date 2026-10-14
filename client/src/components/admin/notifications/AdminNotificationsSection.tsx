@@ -25,13 +25,16 @@ import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
 
 const POPULAR_MODELS = [
-  { id: "claude-opus-5", name: "Claude Opus 5 (Frontier Reasoning)" },
+  { id: "claude-opus-5.5", name: "Claude Opus 5.5 (Frontier Deep Reasoning)" },
+  { id: "claude-sonnet-5.5", name: "Claude Sonnet 5.5 (Balanced Frontier)" },
+  { id: "claude-haiku-5.5", name: "Claude Haiku 5.5 (Fast Agentic)" },
+  { id: "gemini-4-argon", name: "Gemini 4 Argon (Multimodal Frontier)" },
+  { id: "gpt-6-luna", name: "GPT 6 Luna (Adaptive Frontier)" },
+  { id: "gpt-6-astra", name: "GPT-6 Astra (Frontier)" },
   { id: "claude-fable-5.1", name: "Claude Fable 5.1 (Adaptive Creative)" },
   { id: "glm-5.3", name: "GLM 5.3 (High Precision)" },
-  { id: "gpt-6-astra", name: "GPT-6 Astra (Frontier)" },
   { id: "deepseek-v4-pro", name: "DeepSeek V4 Pro (Ultra Fast)" },
   { id: "qwen3.8-max", name: "Qwen 3.8 Max (Flagship)" },
-  { id: "claude-sonnet-4.6", name: "Claude Sonnet 4.6 (Balanced)" },
 ];
 
 export function AdminNotificationsSection() {

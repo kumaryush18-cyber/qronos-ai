@@ -22,7 +22,6 @@ import {
   Gift,
   Smartphone,
   Wallet,
-  CreditCard,
   Sparkles,
   ArrowRight,
   ShieldCheck,
@@ -36,12 +35,12 @@ import { TOKEN_PLAN_TIERS, type TokenPlanTier } from "@shared/paymentTiers";
 
 export default function Pricing() {
   const [activePlanType, setActivePlanType] = useState<"token_plan" | "payg">("token_plan");
-  const [activeRail, setActiveRail] = useState<"card" | "upi" | "crypto">("upi");
+  const [activeRail, setActiveRail] = useState<"upi" | "crypto">("upi");
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [isPaygModalOpen, setIsPaygModalOpen] = useState(false);
   const [authAlertOpen, setAuthAlertOpen] = useState(false);
   const { user } = useAuth();
-  const [selectedRailForModal, setSelectedRailForModal] = useState<"crypto" | "upi" | "card">("upi");
+  const [selectedRailForModal, setSelectedRailForModal] = useState<"crypto" | "upi">("upi");
   const [selectedAmountUsd, setSelectedAmountUsd] = useState<number>(25);
   const [isCheckoutPayg, setIsCheckoutPayg] = useState(false);
   const [isCheckoutCodingPlan, setIsCheckoutCodingPlan] = useState(false);
@@ -56,12 +55,7 @@ export default function Pricing() {
       toast.success("Free tier is active! Enjoy 10M starter tokens and daily check-ins.");
       return;
     }
-    if (activeRail === "card") {
-      toast.error("Card payments are temporarily under maintenance. Please use Domestic UPI or Solana Pay.");
-      setSelectedRailForModal("upi");
-    } else {
-      setSelectedRailForModal(activeRail);
-    }
+    setSelectedRailForModal(activeRail);
     setSelectedAmountUsd(tier.amountUsd);
     setIsCheckoutPayg(false);
     setIsCheckoutCodingPlan(true);
@@ -69,18 +63,13 @@ export default function Pricing() {
     setIsCheckoutOpen(true);
   };
 
-  const handleSelectPaygMethod = (method: "card" | "upi" | "crypto", amountUsd: number) => {
+  const handleSelectPaygMethod = (method: "upi" | "crypto", amountUsd: number) => {
     setIsPaygModalOpen(false);
     if (!user) {
       setAuthAlertOpen(true);
       return;
     }
-    if (method === "card") {
-      toast.error("Card payments are temporarily under maintenance. Please use Domestic UPI or Solana Pay.");
-      setSelectedRailForModal("upi");
-    } else {
-      setSelectedRailForModal(method);
-    }
+    setSelectedRailForModal(method);
     setSelectedAmountUsd(amountUsd);
     setIsCheckoutPayg(true);
     setIsCheckoutCodingPlan(false);
@@ -187,16 +176,6 @@ export default function Pricing() {
               >
                 <Wallet size={13} />
                 <span>Solana Pay (SOL)</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveRail("card")}
-                className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-mono transition-all duration-200 cursor-pointer ${
-                  activeRail === "card" ? "bg-white/15 text-white font-bold" : "text-neutral-400 hover:text-white"
-                }`}
-              >
-                <CreditCard size={13} />
-                <span>Card (Global)</span>
               </button>
             </div>
           </div>

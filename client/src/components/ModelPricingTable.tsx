@@ -63,15 +63,15 @@ export function ModelPricingTable({ onOpenTopUpModal }: ModelPricingTableProps) 
     <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 py-12">
       {/* Section Header */}
       <div className="text-center max-w-3xl mx-auto mb-10">
-        <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full text-xs font-semibold uppercase tracking-wider bg-rose-500/10 text-rose-300 border border-rose-500/20 mb-3">
-          <Sparkles className="w-3.5 h-3.5 text-rose-400" />
-          100% Bonus Credit on Every Deposit (2x Grant)
+        <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full text-xs font-semibold uppercase tracking-wider bg-amber-400/10 text-amber-300 border border-amber-400/30 mb-3 shadow-[0_0_15px_rgba(251,191,36,0.15)]">
+          <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+          50% Discount Active Across All Models
         </div>
         <h2 className="text-3xl sm:text-4xl font-extralight text-white font-display tracking-tight">
-          Official Model <span className="text-rose-400 font-normal">Pricing & Rates</span>
+          Official Model <span className="text-amber-400 font-normal">Pricing & Rates</span>
         </h2>
         <p className="mt-3 text-sm text-slate-300 font-sans leading-relaxed">
-          Standard official rates configured per model. Every top-up deposits <span className="text-rose-300 font-semibold">double the credit (2x grant)</span> to your balance, giving you 2x more tokens for the exact same dollar amount.
+          Standard official rates with an instant <span className="text-amber-300 font-semibold">50% discount</span> applied. Universal API routing with zero subscription lock-in and transparent nanodollar metering.
         </p>
       </div>
 
@@ -125,8 +125,8 @@ export function ModelPricingTable({ onOpenTopUpModal }: ModelPricingTableProps) 
                   <span className="block text-[10px] text-slate-500 font-normal lowercase">per 1M output tokens</span>
                 </th>
                 <th scope="col" className="py-4 px-4 text-center">
-                  Deposit Advantage
-                  <span className="block text-[10px] text-emerald-400 font-normal lowercase">100% bonus balance</span>
+                  Active Discount
+                  <span className="block text-[10px] text-amber-300 font-normal lowercase">50% discount</span>
                 </th>
                 <th scope="col" className="py-4 px-4 text-center">Action</th>
               </tr>
@@ -214,11 +214,11 @@ export function ModelPricingTable({ onOpenTopUpModal }: ModelPricingTableProps) 
                         </span>
                       </td>
 
-                      {/* Column 5: Deposit Advantage */}
+                      {/* Column 5: Discount Badge */}
                       <td className="py-4 px-4 text-center">
-                        <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-300 border border-emerald-500/20">
-                          <Check className="w-3 h-3 text-emerald-400" />
-                          2x Credit Power
+                        <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full bg-amber-400/10 text-amber-300 border border-amber-400/20">
+                          <Percent className="w-3 h-3 text-amber-400" />
+                          50% OFF
                         </span>
                       </td>
 

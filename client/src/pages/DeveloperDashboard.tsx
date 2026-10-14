@@ -1276,9 +1276,6 @@ function UnifiedBalancesPortfolio() {
                   {claimCheckin.isPending ? <Loader2 size={10} className="animate-spin" /> : <Sparkles size={10} className="mr-1" />}
                   Daily Check-in
                 </Button>
-                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-bold bg-white/[0.05] border border-white/15 text-zinc-300 font-mono">
-                  +100% Bonus (2x)
-                </span>
               </div>
             </div>
 
@@ -1687,7 +1684,7 @@ function SpecialReferralGiftBox({ enabled }: { enabled: boolean }) {
       <div className="min-w-0 flex-1">
         <p className="special-referral-gift__eyebrow">SPECIAL REFERRAL REWARD</p>
         <h2>{revealed ? `${amount} added to your account` : "Your special referral gift box is ready"}</h2>
-        <p>{revealed ? "Your special referral bonus is now available in your Qronos AI credit balance." : "You joined through Qronos AI’s limited special link. Open your gift box to reveal the bonus."}</p>
+        <p>{revealed ? "Your special referral credit is now available in your Qronos AI balance." : "You joined through a verified campaign link. Open your gift box to reveal your credits."}</p>
       </div>
       {!revealed && <Button className="special-referral-gift__button" onClick={() => acknowledge.mutate()} disabled={acknowledge.isPending}>{acknowledge.isPending ? <Loader2 className="animate-spin" size={16} /> : <Gift size={16} />}{acknowledge.isPending ? "Opening…" : "Open gift"}</Button>}
       {revealed && <span className="special-referral-gift__confirmed"><Check size={15} /> Credited</span>}
@@ -2066,19 +2063,19 @@ function ReferralWorkspace() {
           >
             <div className="flex items-center justify-between pb-3 border-b border-white/[0.06]">
               <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-emerald-400 bg-emerald-500/10 border border-emerald-500/25 px-2.5 py-0.5 rounded-full">
-                Step 1 · Share Link
+                Step 1 · 1M + 5M Tokens
               </span>
               <span className="text-xs font-mono font-bold text-zinc-500">01</span>
             </div>
             <div className="mt-4">
-              <h3 className="text-base font-bold text-white tracking-tight">Invite Engineers & Teams</h3>
+              <h3 className="text-base font-bold text-white tracking-tight">1M for You, 5M for Referral</h3>
               <p className="mt-2 text-xs text-zinc-400 leading-relaxed">
-                Copy your unique affiliate link and share it with peers, teammates, or communities building with LLMs and agents.
+                When a developer creates an account with your link, <strong>they receive 5,000,000 Free Tokens</strong> and <strong>you receive 1,000,000 Free Tokens</strong> credited instantly to your balances.
               </p>
             </div>
             <div className="mt-4 pt-3 border-t border-white/[0.06] flex items-center gap-2 text-[11px] font-mono text-zinc-300">
               <CheckCircle2 size={13} className="text-emerald-400" />
-              <span>Permanent account binding on signup</span>
+              <span>+1M tokens to you · +5M tokens to referral</span>
             </div>
           </div>
 
@@ -2217,7 +2214,7 @@ function ReferralWorkspace() {
               <Users className="mx-auto text-zinc-500 mb-3" size={28} />
               <p className="text-sm font-bold text-white font-mono">No referral attributions yet</p>
               <p className="mt-1 text-xs text-zinc-400 max-w-sm mx-auto">
-                Invite developers with your referral link above. You will earn 25% lifetime commission on every credit recharge they complete, deposited instantly into your PAYG balance.
+                Invite developers with your referral link above. You will receive <strong>1,000,000 Free Tokens</strong>, your referral receives <strong>5,000,000 Free Tokens</strong>, plus you earn 25% lifetime commission on every balance recharge they complete!
               </p>
             </div>
           )}

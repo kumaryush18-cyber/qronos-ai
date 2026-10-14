@@ -24,6 +24,7 @@ import {
   Layers,
   ArrowRight,
   MessageCircle,
+  Percent,
 } from "lucide-react";
 import { toast } from "sonner";
 import "./infergate-landing.css";
@@ -119,9 +120,15 @@ export default function Models() {
             HEADER & STATS
         ========================================================= */}
         <section className="mb-14 sm:mb-20 text-center max-w-4xl mx-auto space-y-6">
-          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/[0.04] border border-white/10 text-xs font-mono text-zinc-300 backdrop-blur-md">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-            <span>THE VERIFIED FRONTIER MODEL MATRIX</span>
+          <div className="flex flex-wrap items-center justify-center gap-2">
+            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/[0.04] border border-white/10 text-xs font-mono text-zinc-300 backdrop-blur-md">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              <span>THE VERIFIED FRONTIER MODEL MATRIX</span>
+            </div>
+            <div className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-amber-400/10 border border-amber-400/30 text-xs font-mono text-amber-300 backdrop-blur-md shadow-[0_0_15px_rgba(251,191,36,0.15)] font-bold">
+              <Percent size={12} className="text-amber-400" />
+              <span>50% DISCOUNT ACTIVE</span>
+            </div>
           </div>
 
           <h1 className="text-4xl sm:text-5xl lg:text-6xl font-light tracking-tight text-white leading-[1.05]">
@@ -297,6 +304,9 @@ export default function Models() {
                         </span>
                       </div>
                       <div className="flex items-center gap-1.5">
+                        <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded border border-amber-400/30 text-amber-300 bg-amber-400/10 flex items-center gap-0.5 shadow-[0_0_8px_rgba(251,191,36,0.12)]">
+                          <Percent size={9} /> 50% OFF
+                        </span>
                         {isTokenPlan && (
                           <span className="text-[10px] font-mono px-2 py-0.5 rounded border border-white/20 text-zinc-300 bg-white/[0.04]">
                             Token Plan

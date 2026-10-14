@@ -3,7 +3,6 @@ import { Link, useSearch } from "wouter";
 import { SignInCard } from "@/components/ui/sign-in-card-2";
 import { AnnouncementBanner } from "@/components/AnnouncementBanner";
 import { MaintenanceCountdownBanner } from "@/components/MaintenanceCountdownBanner";
-import { ContactAdminModal } from "@/components/ContactAdminModal";
 import { persistSessionToken } from "@/lib/sessionToken";
 import {
   isSpecialReferralCampaignCode,
@@ -16,7 +15,6 @@ export default function LocalAuth({ mode }: LocalAuthProps) {
   const search = useSearch();
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isSuccess, setIsSuccess] = useState(false);
-  const [isContactAdminOpen, setIsContactAdminOpen] = useState(false);
   const [githubLoading, setGithubLoading] = useState(false);
 
   const isSignup = mode === "signup";
@@ -113,17 +111,8 @@ export default function LocalAuth({ mode }: LocalAuthProps) {
           isSignup={isSignup}
           referralCode={referralCode}
           isSpecialReferralCampaign={isSpecialReferralCampaign}
-          onContactAdmin={() => {
-            setErrorMessage(null);
-            setIsContactAdminOpen(true);
-          }}
         />
       </div>
-
-      <ContactAdminModal
-        isOpen={isContactAdminOpen}
-        onClose={() => setIsContactAdminOpen(false)}
-      />
     </div>
   );
 }

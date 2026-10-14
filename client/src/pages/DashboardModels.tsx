@@ -1,4 +1,4 @@
-import { ArrowRight, Braces, CheckCircle2, ChevronLeft, CircleDollarSign, Code2, Cpu, ExternalLink, Lock, Play, Radio, Route, ShieldCheck } from "lucide-react";
+import { ArrowRight, Braces, CheckCircle2, ChevronLeft, CircleDollarSign, Code2, Cpu, ExternalLink, Lock, Percent, Play, Radio, Route, ShieldCheck } from "lucide-react";
 import { Link } from "wouter";
 import { useMemo, useState } from "react";
 import { PUBLIC_ORIGIN } from "@shared/const";
@@ -83,6 +83,9 @@ function ModelList({ modelMetaMap, userTier }: { modelMetaMap: Map<string, { ava
         <i />
         <span>LIVE AVAILABILITY & TIER ACCESS</span>
         <b>{activeCount} of {QRONOS_MODELS.length} routes currently available</b>
+        <span className="ml-2 inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-400/20 text-amber-300 border border-amber-400/30 font-mono">
+          <Percent size={10} className="text-amber-400" /> 50% DISCOUNT ACTIVE
+        </span>
         <small>Your account tier: <strong className="uppercase text-[#c9ff73]">{userTier}</strong> ({accessibleCount} models unlocked). Upgraded tiers unlock frontier models.</small>
       </div>
 
@@ -181,6 +184,9 @@ function ModelList({ modelMetaMap, userTier }: { modelMetaMap: Map<string, { ava
               <div className="dashboard-model-row__main">
                 <div className="flex flex-wrap items-center gap-2">
                   <p>{model.eyebrow}</p>
+                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-400/15 text-amber-300 border border-amber-400/30 font-mono">
+                    <Percent size={9} className="text-amber-400" /> 50% OFF
+                  </span>
                   {isTokenPlan && (
                     <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-cyan-500/15 text-cyan-300 border border-cyan-500/30">
                       <Code2 size={11} className="text-cyan-400" /> Token Plan

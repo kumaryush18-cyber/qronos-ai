@@ -2,10 +2,9 @@ import { useState, useEffect, useRef } from "react";
 import { Link } from "wouter";
 import { PublicNav } from "@/components/PublicNav";
 import { QronosGlyph } from "@/components/QronosGlyph";
-import { ProviderMark } from "@/components/ProviderMark";
 import { VortexHourglass } from "@/components/VortexHourglass";
 import { StarButton } from "@/components/StarButton";
-import { QRONOS_MODELS, CatalogueModel } from "@/lib/modelCatalogue";
+import { QRONOS_MODELS } from "@/lib/modelCatalogue";
 import { trpc } from "@/lib/trpc";
 import {
   ArrowRight,
@@ -24,7 +23,6 @@ import {
   Database,
   Eye,
   Play,
-  Search,
   CheckCircle2,
   ExternalLink,
   Flame,
@@ -403,126 +401,77 @@ function CodeIntegrationHub() {
 }
 
 /* ---------------------------------------------------------
-   Interactive Model Showcase
+   Platform Explainer Showcase
 --------------------------------------------------------- */
-function ModelShowcase() {
-  const [filter, setFilter] = useState<"all" | "reasoning" | "coding" | "fast" | "flagship">("all");
-  const [search, setSearch] = useState("");
+const PLATFORM_EXPLAINERS = [
+  {
+    image: "https://res.cloudinary.com/dhrh8heb5/image/upload/v1791973365/file_00000000906c8209aed168388dfe9a2e_scmhdc.png",
+    heading: "One endpoint. Every model.",
+    description:
+      "Send every request to Qronos, and we route it to the fastest healthy provider for the model you picked. If a provider errors or stalls, your request moves to the next one automatically. Your app never notices.",
+    tags: ["Smart routing", "Automatic failover", "Real-time streaming"],
+  },
+  {
+    image: "https://res.cloudinary.com/dhrh8heb5/image/upload/v1791973390/file_000000002fdc81f78466ddac8e4d4e6e_krytfv.png",
+    heading: "Top up with crypto. Credits in seconds.",
+    description:
+      "Connect your wallet, send USDC or SOL, and your balance updates as soon as the transaction confirms. No credit card, no international payment blocks, no minimum spend.",
+    tags: ["Instant top-ups", "Wallet-friendly", "Transparent usage"],
+  },
+  {
+    image: "https://res.cloudinary.com/dhrh8heb5/image/upload/v1791973450/file_0000000023488230b1dfcb271495a2ab_b3mtkc.png",
+    heading: "Change one line. Keep your workflow.",
+    description:
+      "Qronos speaks the Anthropic Messages API natively. Set your base URL, add your key, and Claude Code, Cline or your own app just works.",
+    tags: ["Anthropic native", "Drop-in setup", "Zero code changes"],
+  },
+];
 
-  const filteredModels = QRONOS_MODELS.filter(m => {
-    const matchesSearch =
-      m.name.toLowerCase().includes(search.toLowerCase()) ||
-      m.provider.toLowerCase().includes(search.toLowerCase()) ||
-      m.id.toLowerCase().includes(search.toLowerCase());
-
-    if (!matchesSearch) return false;
-    if (filter === "reasoning") return m.capabilities.includes("Reasoning") || m.capabilities.includes("Thinking");
-    if (filter === "coding") return m.capabilities.includes("Coding");
-    if (filter === "fast") return m.inputUsdPerMillion <= 1.0;
-    if (filter === "flagship") return m.isPremium || m.inputUsdPerMillion >= 5;
-    return true;
-  });
-
+function PlatformExplainerCards() {
   return (
-    <div className="mt-8">
-      {/* Search and Filters */}
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-8">
-        <div className="flex items-center gap-1.5 p-1 bg-white/[0.03] rounded-xl border border-white/[0.08] w-full sm:w-auto overflow-x-auto">
-          {[
-            { id: "all", label: `All Models (${QRONOS_MODELS.length})` },
-            { id: "flagship", label: "Flagship Reasoning" },
-            { id: "coding", label: "Coding & Agentic" },
-            { id: "fast", label: "Ultra-Fast & Budget" },
-          ].map(f => (
-            <button
-              key={f.id}
-              onClick={() => setFilter(f.id as any)}
-              className={`px-3.5 py-1.5 rounded-lg text-xs font-medium transition whitespace-nowrap ${
-                filter === f.id
-                  ? "bg-white/10 text-white font-semibold shadow-sm"
-                  : "text-zinc-400 hover:text-zinc-200"
-              }`}
-            >
-              {f.label}
-            </button>
-          ))}
-        </div>
-
-        {/* Search input */}
-        <div className="relative w-full sm:w-64">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" />
-          <input
-            type="text"
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder="Search model or provider..."
-            className="w-full pl-9 pr-3 py-1.5 rounded-xl bg-white/[0.03] border border-white/[0.08] text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-violet-500/50"
-          />
-        </div>
-      </div>
-
-      {/* Grid of Models */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {filteredModels.slice(0, 9).map(m => (
-          <div
-            key={m.id}
-            className="infer-glass-card rounded-xl p-5 flex flex-col justify-between group hover:border-violet-500/30 transition-all"
-          >
-            <div>
-              <div className="flex items-start justify-between gap-2 mb-3">
-                <div className="flex items-center gap-2.5">
-                  <span className="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center">
-                    <ProviderMark provider={m.provider} fallback={m.providerMark} size={18} />
-                  </span>
-                  <div>
-                    <h4 className="font-bold text-white text-sm group-hover:text-violet-300 transition flex items-center gap-1.5">
-                      <span>{m.name}</span>
-                      {m.isPremium && (
-                        <span className="text-[10px] px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 font-mono">
-                          Frontier
-                        </span>
-                      )}
-                    </h4>
-                    <span className="text-xs text-zinc-400">{m.provider}</span>
-                  </div>
-                </div>
-
-                <span className="text-xs font-mono text-zinc-400 bg-white/5 px-2 py-0.5 rounded">
-                  {m.id}
-                </span>
-              </div>
-
-              <p className="text-xs text-zinc-400 leading-relaxed mb-4 line-clamp-2">
-                {m.description}
-              </p>
-            </div>
-
-            <div className="pt-3 border-t border-white/[0.06] flex items-center justify-between">
-              <div className="text-[11px] font-mono text-zinc-400">
-                <span className="text-zinc-200 font-semibold">${m.inputUsdPerMillion}</span> / ${m.outputUsdPerMillion} <span className="text-zinc-500">per 1M</span>
-              </div>
-
-              <Link
-                href="/playground"
-                className="text-xs font-medium text-violet-400 hover:text-violet-300 flex items-center gap-1 group-hover:translate-x-0.5 transition"
-              >
-                <span>Playground</span>
-                <ArrowRight size={12} />
-              </Link>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      <div className="mt-6 text-center">
-        <Link
-          href="/models"
-          className="inline-flex items-center gap-2 text-sm font-semibold text-zinc-300 hover:text-white px-5 py-2.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 transition"
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
+      {PLATFORM_EXPLAINERS.map((item, idx) => (
+        <div
+          key={idx}
+          className="group relative rounded-2xl border border-white/[0.08] bg-[#0c0d12]/90 backdrop-blur-xl p-5 sm:p-6 flex flex-col justify-between hover:border-white/25 transition-all duration-300 shadow-2xl hover:shadow-[0_0_30px_rgba(255,255,255,0.06)]"
         >
-          <span>Explore All {QRONOS_MODELS.length} Models & Published Pricing</span>
-          <ExternalLink size={14} />
-        </Link>
-      </div>
+          <div>
+            {/* 16:9 Aspect Ratio Image Preview */}
+            <div className="relative aspect-[16/9] w-full overflow-hidden rounded-xl border border-white/10 bg-black/60 shadow-lg mb-6 group-hover:border-white/20 transition-all">
+              <img
+                src={item.image}
+                alt={item.heading}
+                className="w-full h-full object-cover object-center group-hover:scale-[1.02] transition-transform duration-500 ease-out"
+                loading="lazy"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent pointer-events-none" />
+            </div>
+
+            {/* Metallic Silver Gradient Heading */}
+            <h3 className="text-xl sm:text-2xl font-bold font-display tracking-tight text-balance bg-gradient-to-b from-[#ffffff] via-[#e4e4e7] to-[#a1a1aa] bg-clip-text text-transparent">
+              {item.heading}
+            </h3>
+
+            {/* Description */}
+            <p className="mt-3.5 text-sm sm:text-[15px] leading-relaxed text-zinc-400 font-sans">
+              {item.description}
+            </p>
+          </div>
+
+          {/* Sub-tags / Feature Badges */}
+          <div className="mt-6 pt-4 border-t border-white/[0.06] flex flex-wrap items-center gap-2">
+            {item.tags.map((tag, tIdx) => (
+              <span
+                key={tIdx}
+                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-mono text-zinc-300 bg-white/[0.04] border border-white/[0.08]"
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-zinc-400" />
+                <span>{tag}</span>
+              </span>
+            ))}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
@@ -562,18 +511,26 @@ export default function Home() {
 
         <div className="relative z-10 w-full max-w-[1400px] mx-auto px-4 py-28 sm:px-8 sm:py-32 lg:px-14 lg:py-40">
           <div className="mx-auto flex max-w-full flex-col items-center text-center">
-            <div className="mb-6">
-              <h1 className="relative z-10 max-w-[22rem] text-balance text-center text-[clamp(2rem,9vw,2.5rem)] font-display leading-[0.96] tracking-tight text-white sm:max-w-none sm:text-[clamp(2rem,4.6vw,4.5rem)] sm:leading-[0.92]">
-                <span className="block sm:whitespace-nowrap">The gateway management</span>
-                <span className="block bg-gradient-to-b from-white via-zinc-300 to-zinc-500 bg-clip-text text-transparent sm:whitespace-nowrap">
-                  system for autonomous agents
-                </span>
-              </h1>
+            {/* Crypto Top-up Pill */}
+            <div className="mb-6 inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/[0.05] border border-white/10 text-xs font-mono text-zinc-300 backdrop-blur-md">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              <span>TOP UP IN USDC OR SOL · SHIP WITH ANY MODEL</span>
             </div>
 
-            <p className="relative z-0 mb-8 max-w-[22rem] text-center text-sm leading-relaxed text-zinc-300 sm:mb-10 sm:max-w-none sm:text-base lg:text-lg">
-              <span className="block sm:whitespace-nowrap">Route work across every provider, model, and agent.</span>
-              <span className="block sm:whitespace-nowrap">Sub-millisecond failover keeps every token stream in control.</span>
+            <div className="mb-5 max-w-4xl">
+              <h1 className="relative z-10 text-balance text-center text-[clamp(2.2rem,8vw,4.5rem)] font-display leading-[0.96] tracking-tight text-white">
+                <span className="block sm:whitespace-nowrap">One API for every model.</span>
+                <span className="block bg-gradient-to-b from-white via-zinc-200 to-zinc-400 bg-clip-text text-transparent sm:whitespace-nowrap">
+                  Pay with crypto.
+                </span>
+              </h1>
+              <p className="mt-3 text-xs sm:text-sm font-mono text-zinc-400 tracking-wide">
+                The LLM gateway for coding agents. Crypto-native billing.
+              </p>
+            </div>
+
+            <p className="relative z-0 mb-8 max-w-2xl text-center text-sm leading-relaxed text-zinc-300 sm:mb-10 sm:text-base lg:text-lg">
+              Qronos is an Anthropic-compatible LLM gateway. Plug in Claude Code, Cline or your own app with one API key, and top up instantly with crypto: no cards, no bank delays, no borders.
             </p>
 
             <div className="flex w-full flex-col items-center justify-center gap-3 min-[390px]:flex-row">
@@ -592,24 +549,31 @@ export default function Home() {
                     aria-hidden="true"
                     className="pointer-events-none absolute left-[1.125rem] top-0 h-px w-[calc(100%-2.25rem)] bg-gradient-to-r from-neutral-950/0 via-neutral-500 to-neutral-950/0"
                   />
-                  <span className="relative z-10">REQUEST A DEMO</span>
+                  <span className="relative z-10">OPEN PLAYGROUND</span>
                 </button>
               </Link>
             </div>
           </div>
         </div>
 
-        {/* Real Logo Marquee */}
-        <div className="absolute bottom-12 left-0 right-0">
-          <div className="mx-auto w-[calc(100%-2rem)] max-w-[1344px] overflow-hidden lg:w-[calc(100%-3.5rem)] [mask-image:linear-gradient(to_right,transparent,black_25%,black_75%,transparent)]">
-            <div className="flex w-max gap-12 py-2 animate-marquee-scroll items-center">
+        {/* AI Model Companies Logo Marquee */}
+        <div className="absolute bottom-10 left-0 right-0 z-20">
+          <div className="mx-auto w-[calc(100%-2rem)] max-w-[1344px] overflow-hidden lg:w-[calc(100%-3.5rem)] [mask-image:linear-gradient(to_right,transparent,black_20%,black_80%,transparent)]">
+            <div className="flex w-max gap-6 py-2 animate-marquee-scroll items-center">
               {[...QRONOS_LOGOS, ...QRONOS_LOGOS].map((item, idx) => (
-                <img
+                <div
                   key={`${item.alt}-${idx}`}
-                  src={item.src}
-                  alt={item.alt}
-                  className="pointer-events-none h-7 select-none grayscale brightness-0 invert opacity-75 md:h-9"
-                />
+                  className="flex items-center gap-2.5 px-4 py-2 rounded-full border border-white/[0.08] bg-black/60 backdrop-blur-xl opacity-75 hover:opacity-100 transition-all shadow-sm"
+                >
+                  <img
+                    src={item.src}
+                    alt={item.alt}
+                    className="pointer-events-none h-4 w-4 sm:h-5 sm:w-5 object-contain select-none brightness-0 invert"
+                  />
+                  <span className="font-mono text-xs tracking-wider text-zinc-300 font-medium whitespace-nowrap">
+                    {item.name || item.alt}
+                  </span>
+                </div>
               ))}
             </div>
           </div>
@@ -629,13 +593,6 @@ export default function Home() {
             <p className="mt-6 max-w-2xl text-base leading-relaxed text-zinc-400">
               Qronos AI is the stateful runtime for autonomous work—preserving memory, tools, and context across every governed run.
             </p>
-          </div>
-          <div className="mt-10 rounded-2xl overflow-hidden border border-white/10 shadow-2xl bg-zinc-950">
-            <img
-              src="/images/about-schedule-mobile.png"
-              alt="Schedule overview"
-              className="w-full h-auto object-cover max-h-[720px]"
-            />
           </div>
           <div className="mt-14">
             <GatewayTerminalSimulator />
@@ -687,13 +644,6 @@ export default function Home() {
               Monitor every agent task as it progresses, with live status, activity, and the context your team needs to keep work moving.
             </p>
           </div>
-          <div className="mt-10 rounded-2xl overflow-hidden border border-white/10 shadow-2xl bg-zinc-950">
-            <img
-              src="/images/tracking-dashboard-mobile.png"
-              alt="Tracking dashboard"
-              className="w-full h-auto object-cover max-h-[720px]"
-            />
-          </div>
           <div className="mt-14 grid grid-cols-2 gap-4 md:grid-cols-4">
             <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-5">
               <p className="text-xs text-zinc-500">Total tokens processed</p>
@@ -716,18 +666,21 @@ export default function Home() {
       </section>
 
       {/* =========================================================
-          MODELS — curated catalogue preview
+          PLATFORM EXPLAINERS — core architecture & features
       ========================================================= */}
       <section className="relative overflow-hidden py-24 lg:py-32 bg-black">
         <div className="mx-auto max-w-[1344px] px-6 lg:px-0">
-          <div className="max-w-3xl">
-            <p className="text-xs font-mono uppercase tracking-[0.2em] text-zinc-500">Models</p>
-            <h2 className="mt-4 text-[clamp(2rem,5vw,4rem)] font-display leading-[0.98] tracking-tight text-white">
-              One base URL, every frontier model.
+          <div className="max-w-3xl mb-14">
+            <p className="text-xs font-mono uppercase tracking-[0.2em] text-zinc-500">How Qronos Works</p>
+            <h2 className="mt-4 text-[clamp(2rem,5vw,4rem)] font-display leading-[0.98] tracking-tight bg-gradient-to-b from-white via-zinc-200 to-zinc-400 bg-clip-text text-transparent">
+              Built for speed. Powered by crypto.
             </h2>
+            <p className="mt-4 text-base text-zinc-400 leading-relaxed">
+              Route to any model with automatic provider failover, crypto-native top-ups, and native Anthropic compatibility.
+            </p>
           </div>
-          <div className="mt-14">
-            <ModelShowcase />
+          <div>
+            <PlatformExplainerCards />
           </div>
         </div>
       </section>

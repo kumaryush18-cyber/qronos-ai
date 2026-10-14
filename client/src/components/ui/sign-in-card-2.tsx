@@ -95,7 +95,6 @@ export interface SignInCardProps {
   isSignup?: boolean;
   referralCode?: string | null;
   isSpecialReferralCampaign?: boolean;
-  onContactAdmin?: () => void;
   className?: string;
 }
 
@@ -107,7 +106,6 @@ export function SignInCard({
   isSignup = false,
   referralCode,
   isSpecialReferralCampaign = false,
-  onContactAdmin,
   className,
 }: SignInCardProps) {
   // For 3D card tilt effect
@@ -328,22 +326,17 @@ export function SignInCard({
                 </motion.p>
               </div>
 
-              {/* Referral notice if applicable */}
+              {/* Referral notice if applicable: 5M Tokens in Green Message */}
               {referralCode && (
                 <div
-                  style={{
-                    backgroundColor: "oklch(0.18 0 0)",
-                    borderColor: "oklch(0.32 0 0)",
-                  }}
-                  className="mb-5 p-3 rounded-xl border text-xs font-mono text-zinc-300"
+                  className="mb-5 p-3.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-xs font-mono text-emerald-300 shadow-[0_0_20px_rgba(16,185,129,0.15)] text-left"
                 >
-                  <div className="font-semibold text-white">
-                    {isSpecialReferralCampaign ? "Special invitation activated" : "You were invited"}
+                  <div className="flex items-center gap-2 font-bold text-emerald-400">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                    <span>🎁 5,000,000 (5M) Tokens Bonus Activated!</span>
                   </div>
-                  <div style={{ color: "oklch(0.72 0 0)" }} className="text-[11px] mt-1">
-                    {isSpecialReferralCampaign
-                      ? "Claim your $150 referral compute bonus upon sign-in."
-                      : "Eligible new accounts receive a $20 credit upon verification."}
+                  <div className="text-[11px] text-emerald-300/90 mt-1.5 leading-relaxed font-sans">
+                    You joined via invitation. Create your account with GitHub now to receive <strong className="text-white font-mono font-bold">5,000,000 Free Coding Tokens</strong> immediately credited to your balance!
                   </div>
                 </div>
               )}
@@ -450,17 +443,16 @@ export function SignInCard({
                   </div>
                 )}
 
-                {onContactAdmin && (
-                  <div className="pt-2 text-center">
-                    <button
-                      type="button"
-                      onClick={onContactAdmin}
-                      className="text-xs text-zinc-500 hover:text-white transition font-mono"
-                    >
-                      Need help? Contact administrator
-                    </button>
-                  </div>
-                )}
+                <div className="pt-2 text-center">
+                  <a
+                    href="https://discord.gg/xVDscH5ezj"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs text-zinc-500 hover:text-white transition font-mono inline-block underline decoration-zinc-700 underline-offset-4 hover:decoration-white"
+                  >
+                    Need help? Contact administrator on Discord
+                  </a>
+                </div>
               </div>
             </div>
           </div>

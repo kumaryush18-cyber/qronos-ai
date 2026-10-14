@@ -10,11 +10,13 @@ import "./infergate-landing.css";
 
 const FEATURED_MODELS = [
   { id: "claude-opus-5.5", label: "Claude Opus 5.5" },
-  { id: "claude-opus-5", label: "Claude Opus 5" },
+  { id: "claude-sonnet-5.5", label: "Claude Sonnet 5.5" },
+  { id: "claude-haiku-5.5", label: "Claude Haiku 5.5" },
+  { id: "gemini-4-argon", label: "Gemini 4 Argon" },
+  { id: "gpt-6-luna", label: "GPT 6 Luna" },
+  { id: "gpt-6-astra", label: "GPT-6 Astra" },
   { id: "claude-fable-5.1", label: "Claude Fable 5.1" },
   { id: "glm-5.3", label: "GLM 5.3" },
-  { id: "glm-5.2", label: "GLM-5.2" },
-  { id: "gpt-6-astra", label: "GPT-6 Astra" },
   { id: "deepseek-v4-pro", label: "DeepSeek V4 Pro" },
   { id: "qwen3.8-max", label: "Qwen 3.8 Max" },
 ];
@@ -51,7 +53,7 @@ export default function PublicPlayground() {
         body: JSON.stringify({
           model: activeModel,
           messages: [{ role: "user", content: text }],
-          maxOutputTokens: 1024,
+          maxOutputTokens: 65536,
           temperature: 0.7,
         }),
       });
@@ -82,6 +84,9 @@ export default function PublicPlayground() {
       }
     } catch (err: any) {
       const msg = err?.message || String(err);
+      if (msg.toLowerCase().includes("maintenance")) {
+        return `⚠️ ${msg}`;
+      }
       if (msg.includes("Sign in") || msg.includes("unauthorized") || msg.includes("401")) {
         return `⚠️ Authentication Required: You must be signed in to send messages in the live Playground.\n\nPlease sign in or register with GitHub to unlock live model completions.`;
       }
@@ -224,17 +229,24 @@ export default function PublicPlayground() {
           </div>
         </div>
 
-        {/* Real Logo Marquee at Bottom of Stage */}
+        {/* AI Model Companies Logo Marquee at Bottom of Stage */}
         <div className="w-full max-w-[1344px] mx-auto px-4 mt-8 overflow-hidden z-10">
           <div className="relative py-3 border-t border-b border-white/[0.08] [mask-image:linear-gradient(to_right,transparent,black_15%,black_85%,transparent)]">
-            <div className="flex w-max gap-12 py-1 animate-marquee-scroll items-center">
+            <div className="flex w-max gap-6 py-1 animate-marquee-scroll items-center">
               {[...QRONOS_LOGOS, ...QRONOS_LOGOS].map((item, idx) => (
-                <img
+                <div
                   key={`${item.alt}-${idx}`}
-                  src={item.src}
-                  alt={item.alt}
-                  className="pointer-events-none h-6 select-none grayscale brightness-0 invert opacity-75 md:h-8"
-                />
+                  className="flex items-center gap-2.5 px-3.5 py-1.5 rounded-full border border-white/[0.08] bg-black/60 backdrop-blur-xl opacity-75 hover:opacity-100 transition-all shadow-sm"
+                >
+                  <img
+                    src={item.src}
+                    alt={item.alt}
+                    className="pointer-events-none h-4 w-4 object-contain select-none brightness-0 invert"
+                  />
+                  <span className="font-mono text-xs tracking-wider text-zinc-300 font-medium whitespace-nowrap">
+                    {item.name || item.alt}
+                  </span>
+                </div>
               ))}
             </div>
           </div>

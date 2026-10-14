@@ -675,22 +675,22 @@ export function AIThinkingOrbInput({
             />
           )}
 
-          {/* Inner Input Surface */}
+          {/* Inner Input Surface - Responsive across all mobile & desktop viewports */}
           <form
             onSubmit={handleSubmit}
-            className="relative z-10 flex items-center justify-between w-full h-[60px] rounded-full bg-[#0a0c10]/95 backdrop-blur-2xl border border-white/10 px-5 transition-all focus-within:border-white/30"
+            className="relative z-10 flex items-center justify-between w-full min-h-[48px] sm:min-h-[56px] md:h-[60px] rounded-full bg-[#0a0c10]/95 backdrop-blur-2xl border border-white/10 px-3 sm:px-5 py-1.5 transition-all focus-within:border-white/30 shadow-lg"
           >
             <input
               type="text"
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
               placeholder={placeholder}
-              className="flex-1 bg-transparent text-sm sm:text-base text-white placeholder-zinc-500 focus:outline-none font-sans mr-3"
+              className="min-w-0 flex-1 bg-transparent text-xs sm:text-sm md:text-base text-white placeholder:text-zinc-500 focus:outline-none font-sans mr-2 sm:mr-3 py-1"
             />
             <button
               type="submit"
               disabled={!inputText.trim()}
-              className="px-5 py-2 rounded-full text-xs font-mono font-medium bg-white text-black hover:bg-zinc-200 disabled:opacity-40 disabled:hover:bg-white transition-all active:scale-95 cursor-pointer shadow-sm shrink-0"
+              className="px-3.5 sm:px-5 py-1.5 sm:py-2 rounded-full text-[11px] sm:text-xs font-mono font-bold bg-white text-black hover:bg-zinc-200 disabled:opacity-40 disabled:hover:bg-white transition-all active:scale-95 cursor-pointer shadow-sm shrink-0 whitespace-nowrap"
             >
               {COPY.send}
             </button>

@@ -6,9 +6,9 @@ import { ArrowRight, BarChart3, CircleAlert, KeyRound, LockKeyhole, Sparkles } f
 import { Link } from "wouter";
 
 const activity = [
-  { label: "glm-5.2", detail: "Chat completion", status: "Completed", time: "Just now" },
-  { label: "grok-4.5", detail: "Streaming request", status: "Completed", time: "12 min ago" },
-  { label: "glm-5.2", detail: "Model discovery", status: "Completed", time: "42 min ago" },
+  { label: "claude-sonnet-5.5", detail: "Chat completion", status: "Completed", time: "Just now" },
+  { label: "claude-haiku-5.5", detail: "Streaming request", status: "Completed", time: "12 min ago" },
+  { label: "gemini-4-argon", detail: "Model discovery", status: "Completed", time: "42 min ago" },
 ];
 
 export default function DemoWorkspace() {

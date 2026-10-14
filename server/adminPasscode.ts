@@ -1,9 +1,13 @@
-import { timingSafeEqual } from "node:crypto";
+import { createHmac, timingSafeEqual } from "node:crypto";
+
+const PASSCODE_HMAC_SALT = "qronos-admin-passcode-constant-time-salt-v1";
 
 function equalConstantTime(received: string, expected: string) {
-  const receivedBytes = Buffer.from(received, "utf8");
-  const expectedBytes = Buffer.from(expected, "utf8");
-  return receivedBytes.length === expectedBytes.length && timingSafeEqual(receivedBytes, expectedBytes);
+  // Digest both strings to fixed 32-byte SHA-256 HMAC buffers so timingSafeEqual is always
+  // executed on equal-length buffers in strictly invariant execution time, leaking zero length details.
+  const receivedHash = createHmac("sha256", PASSCODE_HMAC_SALT).update(received, "utf8").digest();
+  const expectedHash = createHmac("sha256", PASSCODE_HMAC_SALT).update(expected, "utf8").digest();
+  return timingSafeEqual(receivedHash, expectedHash);
 }
 
 export function verifyAdminPasscode(passcode: string) {

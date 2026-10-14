@@ -4,7 +4,6 @@ import {
   AlertTriangle,
   Zap,
   ArrowRight,
-  CreditCard,
   Smartphone,
   Coins,
   X,
@@ -66,7 +65,7 @@ export function LowBalanceWarning({
   const isPreview = forceShow || isUrlPreview;
 
   const [checkoutOpen, setCheckoutOpen] = useState(false);
-  const [selectedRail, setSelectedRail] = useState<"card" | "upi" | "crypto">("upi");
+  const [selectedRail, setSelectedRail] = useState<"upi" | "crypto">("upi");
   const [isDismissed, setIsDismissed] = useState(() => {
     if (isPreview) return false;
     if (!dismissible) return false;
@@ -374,9 +373,9 @@ export function LowBalanceWarning({
               <button
                 type="button"
                 onClick={() => openTopup("upi")}
-                className="inline-flex items-center gap-1 rounded-md px-2 py-1 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 transition-colors cursor-pointer"
+                className="inline-flex items-center gap-1 rounded-md px-2 py-1 bg-white/[0.06] hover:bg-white/[0.12] text-zinc-200 border border-white/15 transition-colors cursor-pointer"
               >
-                <Smartphone size={11} className="text-emerald-400" />
+                <Smartphone size={11} className="text-zinc-300" />
                 <span>UPI (Active)</span>
               </button>
               <button
@@ -387,13 +386,6 @@ export function LowBalanceWarning({
                 <Coins size={11} className="text-purple-400" />
                 <span>Solana (Active)</span>
               </button>
-              <span
-                className="inline-flex items-center gap-1 rounded-md px-2 py-1 bg-white/5 text-neutral-500 border border-white/5 cursor-not-allowed opacity-60"
-                title="Card payments are temporarily under maintenance"
-              >
-                <CreditCard size={11} className="text-neutral-500" />
-                <span>Card (Offline)</span>
-              </span>
             </div>
 
             <Link

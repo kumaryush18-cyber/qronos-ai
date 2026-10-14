@@ -470,6 +470,9 @@ function adminUnlockThrottleIdentifier(req: Parameters<typeof tokenForgeRequestI
   return `admin-unlock-ip-${tokenForgeRequestIpHash(req)}@tokenforge.internal`;
 }
 
+const GLOBAL_ADMIN_UNLOCK_THROTTLE_IDENTIFIER = "admin-unlock-global-distributed-ceiling@tokenforge.internal";
+const ADMIN_SESSION_MAX_AGE_MS = 4 * 60 * 60 * 1000; // 4 hours strictly for admin sessions
+
 import {
   sendSupportMessage,
   getChatHistory,
@@ -837,29 +840,71 @@ export const appRouter = router({
   admin: router({
     unlock: publicProcedure.input(adminPasscodeInput).mutation(async ({ ctx, input }) => {
       if (ctx.user?.isAdminSession) return { unlocked: true, alreadyAdmin: true } as const;
+
+      // 1. Dual-Scope: Check Global Failure Ceiling across all distributed IPs
+      const globalThrottle = await getPasswordLoginThrottle(GLOBAL_ADMIN_UNLOCK_THROTTLE_IDENTIFIER);
+      if (globalThrottle.blocked) {
+        throw new TRPCError({
+          code: "TOO_MANY_REQUESTS",
+          message: `Administrator access is locked due to security violations across distributed networks. Try again in ${globalThrottle.retryAfterSeconds} seconds.`,
+        });
+      }
+
+      // 2. Dual-Scope: Check Caller IP Throttle
       const identifier = adminUnlockThrottleIdentifier(ctx.req);
       const throttle = await getPasswordLoginThrottle(identifier);
       if (throttle.blocked) {
-        throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: `Too many administrator passcode attempts. Try again in ${throttle.retryAfterSeconds} seconds.` });
+        throw new TRPCError({
+          code: "TOO_MANY_REQUESTS",
+          message: `Too many administrator passcode attempts. Try again in ${throttle.retryAfterSeconds} seconds.`,
+        });
       }
+
       if (!verifyAdminPasscode(input.passcode)) {
+        // Layer 3: Progressive Deliberate Latency and Jitter to throttle brute-force concurrency
+        if (process.env.NODE_ENV !== "test") {
+          const delayMs = 1000 + Math.floor(Math.random() * 300);
+          await new Promise((r) => setTimeout(r, delayMs));
+        }
+
         const failedAttempt = await recordFailedPasswordLogin(identifier);
+        await recordFailedPasswordLogin(GLOBAL_ADMIN_UNLOCK_THROTTLE_IDENTIFIER);
+
         if (failedAttempt.blocked) {
-          throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: `Too many administrator passcode attempts. Try again in ${failedAttempt.retryAfterSeconds} seconds.` });
+          throw new TRPCError({
+            code: "TOO_MANY_REQUESTS",
+            message: `Too many administrator passcode attempts. Try again in ${failedAttempt.retryAfterSeconds} seconds.`,
+          });
         }
         throw new TRPCError({ code: "UNAUTHORIZED", message: "Incorrect administrator passcode" });
       }
+
       await clearFailedPasswordLogin(identifier);
+      await clearFailedPasswordLogin(GLOBAL_ADMIN_UNLOCK_THROTTLE_IDENTIFIER);
+
       const administrator = await getOrCreateAdminSessionPrincipal();
       await clearLegacyAdministratorRoles();
-      // Do NOT bump the global session version here: doing so would log out
-      // every ordinary user. The admin token carries isAdminSession, which is
-      // what gates the control plane; issue it at the current version so user
-      // sessions stay valid.
+
+      // Issue session version and strictly bounded 4-hour admin session (Layer 4)
       const sessionVersion = await getAuthSessionVersion();
-      const token = await sdk.createSessionToken(administrator.openId, { expiresInMs: LOCAL_SESSION_MAX_AGE_MS, name: administrator.name ?? "Qronos Administrator", sessionVersion, isAdminSession: true });
-      ctx.res.cookie(COOKIE_NAME, token, { ...getSessionCookieOptions(ctx.req), maxAge: LOCAL_SESSION_MAX_AGE_MS });
-      await writeAuditEvent({ actorUserId: administrator.id, targetUserId: administrator.id, action: "admin.passcode.unlocked", entityType: "administrator_session", entityId: String(administrator.id), metadata: { entry: "passcode_only" } });
+      const token = await sdk.createSessionToken(administrator.openId, {
+        expiresInMs: ADMIN_SESSION_MAX_AGE_MS,
+        name: administrator.name ?? "Qronos Administrator",
+        sessionVersion,
+        isAdminSession: true,
+      });
+      ctx.res.cookie(COOKIE_NAME, token, {
+        ...getSessionCookieOptions(ctx.req),
+        maxAge: ADMIN_SESSION_MAX_AGE_MS,
+      });
+      await writeAuditEvent({
+        actorUserId: administrator.id,
+        targetUserId: administrator.id,
+        action: "admin.passcode.unlocked",
+        entityType: "administrator_session",
+        entityId: String(administrator.id),
+        metadata: { entry: "passcode_only" },
+      });
       return { unlocked: true, alreadyAdmin: false, sessionVersion } as const;
     }),
     signOut: adminProcedure.mutation(async ({ ctx }) => {

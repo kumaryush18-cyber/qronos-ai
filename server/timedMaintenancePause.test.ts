@@ -12,7 +12,7 @@ describe("timed maintenance pause safeguards", () => {
     const activationEnd = dbSource.indexOf("/** Returns the global inference admission state.", activationStart);
     const activationSource = dbSource.slice(activationStart, activationEnd);
 
-    expect(dbSource).toContain('PLATFORM_MAINTENANCE_ERROR_MESSAGE = "Site entered in maintainence mode due to massive request."');
+    expect(dbSource).toContain('PLATFORM_MAINTENANCE_ERROR_MESSAGE = "Platform under maintenance, contact administrator on Discord"');
     expect(activationSource).toContain("countdown.endsAt > Date.now()");
     expect(activationSource).toContain('settingKey: PLATFORM_MAINTENANCE_SETTING_KEY, value: "enabled"');
     expect(activationSource).toContain('settingKey: MAINTENANCE_COUNTDOWN_SETTING_KEY, value: ""');

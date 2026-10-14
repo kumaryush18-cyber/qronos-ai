@@ -37,7 +37,7 @@ export interface UPIOrder {
 const upiOrders = new Map<string, UPIOrder>();
 const processedUtrs = new Set<string>();
 
-export const DEFAULT_UPI_ID = "qronos@upi";
+export const DEFAULT_UPI_ID = "anand11arp@okaxis";
 export const DEFAULT_MERCHANT_NAME = "Qronos AI";
 
 /** Strict regex pattern for UPI Virtual Payment Address (VPA) */
@@ -78,14 +78,13 @@ export function buildUpiUri(params: {
   omitAmount?: boolean;
 }) {
   const vpa = params.upiId.trim();
-  const name = encodeURIComponent(params.merchantName.trim());
+  const name = encodeURIComponent(params.merchantName.trim() || "Qronos AI");
   const isDirect = params.omitAmount || (params.amountInr !== undefined && params.amountInr >= UPI_DIRECT_ENTRY_THRESHOLD_INR);
   if (isDirect) {
     return `upi://pay?pa=${vpa}&pn=${name}&cu=INR`;
   }
   const am = (params.amountInr ?? 0).toFixed(2);
-  const tn = params.orderId ? encodeURIComponent(`Order_${params.orderId}`) : "";
-  return `upi://pay?pa=${vpa}&pn=${name}&am=${am}&cu=INR${tn ? `&tn=${tn}` : ""}`;
+  return `upi://pay?pa=${vpa}&pn=${name}&am=${am}&cu=INR&tn=Qronos`;
 }
 
 /**
@@ -434,7 +433,7 @@ export function registerUpiPayGateway(app: Express) {
       const cleanVpa = upiId.trim();
       const cleanName = encodeURIComponent(merchantName.trim());
       const directUpiUri = `upi://pay?pa=${cleanVpa}&pn=${cleanName}&cu=INR`;
-      const dynamicUpiUri = `upi://pay?pa=${cleanVpa}&pn=${cleanName}&am=${scannedInr.toFixed(2)}&cu=INR&tn=${encodeURIComponent(`Order_${orderId}`)}`;
+      const dynamicUpiUri = `upi://pay?pa=${cleanVpa}&pn=${cleanName}&am=${scannedInr.toFixed(2)}&cu=INR&tn=Qronos`;
 
       const upiUri = buildUpiUri({
         upiId,

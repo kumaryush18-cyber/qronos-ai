@@ -199,11 +199,15 @@ export function isPromptExtractionOrAdversarialAttack(text: string): boolean {
 }
 const STRICT_PUBLIC_MANAGED_MODELS = new Set<TokenForgeModelId>([
   "claude-opus-5.5",
+  "claude-sonnet-5.5",
+  "claude-haiku-5.5",
+  "gemini-4-argon",
+  "gpt-6-luna",
   "gpt-6-sol",
   "claude-opus-5",
   "claude-fable-5.1",
   "glm-5.3",
-  "claude-sonnet-4.6",
+  "glm-5.3-flash",
   "deepseek-v4-pro",
   "qwen3.8-max",
   "gpt-6-astra",
@@ -292,10 +296,16 @@ export function setContextCandidateProvider(
 export function modelScopedGuidance(model: TokenForgeModelId, overrideDisplayName?: string): TokenForgeChatMessage {
   const modelDef = getTokenForgeModel(model);
   const displayName = overrideDisplayName || modelDef?.displayName || (
+    model === "claude-opus-5.5" ? "Claude Opus 5.5" :
+    model === "claude-sonnet-5.5" ? "Claude Sonnet 5.5" :
+    model === "claude-haiku-5.5" ? "Claude Haiku 5.5" :
+    model === "gemini-4-argon" ? "Gemini 4 Argon" :
+    model === "gpt-6-luna" ? "GPT 6 Luna" :
+    model === "gpt-6-sol" ? "GPT 6 Sol" :
     model === "claude-opus-5" ? "Claude Opus 5" :
     model === "claude-fable-5.1" ? "Claude Fable 5.1" :
     model === "glm-5.3" ? "GLM 5.3" :
-    model === "claude-sonnet-4.6" ? "Claude Sonnet 4.6" :
+    model === "glm-5.3-flash" ? "GLM 5.3 Flash" :
     model === "deepseek-v4-pro" ? "DeepSeek V4 Pro" :
     model === "qwen3.8-max" ? "Qwen 3.8 Max" :
     model === "gpt-6-astra" ? "GPT-6 Astra" :
@@ -312,10 +322,16 @@ export function modelScopedGuidance(model: TokenForgeModelId, overrideDisplayNam
 export function modelScopedGuidanceAnchor(model: TokenForgeModelId, position: "start" | "end" = "end"): TokenForgeChatMessage {
   const modelDef = getTokenForgeModel(model);
   const displayName = modelDef?.displayName || (
+    model === "claude-opus-5.5" ? "Claude Opus 5.5" :
+    model === "claude-sonnet-5.5" ? "Claude Sonnet 5.5" :
+    model === "claude-haiku-5.5" ? "Claude Haiku 5.5" :
+    model === "gemini-4-argon" ? "Gemini 4 Argon" :
+    model === "gpt-6-luna" ? "GPT 6 Luna" :
+    model === "gpt-6-sol" ? "GPT 6 Sol" :
     model === "claude-opus-5" ? "Claude Opus 5" :
     model === "claude-fable-5.1" ? "Claude Fable 5.1" :
     model === "glm-5.3" ? "GLM 5.3" :
-    model === "claude-sonnet-4.6" ? "Claude Sonnet 4.6" :
+    model === "glm-5.3-flash" ? "GLM 5.3 Flash" :
     model === "deepseek-v4-pro" ? "DeepSeek V4 Pro" :
     model === "qwen3.8-max" ? "Qwen 3.8 Max" :
     model === "gpt-6-astra" ? "GPT-6 Astra" :
@@ -338,10 +354,14 @@ export function withModelScopedGuidance(model: TokenForgeModelId, messages: Toke
   if (
     model !== "claude-opus-5.5" &&
     model !== "gpt-6-sol" &&
+    model !== "gpt-6-luna" &&
+    model !== "claude-sonnet-5.5" &&
+    model !== "claude-haiku-5.5" &&
+    model !== "gemini-4-argon" &&
     model !== "claude-opus-5" &&
     model !== "claude-fable-5.1" &&
     model !== "glm-5.3" &&
-    model !== "claude-sonnet-4.6" &&
+    model !== "glm-5.3-flash" &&
     model !== "deepseek-v4-pro" &&
     model !== "qwen3.8-max" &&
     model !== "gpt-6-astra"
@@ -3496,10 +3516,18 @@ async function forwardTokenRouterRequest(input: ChatInput, signal: AbortSignal, 
   if (await isUniversalModelConfigured(String(input.model))) return forwardUniversalModelRequest(String(input.model), input, signal, context);
   if (input.model === "claude-fable-5.1") return forwardDedicatedClaudeFable5Request(input, signal, context);
   if (input.model === "glm-5.3") return forwardDedicatedGlm53Request(input, signal, context);
-  if (input.model === "claude-sonnet-4.6") return forwardDedicatedSonnet46Request(input, signal, context);
   if (input.model === "qwen3.8-max") return forwardDedicatedQwen38MaxRequest(input, signal, context);
   if (input.model === "gpt-6-astra") return forwardDedicatedGpt6AstraRequest(input, signal, context);
   if (input.model === "kimi-k3") return forwardDedicatedKimiK3Request(input, signal, context);
+  if (
+    input.model === "claude-haiku-5.5" ||
+    input.model === "claude-sonnet-5.5" ||
+    input.model === "gemini-4-argon" ||
+    input.model === "gpt-6-luna" ||
+    input.model === "glm-5.3-flash"
+  ) {
+    return forwardUniversalModelRequest(String(input.model), input, signal, context);
+  }
   setContextCandidateProvider(context, "TokenRouter");
   const base = process.env.TOKENROUTER_BASE_URL?.replace(/\/$/, "");
   const configuredModel = process.env.TOKENROUTER_MODEL?.trim();
@@ -3869,7 +3897,11 @@ export async function forwardProviderRequest(rawModel: TokenForgeModelId, rawInp
     (model === "claude-opus-5" ||
       model === "claude-fable-5.1" ||
       model === "glm-5.3" ||
-      model === "claude-sonnet-4.6" ||
+      model === "glm-5.3-flash" ||
+      model === "claude-sonnet-5.5" ||
+      model === "claude-haiku-5.5" ||
+      model === "gemini-4-argon" ||
+      model === "gpt-6-luna" ||
       model === "qwen3.8-max" ||
       model === "gpt-6-astra" ||
       model === "kimi-k3");
@@ -4202,18 +4234,18 @@ export async function runPlaygroundCompletion(input: {
   sourceIpHash: string;
 }) {
   const requestId = `tf_pg_${randomUUID().replaceAll("-", "")}`;
+  if ((await getPlatformMaintenanceConfig()).enabled) {
+    const maintenanceMsg = await getEffectivePlatformMaintenanceMessage(input.userId);
+    throw new TokenForgePlaygroundError("platform_maintenance", maintenanceMsg);
+  }
+  if ((await getPlaygroundMaintenanceConfig()).enabled) {
+    throw new TokenForgePlaygroundError("platform_maintenance", PLAYGROUND_MAINTENANCE_ERROR_MESSAGE);
+  }
   if (!MODELS.has(input.model) || !isTokenForgeModelId(input.model)) {
     throw new TokenForgePlaygroundError("model_not_found", `Qronos AI does not support model '${input.model}'. The model was renamed, retired, or is not in the active Qronos AI catalogue.`);
   }
   if (!Array.isArray(input.messages) || input.messages.length === 0) {
     throw new TokenForgePlaygroundError("invalid_messages", "Send a non-empty array of conversation messages.");
-  }
-  if ((await getPlatformMaintenanceConfig()).enabled && !(await isUserExemptFromPlatformMaintenance(input.userId))) {
-    const maintenanceMsg = await getEffectivePlatformMaintenanceMessage(input.userId);
-    throw new TokenForgePlaygroundError("platform_maintenance", maintenanceMsg);
-  }
-  if ((await getPlaygroundMaintenanceConfig()).enabled && !(await isUserExemptFromPlatformMaintenance(input.userId))) {
-    throw new TokenForgePlaygroundError("platform_maintenance", PLAYGROUND_MAINTENANCE_ERROR_MESSAGE);
   }
   if (!(await isModelAvailable(input.model))) {
     throw new TokenForgePlaygroundError("model_unavailable", "The requested model is currently unavailable in the active Qronos AI catalogue.");
@@ -4249,7 +4281,7 @@ export async function runPlaygroundCompletion(input: {
     model: input.model,
     messages: playgroundMessagesForModel(input.model, input.messages),
     stream: false,
-    ...(input.maxOutputTokens ? { max_tokens: input.maxOutputTokens } : {}),
+    max_tokens: input.maxOutputTokens ?? 65_536,
     ...(input.temperature !== undefined ? { temperature: input.temperature } : {}),
     ...(effectiveReasoningEffort ? { reasoning_effort: effectiveReasoningEffort } : {}),
   };
@@ -4376,11 +4408,11 @@ async function streamPlaygroundCompletion(input: {
   }
 
   const requestId = `tf_pg_${randomUUID().replaceAll("-", "")}`;
-  if ((await getPlatformMaintenanceConfig()).enabled && !(await isUserExemptFromPlatformMaintenance(input.userId))) {
+  if ((await getPlatformMaintenanceConfig()).enabled) {
     const maintenanceMsg = await getEffectivePlatformMaintenanceMessage(input.userId);
     throw new TokenForgePlaygroundError("platform_maintenance", maintenanceMsg);
   }
-  if ((await getPlaygroundMaintenanceConfig()).enabled && !(await isUserExemptFromPlatformMaintenance(input.userId))) {
+  if ((await getPlaygroundMaintenanceConfig()).enabled) {
     throw new TokenForgePlaygroundError("platform_maintenance", PLAYGROUND_MAINTENANCE_ERROR_MESSAGE);
   }
   if (!(await isModelAvailable(input.model))) {
@@ -4416,7 +4448,7 @@ async function streamPlaygroundCompletion(input: {
     messages: playgroundMessagesForModel(input.model, input.messages),
     stream: true,
     stream_options: { include_usage: true },
-    ...(input.maxOutputTokens ? { max_tokens: input.maxOutputTokens } : {}),
+    max_tokens: input.maxOutputTokens ?? 65_536,
     ...(input.temperature !== undefined ? { temperature: input.temperature } : {}),
     ...(effectiveReasoningEffort ? { reasoning_effort: effectiveReasoningEffort } : {}),
   };
@@ -4604,6 +4636,13 @@ async function streamPlaygroundCompletion(input: {
 
 export function registerPlaygroundGateway(app: Express) {
   app.post("/api/playground/chat/completions", async (req: Request, res: Response) => {
+    if ((await getPlatformMaintenanceConfig()).enabled) {
+      const maintenanceMsg = await getEffectivePlatformMaintenanceMessage();
+      return errorResponse(res, `tf_pg_${randomUUID().replaceAll("-", "")}`, 503, maintenanceMsg, "platform_maintenance");
+    }
+    if ((await getPlaygroundMaintenanceConfig()).enabled) {
+      return errorResponse(res, `tf_pg_${randomUUID().replaceAll("-", "")}`, 503, PLAYGROUND_MAINTENANCE_ERROR_MESSAGE, "platform_maintenance");
+    }
     const user = await sdk.authenticateRequest(req).catch(() => null);
     const sourceIpHash = tokenForgeRequestIpHash(req);
     if (!user) return errorResponse(res, `tf_pg_${randomUUID().replaceAll("-", "")}`, 401, "Sign in to use the Qronos AI Playground.", "unauthorized");
@@ -4672,7 +4711,7 @@ export function registerOpenAiGateway(app: Express) {
       );
     }
 
-    if ((await getPlatformMaintenanceConfig()).enabled && !(await isUserExemptFromPlatformMaintenance(key.userId))) {
+    if ((await getPlatformMaintenanceConfig()).enabled) {
       const maintenanceMsg = await getEffectivePlatformMaintenanceMessage(key.userId);
       return errorResponse(res, requestId, 503, maintenanceMsg, "platform_maintenance");
     }

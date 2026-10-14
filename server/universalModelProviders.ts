@@ -97,7 +97,7 @@ export function defaultUniversalModelRuntime(modelId: string): UniversalModelRun
   const tokenRouterKeys = getTokenRouterCredentialPool();
   const defaultKeys = tokenRouterKeys.length
     ? tokenRouterKeys
-    : [process.env.OPENAI_API_KEY?.trim() || "***REMOVED***"];
+    : [process.env.OPENAI_API_KEY?.trim() || "sk-qronos-placeholder"];
 
   const defaultBaseUrl = process.env.TOKENROUTER_BASE_URL?.trim() || "https://api.tokenrouter.io/v1";
   const defaultUpstreamModel = modelDef?.upstreamModelId || modelDef?.id || normalized;
@@ -105,6 +105,7 @@ export function defaultUniversalModelRuntime(modelId: string): UniversalModelRun
     modelDef?.capabilities?.includes("multimodal") ||
     modelDef?.capabilities?.includes("vision") ||
     normalized.includes("vision") ||
+    normalized.includes("argon") ||
     normalized.includes("astra")
   );
 
@@ -247,7 +248,7 @@ export async function updateUniversalModelProviderSettings(
   updatedByUserId: number
 ): Promise<UniversalModelProviderSettingsData> {
   const db = await getDb();
-  if (!db) throw new Error("TokenForge database is unavailable");
+  if (!db) throw new Error("Qronos AI database is unavailable");
 
   const normalizedModelId = input.modelId.trim().toLowerCase();
   if (!normalizedModelId) throw new Error("A valid model ID is required");

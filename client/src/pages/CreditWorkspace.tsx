@@ -41,7 +41,7 @@ export function PaygHero({ compact = false }: { compact?: boolean }) {
   const utils = trpc.useUtils();
   const [paygModalOpen, setPaygModalOpen] = useState(false);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
-  const [checkoutRail, setCheckoutRail] = useState<"card" | "upi" | "crypto">("upi");
+  const [checkoutRail, setCheckoutRail] = useState<"upi" | "crypto">("upi");
   const [checkoutAmount, setCheckoutAmount] = useState<number>(25);
 
   if (wallet.isLoading || wallet.error || !wallet.data) return null;
@@ -50,7 +50,7 @@ export function PaygHero({ compact = false }: { compact?: boolean }) {
   const paygBalanceNanos = (data as any).paygBalanceNanos ?? 0;
   const paygAmount = formatCreditWhole(paygBalanceNanos);
 
-  const handleSelectPaygMethod = (method: "card" | "upi" | "crypto", amountUsd: number) => {
+  const handleSelectPaygMethod = (method: "upi" | "crypto", amountUsd: number) => {
     setPaygModalOpen(false);
     setCheckoutRail(method);
     setCheckoutAmount(amountUsd);
@@ -78,9 +78,6 @@ export function PaygHero({ compact = false }: { compact?: boolean }) {
                 PAYG Compute Balance
               </span>
             </div>
-            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/20 border border-rose-500/30 text-rose-200 font-mono">
-              +100% Bonus (2x)
-            </span>
           </div>
 
           <div>

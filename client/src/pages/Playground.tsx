@@ -9,11 +9,13 @@ import "./infergate-landing.css";
 
 const FEATURED_MODELS = [
   { id: "claude-opus-5.5", label: "Claude Opus 5.5" },
-  { id: "claude-opus-5", label: "Claude Opus 5" },
+  { id: "claude-sonnet-5.5", label: "Claude Sonnet 5.5" },
+  { id: "claude-haiku-5.5", label: "Claude Haiku 5.5" },
+  { id: "gemini-4-argon", label: "Gemini 4 Argon" },
+  { id: "gpt-6-luna", label: "GPT 6 Luna" },
+  { id: "gpt-6-astra", label: "GPT-6 Astra" },
   { id: "claude-fable-5.1", label: "Claude Fable 5.1" },
   { id: "glm-5.3", label: "GLM 5.3" },
-  { id: "glm-5.2", label: "GLM-5.2" },
-  { id: "gpt-6-astra", label: "GPT-6 Astra" },
   { id: "deepseek-v4-pro", label: "DeepSeek V4 Pro" },
   { id: "qwen3.8-max", label: "Qwen 3.8 Max" },
 ];
@@ -51,7 +53,7 @@ export default function Playground() {
         body: JSON.stringify({
           model: activeModel,
           messages: [{ role: "user", content: text }],
-          maxOutputTokens: 1024,
+          maxOutputTokens: 65536,
           temperature: 0.7,
         }),
       });
@@ -82,6 +84,9 @@ export default function Playground() {
       }
     } catch (err: any) {
       const msg = err?.message || String(err);
+      if (msg.toLowerCase().includes("maintenance")) {
+        return `⚠️ ${msg}`;
+      }
       if (msg.includes("Sign in") || msg.includes("unauthorized") || msg.includes("401")) {
         return `⚠️ Authentication Required: You must be signed in to send messages in the live Playground.\n\nPlease sign in to your developer workspace or register with GitHub to unlock live model completions.`;
       }

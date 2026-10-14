@@ -294,10 +294,14 @@ export function AdminUserMessageInspector() {
               className="bg-transparent text-white text-xs outline-none cursor-pointer"
             >
               <option value="all" className="bg-[#141416] text-white">All Models</option>
+              <option value="claude-opus-5.5" className="bg-[#141416] text-white">Claude Opus 5.5</option>
+              <option value="claude-sonnet-5.5" className="bg-[#141416] text-white">Claude Sonnet 5.5</option>
+              <option value="claude-haiku-5.5" className="bg-[#141416] text-white">Claude Haiku 5.5</option>
+              <option value="gemini-4-argon" className="bg-[#141416] text-white">Gemini 4 Argon</option>
+              <option value="gpt-6-luna" className="bg-[#141416] text-white">GPT 6 Luna</option>
               <option value="claude-opus-5" className="bg-[#141416] text-white">Claude Opus 5</option>
               <option value="claude-fable-5.1" className="bg-[#141416] text-white">Claude Fable 5.1</option>
               <option value="glm-5.3" className="bg-[#141416] text-white">GLM 5.3</option>
-              <option value="claude-sonnet-4.6" className="bg-[#141416] text-white">Claude Sonnet 4.6</option>
               <option value="deepseek-v4-pro" className="bg-[#141416] text-white">DeepSeek V4 Pro</option>
               <option value="qwen3.8-max" className="bg-[#141416] text-white">Qwen 3.8 Max</option>
               <option value="gpt-6-astra" className="bg-[#141416] text-white">GPT-6 Astra</option>

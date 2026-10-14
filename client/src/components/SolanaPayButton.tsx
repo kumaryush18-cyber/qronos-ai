@@ -3,7 +3,7 @@ import React, { useState } from "react";
 import { PublicKey } from "@solana/web3.js";
 import { encodeURL } from "@solana/pay";
 import BigNumber from "bignumber.js";
-import { Sparkles, Wallet, Smartphone, CreditCard } from "lucide-react";
+import { Sparkles, Wallet, Smartphone } from "lucide-react";
 import { PearlButton } from "@/components/ui/pearl-button";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { SolanaPayCheckoutModal } from "./SolanaPayCheckoutModal";
@@ -47,9 +47,9 @@ export interface SolanaPayButtonProps {
    */
   userId?: number;
   /**
-   * Default active tab: "card" (Credit/Debit Card), "crypto" (Solana Pay) or "upi" (Direct UPI)
+   * Default active tab: "crypto" (Solana Pay) or "upi" (Direct UPI)
    */
-  initialRail?: "crypto" | "upi" | "card";
+  initialRail?: "crypto" | "upi";
   /**
    * Callback invoked once transaction is verified on-chain
    */
@@ -106,36 +106,28 @@ export function SolanaPayButton({
 
   const displayText =
     buttonText ||
-    (initialRail === "card"
-      ? "Pay with Card"
-      : initialRail === "upi"
+    (initialRail === "upi"
       ? "Buy with UPI (₹)"
       : currency === "USDC"
       ? `Buy with Solana (${amount} USDC)`
       : `Buy with Solana Pay`);
 
   const iconElement =
-    initialRail === "card" ? (
-      <span className="flex items-center text-[#fda4af]">
-        <CreditCard size={15} />
-      </span>
-    ) : initialRail === "upi" ? (
-      <span className="flex items-center text-[#ffcf8d]">
+    initialRail === "upi" ? (
+      <span className="flex items-center text-zinc-300">
         <Smartphone size={15} />
       </span>
     ) : (
-      <span className="flex items-center text-[#c8ff74]">
+      <span className="flex items-center text-purple-400">
         <Wallet size={15} />
       </span>
     );
 
-  const badgeText = initialRail === "card" ? "Global" : initialRail === "upi" ? "Zero Fee" : "Mainnet";
+  const badgeText = initialRail === "upi" ? "Zero Fee" : "Mainnet";
   const badgeColor =
-    initialRail === "card"
-      ? "text-rose-300 border-rose-500/30"
-      : initialRail === "upi"
-      ? "text-amber-300 border-amber-500/30"
-      : "text-emerald-300 border-emerald-500/30";
+    initialRail === "upi"
+      ? "text-zinc-300 border-white/20"
+      : "text-purple-300 border-purple-500/30";
 
   return (
     <>

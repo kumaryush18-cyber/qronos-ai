@@ -12,9 +12,11 @@ const OFFICIAL_MARKS: Partial<Record<string, string>> = {
   Anthropic: "/marks/anthropic.svg",
   Claude: "/marks/anthropic.svg",
   Google: "/marks/google.svg",
+  DeepSeek: "/marks/deepseek.svg",
   "Z.AI": "/marks/zai.svg",
   "Mistral AI": "/marks/mistralai.svg",
-  xAI: "/marks/xai.png",
+  "Moonshot AI": "/marks/moonshot.svg",
+  xAI: "/marks/xai.svg",
 };
 
 const PROVIDER_MONOGRAMS: Record<string, string> = {

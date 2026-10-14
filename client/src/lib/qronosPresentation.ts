@@ -1,6 +1,6 @@
 export const publicModels = [
-  { id: "glm-5.2", name: "GLM-5.2", capabilities: "Reasoning · streaming" },
-  { id: "grok-4.5", name: "Grok 4.5", capabilities: "Coding · streaming" },
+  { id: "claude-sonnet-5.5", name: "Claude Sonnet 5.5", capabilities: "Reasoning · streaming" },
+  { id: "claude-haiku-5.5", name: "Claude Haiku 5.5", capabilities: "Coding · streaming" },
 ] as const;
 
 export const demoSafetyNotice = "This preview is intentionally disconnected from the live API, provider controls, and administrative procedures.";
@@ -11,7 +11,7 @@ export const betaPlans = [
     eyebrow: "Free beta",
     price: "$0",
     description: "A careful starting point for independent builders and prototypes.",
-    features: ["100 requests each day", "100,000 tokens each day", "GLM-5.2 and Grok 4.5", "Developer dashboard"],
+    features: ["100 requests each day", "100,000 tokens each day", "Claude Sonnet 5.5 and Claude Haiku 5.5", "Developer dashboard"],
     action: "Try the preview",
     href: "/demo",
   },

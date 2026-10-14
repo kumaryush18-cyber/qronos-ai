@@ -26,17 +26,19 @@ import {
 
 const POPULAR_PRESET_MODELS = [
   { id: "claude-opus-5.5", label: "Claude Opus 5.5" },
+  { id: "claude-sonnet-5.5", label: "Claude Sonnet 5.5" },
+  { id: "claude-haiku-5.5", label: "Claude Haiku 5.5" },
+  { id: "gemini-4-argon", label: "Gemini 4 Argon" },
+  { id: "gpt-6-luna", label: "GPT 6 Luna" },
   { id: "gpt-6-sol", label: "GPT 6 Sol" },
   { id: "gpt-6-astra", label: "GPT-6 Astra" },
   { id: "claude-opus-5", label: "Claude Opus 5" },
   { id: "glm-5.3", label: "GLM 5.3" },
-  { id: "glm-5.2", label: "GLM-5.2" },
-  { id: "grok-4.5", label: "Grok 4.5" },
+  { id: "glm-5.3-flash", label: "GLM 5.3 Flash" },
   { id: "deepseek-v4-pro", label: "DeepSeek V4 Pro" },
   { id: "deepseek-v4-flash", label: "DeepSeek V4 Flash" },
   { id: "qwen3.8-max", label: "Qwen 3.8 Max" },
   { id: "claude-fable-5.1", label: "Claude Fable 5.1" },
-  { id: "claude-sonnet-4.6", label: "Claude Sonnet 4.6" },
   { id: "kimi-k3", label: "Kimi K3" },
 ];
 

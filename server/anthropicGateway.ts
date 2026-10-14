@@ -94,7 +94,7 @@ type AnthropicBlock = { type?: unknown; text?: unknown; id?: unknown; name?: unk
 // TokenRouter exposes the validated Claude routes through OpenAI-compatible Chat
 // Completions. Keep both customer-facing Claude models on the same converter so
 // Claude Code receives consistent Anthropic response, tool, and SSE semantics.
-const OPENAI_TRANSLATED_MESSAGES_MODELS = new Set(["qwen3.8-27b", "qwen3.8-max", "claude-fable-5.1", "claude-fable-5", "claude-opus-5", "claude-opus-5.5", "gpt-6-sol", "glm-5.3", "claude-sonnet-4.6", "deepseek-v4-pro", "gpt-6-astra", "kimi-k3"]);
+const OPENAI_TRANSLATED_MESSAGES_MODELS = new Set(["qwen3.8-max", "claude-fable-5.1", "claude-fable-5", "claude-opus-5", "claude-opus-5.5", "claude-sonnet-5.5", "claude-haiku-5.5", "gemini-4-argon", "gpt-6-luna", "gpt-6-sol", "glm-5.3", "glm-5.3-flash", "deepseek-v4-pro", "deepseek-v4-flash", "gpt-6-astra", "kimi-k3"]);
 
 export const CLAUDE_CODE_REPORTED_COMPACT_TOTAL = 980_000;
 
@@ -1206,7 +1206,7 @@ export function registerAnthropicMessagesGateway(app: Express) {
       );
     }
 
-    if ((await getPlatformMaintenanceConfig()).enabled && !(await isUserExemptFromPlatformMaintenance(key.userId))) {
+    if ((await getPlatformMaintenanceConfig()).enabled) {
       const maintenanceMsg = await getEffectivePlatformMaintenanceMessage(key.userId);
       return respondError(res, requestId, 503, "overloaded_error", maintenanceMsg);
     }
