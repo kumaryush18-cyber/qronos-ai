@@ -5028,9 +5028,10 @@ export function registerOpenAiGateway(app: Express) {
     let clientDisconnected = false;
     let firstTokenAt: number | null = null;
     let stopReason = "none";
+    let streamCompletedNormally = false;
 
     const onClientClose = () => {
-      if (!res.writableEnded) {
+      if (!streamCompletedNormally && !res.writableEnded) {
         clientDisconnected = true;
         streamFailed = true;
         streamFailedMessage = "Client disconnected before stream completed.";
@@ -5044,7 +5045,10 @@ export function registerOpenAiGateway(app: Express) {
     try {
       while (true) {
         const chunk = await reader.read();
-        if (chunk.done) break;
+        if (chunk.done) {
+          streamCompletedNormally = true;
+          break;
+        }
         if (firstTokenAt === null) firstTokenAt = Date.now();
         const value = decoder.decode(chunk.value, { stream: true });
         buffer += value;
@@ -5093,6 +5097,8 @@ export function registerOpenAiGateway(app: Express) {
         };
         res.write(`data: ${JSON.stringify(fallbackChunk)}\n\ndata: [DONE]\n\n`);
       }
+      req.off("close", onClientClose);
+      res.off("close", onClientClose);
     } catch {
       streamFailed = true;
       streamFailedMessage = "The selected provider stream did not complete.";

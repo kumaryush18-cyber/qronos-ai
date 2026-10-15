@@ -1810,6 +1810,8 @@ export function registerAnthropicMessagesGateway(app: Express) {
         }
       }
       finish();
+      req.off("close", onClientClose);
+      res.off("close", onClientClose);
     } catch {
       failed = true;
       failedMessage = "The selected provider stream did not complete.";
