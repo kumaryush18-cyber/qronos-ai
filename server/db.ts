@@ -58,7 +58,7 @@ import { decryptBaiReasoningContinuation, encryptBaiReasoningContinuation } from
 import { decryptGlmToolContinuation, encryptGlmToolContinuation, type GlmPrivateToolContinuation } from "./glmToolContinuationVault";
 import { decryptProviderRuntimeConfig, encryptProviderRuntimeConfig } from "./providerRuntimeConfigVault";
 import { cached, bustCache } from "./memoryCache";
-import { TOKENFORGE_REFERRAL_REWARD_NANOS, isSpecialReferralCampaignCode, normalizeReferralCode } from "../shared/referrals";
+import { QRONOS_REFERRAL_SIGNUP_TOKENS, TOKENFORGE_REFERRAL_REWARD_NANOS, isSpecialReferralCampaignCode, normalizeReferralCode } from "../shared/referrals";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 let _pool: mysql.Pool | null = null;
@@ -1349,7 +1349,7 @@ export async function awardReferralForNewUser(referredUserId: number, rawReferra
         });
       }
 
-      return { awarded: true as const, referralId, referrerUserId: invitation.userId, tokensAwarded: REFERRAL_SIGNUP_TOKENS };
+      return { awarded: true as const, referralId, referrerUserId: invitation.userId, tokensAwarded: QRONOS_REFERRAL_SIGNUP_TOKENS };
     });
     if (outcome.awarded) {
       await writeAuditEvent({ actorUserId: outcome.referrerUserId, targetUserId: referredUserId, action: "referral_bound", entityType: "referral", entityId: String(outcome.referralId), metadata: { rewardNanos: 0, tokensAwarded: outcome.tokensAwarded } });
