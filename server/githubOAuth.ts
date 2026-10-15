@@ -16,7 +16,8 @@ const GITHUB_STATE_COOKIE = "tf_github_oauth_state";
 const GITHUB_VERIFIER_COOKIE = "tf_github_oauth_verifier";
 const GITHUB_REFERRAL_COOKIE = "tf_github_oauth_ref";
 const LOCAL_SESSION_MAX_AGE_MS = DEFAULT_SESSION_MAX_AGE_MS;
-export const MINIMUM_GITHUB_ACCOUNT_AGE_MS = 14 * 24 * 60 * 60 * 1000;
+export const MINIMUM_GITHUB_ACCOUNT_AGE_DAYS = 90; // 3 months
+export const MINIMUM_GITHUB_ACCOUNT_AGE_MS = MINIMUM_GITHUB_ACCOUNT_AGE_DAYS * 24 * 60 * 60 * 1000;
 export const GITHUB_OAUTH_LOG_FILE = "/tmp/github-oauth.log";
 
 type GitHubEmail = { email: string; primary: boolean; verified: boolean };
@@ -169,32 +170,146 @@ function renderOAuthError(res: Response, errorKey: string, heading: string, deta
 
   res.setHeader("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'");
   res.status(200).send(`<!DOCTYPE html>
-<html>
-<head><title>GitHub Sign-In Notice</title></head>
-<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #12131a; color: #f2f5ee; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0;">
-  <div style="text-align: center; padding: 24px; max-width: 440px;">
-    <p style="font-size: 16px; font-weight: bold; color: #ef929b; margin-bottom: 8px;">${safeHeading}</p>
-    <p style="font-size: 13px; color: #a8a9b6; line-height: 1.5; margin-bottom: 20px;">${safeDetail}</p>
-    <div>
-      <a href="/signin?github=${encodeURIComponent(errorKey)}" style="display: inline-block; padding: 8px 20px; border-radius: 9999px; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); color: #e2e1ea; font-size: 13px; text-decoration: none; font-weight: 500;">Return to Sign In</a>
-    </div>
-    <script>
-      (function() {
-        if (window.opener && !window.opener.closed) {
-          try {
-            window.opener.postMessage({ type: 'OAUTH_AUTH_ERROR', error: ${JSON.stringify(safeErrorKey)} }, window.location.origin);
-            setTimeout(function() {
-              try { window.close(); } catch(e) {}
-            }, 500);
-            return;
-          } catch (e) {}
-        }
-        setTimeout(function() {
-          window.location.href = '/signin?github=' + encodeURIComponent(${JSON.stringify(errorKey)});
-        }, 1200);
-      })();
-    </script>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GitHub Sign-In Notice · Qronos AI</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      background: #090a0f;
+      color: #f4f4f6;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      overflow: hidden;
+      position: relative;
+    }
+    .ambient-glow {
+      position: absolute;
+      width: 460px;
+      height: 460px;
+      background: radial-gradient(circle, rgba(239, 68, 68, 0.12) 0%, rgba(244, 63, 94, 0.05) 45%, transparent 70%);
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+      filter: blur(40px);
+    }
+    .card {
+      position: relative;
+      z-index: 10;
+      text-align: center;
+      padding: 38px 32px;
+      max-width: 420px;
+      width: calc(100% - 32px);
+      background: rgba(15, 16, 23, 0.9);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 26px;
+      box-shadow: 0 25px 70px rgba(0, 0, 0, 0.85), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
+    }
+    .icon-wrap {
+      width: 52px;
+      height: 52px;
+      margin: 0 auto 18px auto;
+      border-radius: 50%;
+      background: rgba(239, 68, 68, 0.12);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #f87171;
+      font-size: 24px;
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 3px 10px;
+      border-radius: 9999px;
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px solid rgba(239, 68, 68, 0.25);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 10px;
+      font-weight: 700;
+      color: #f87171;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 12px;
+    }
+    h1 {
+      font-size: 18px;
+      font-weight: 800;
+      color: #ffffff;
+      letter-spacing: -0.02em;
+      margin-bottom: 8px;
+    }
+    p.sub {
+      font-size: 13px;
+      color: #9496a8;
+      line-height: 1.5;
+      margin-bottom: 22px;
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      width: 100%;
+      padding: 11px 22px;
+      border-radius: 9999px;
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      color: #ffffff;
+      font-size: 13px;
+      font-weight: 600;
+      text-decoration: none;
+      transition: all 0.15s ease;
+      cursor: pointer;
+    }
+    .btn:hover {
+      background: rgba(255, 255, 255, 0.14);
+      border-color: rgba(255, 255, 255, 0.25);
+    }
+    .footer {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 11px;
+      color: #5d5f70;
+      margin-top: 18px;
+    }
+  </style>
+</head>
+<body>
+  <div class="ambient-glow"></div>
+  <div class="card">
+    <div class="icon-wrap">&times;</div>
+    <div class="badge">Authorization Notice</div>
+    <h1>${safeHeading}</h1>
+    <p class="sub">${safeDetail}</p>
+    <a href="/signin?github=${encodeURIComponent(errorKey)}" class="btn">Return to Sign In</a>
+    <p class="footer">Qronos AI · Unified LLM Gateway</p>
   </div>
+  <script>
+    (function() {
+      if (window.opener && !window.opener.closed) {
+        try {
+          window.opener.postMessage({ type: 'OAUTH_AUTH_ERROR', error: ${JSON.stringify(safeErrorKey)} }, window.location.origin);
+          setTimeout(function() {
+            try { window.close(); } catch (e) {}
+          }, 500);
+          return;
+        } catch (e) {}
+      }
+      setTimeout(function() {
+        window.location.href = '/signin?github=' + encodeURIComponent(${JSON.stringify(errorKey)});
+      }, 1400);
+    })();
+  </script>
 </body>
 </html>`);
 }
@@ -335,7 +450,7 @@ export function registerGitHubOAuthRoutes(app: Express) {
       const mayBypassAge = mayBypassGitHubAccountAge({ verifiedEmail: identity.email, hasPreProvisionedReservation });
       if (!mayBypassAge && !isGitHubAccountOldEnough(identity.accountCreatedAt)) {
         logGitHubOAuth("Account Age Validation Failed", { accountCreatedAt: identity.accountCreatedAt });
-        renderOAuthError(res, "account-too-new", "Account Too New", "GitHub accounts must be at least 14 days old to register on Qronos AI.");
+        renderOAuthError(res, "account-too-new", "Account Too New", "GitHub accounts must be at least 3 months old to register on Qronos AI.");
         return;
       }
 
@@ -370,35 +485,185 @@ export function registerGitHubOAuthRoutes(app: Express) {
 
       res.setHeader("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'");
       res.status(200).send(`<!DOCTYPE html>
-<html>
-<head><title>GitHub Sign-In Success</title></head>
-<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #12131a; color: #f2f5ee; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0;">
-  <div style="text-align: center; padding: 24px; max-width: 440px;">
-    <p style="font-size: 16px; font-weight: bold; color: #c9ff73; margin-bottom: 8px;">Authentication Successful</p>
-    <p style="font-size: 13px; color: #a8a9b6; margin-bottom: 20px;">Entering your developer workspace…</p>
-    <div>
-      <a href="/dashboard" style="display: inline-block; padding: 8px 20px; border-radius: 9999px; background: #c9ff73; color: #17210d; font-size: 13px; font-weight: 600; text-decoration: none;">Continue to Workspace &rarr;</a>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Entering Qronos AI Workspace</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      background: #090a0f;
+      color: #f4f4f6;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      overflow: hidden;
+      position: relative;
+    }
+    .ambient-glow {
+      position: absolute;
+      width: 480px;
+      height: 480px;
+      background: radial-gradient(circle, rgba(16, 185, 129, 0.12) 0%, rgba(6, 182, 212, 0.05) 45%, transparent 70%);
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+      filter: blur(40px);
+    }
+    .card {
+      position: relative;
+      z-index: 10;
+      text-align: center;
+      padding: 38px 32px;
+      max-width: 400px;
+      width: calc(100% - 32px);
+      background: rgba(15, 16, 23, 0.88);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 26px;
+      box-shadow: 0 25px 70px rgba(0, 0, 0, 0.85), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
+    }
+    .spinner-wrap {
+      position: relative;
+      width: 56px;
+      height: 56px;
+      margin: 0 auto 20px auto;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .spinner-outer {
+      position: absolute;
+      inset: 0;
+      border-radius: 50%;
+      border: 2px solid transparent;
+      border-top-color: #10b981;
+      border-right-color: #06b6d4;
+      animation: spin 0.9s cubic-bezier(0.55, 0.15, 0.45, 0.85) infinite;
+    }
+    .spinner-inner {
+      position: absolute;
+      inset: 6px;
+      border-radius: 50%;
+      border: 2px solid transparent;
+      border-bottom-color: #10b981;
+      border-left-color: #3b82f6;
+      animation: spin-rev 1.3s cubic-bezier(0.55, 0.15, 0.45, 0.85) infinite;
+    }
+    .spinner-core {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(16, 185, 129, 0.4) 0%, transparent 70%);
+      animation: pulse 1.6s ease-in-out infinite;
+    }
+    @keyframes spin { 100% { transform: rotate(360deg); } }
+    @keyframes spin-rev { 100% { transform: rotate(-360deg); } }
+    @keyframes pulse { 0%, 100% { transform: scale(0.9); opacity: 0.6; } 50% { transform: scale(1.15); opacity: 1; } }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 3px 10px;
+      border-radius: 9999px;
+      background: rgba(16, 185, 129, 0.1);
+      border: 1px solid rgba(16, 185, 129, 0.25);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 10px;
+      font-weight: 700;
+      color: #34d399;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 12px;
+    }
+    .badge-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #34d399;
+      box-shadow: 0 0 8px #34d399;
+      animation: pulse 1.2s infinite;
+    }
+    h1 {
+      font-size: 19px;
+      font-weight: 800;
+      color: #ffffff;
+      letter-spacing: -0.02em;
+      margin-bottom: 6px;
+    }
+    p.sub {
+      font-size: 13px;
+      color: #9496a8;
+      line-height: 1.5;
+      margin-bottom: 22px;
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      width: 100%;
+      padding: 11px 22px;
+      border-radius: 9999px;
+      background: #ffffff;
+      color: #090a0f;
+      font-size: 13px;
+      font-weight: 700;
+      text-decoration: none;
+      box-shadow: 0 4px 20px rgba(255, 255, 255, 0.18);
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+      cursor: pointer;
+    }
+    .btn:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 24px rgba(255, 255, 255, 0.26);
+    }
+    .footer {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 11px;
+      color: #5d5f70;
+      margin-top: 18px;
+    }
+  </style>
+</head>
+<body>
+  <div class="ambient-glow"></div>
+  <div class="card">
+    <div class="spinner-wrap">
+      <div class="spinner-outer"></div>
+      <div class="spinner-inner"></div>
+      <div class="spinner-core"></div>
     </div>
-    <script>
-      (function() {
-        var notified = false;
-        if (window.opener && !window.opener.closed) {
-          try {
-            window.opener.postMessage({ type: 'OAUTH_AUTH_SUCCESS' }, window.location.origin);
-            notified = true;
-          } catch (e) {}
-        }
-        if (notified) {
-          setTimeout(function() {
-            try { window.close(); } catch(e) {}
-            setTimeout(function() { window.location.href = '/dashboard'; }, 300);
-          }, 250);
-        } else {
-          setTimeout(function() { window.location.href = '/dashboard'; }, 500);
-        }
-      })();
-    </script>
+    <div class="badge"><span class="badge-dot"></span>Session Verified</div>
+    <h1>Authentication Successful</h1>
+    <p class="sub">Entering your developer workspace…</p>
+    <a href="/dashboard" class="btn">Continue to Workspace &rarr;</a>
+    <p class="footer">Qronos AI · Unified LLM Gateway</p>
   </div>
+  <script>
+    (function() {
+      var notified = false;
+      if (window.opener && !window.opener.closed) {
+        try {
+          window.opener.postMessage({ type: 'OAUTH_AUTH_SUCCESS' }, window.location.origin);
+          notified = true;
+        } catch (e) {}
+      }
+      if (notified) {
+        setTimeout(function() {
+          try { window.close(); } catch (e) {}
+          setTimeout(function() { window.location.href = '/dashboard'; }, 250);
+        }, 200);
+      } else {
+        setTimeout(function() { window.location.href = '/dashboard'; }, 400);
+      }
+    })();
+  </script>
 </body>
 </html>`);
     } catch (error) {

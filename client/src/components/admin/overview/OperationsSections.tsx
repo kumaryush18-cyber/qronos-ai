@@ -124,33 +124,35 @@ export function AnnouncementSection({
         title="Rolling announcement"
         detail="Publish one concise, site-wide message below the public and developer headers. Save an empty field to remove it."
       />
-      <div className="mt-5 grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(18rem,.8fr)]">
-        <div>
-          <label htmlFor="announcement-text" className="text-xs font-mono font-semibold text-zinc-300">
-            Announcement message
-          </label>
+      <div className="mt-5 grid gap-5 lg:grid-cols-1 xl:grid-cols-[minmax(0,1fr)_minmax(18rem,.8fr)] items-start">
+        <div className="space-y-2.5">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <label htmlFor="announcement-text" className="text-xs font-mono font-semibold text-zinc-300">
+              Announcement message
+            </label>
+            <div className="flex items-center gap-2.5">
+              <span className="text-[10px] font-mono text-zinc-500">{text.length}/500</span>
+              <Button
+                size="sm"
+                onClick={onSave}
+                disabled={saving || loading}
+                className="bg-white text-black hover:bg-zinc-200 font-mono font-bold text-xs h-8 px-4 cursor-pointer shadow-md disabled:opacity-40 shrink-0"
+              >
+                {saving ? <Loader2 size={13} className="animate-spin mr-1.5" /> : null}
+                {saving ? "Publishing…" : "Save announcement"}
+              </Button>
+            </div>
+          </div>
           <Textarea
             id="announcement-text"
             value={text}
             onChange={(event) => onChange(event.target.value)}
             maxLength={500}
-            rows={5}
+            rows={4}
             placeholder="For example: Qronos AI model routing capacity upgraded…"
-            className="mt-2 resize-y border-white/10 bg-black/60 text-sm leading-6 text-white placeholder:text-zinc-500 font-mono focus:border-white/30"
+            className="w-full [field-sizing:fixed] h-28 min-h-[100px] max-h-[160px] resize-y overflow-y-auto border-white/10 bg-black/60 text-sm leading-relaxed text-white placeholder:text-zinc-500 font-mono focus:border-white/30"
             disabled={loading || saving}
           />
-          <div className="mt-2 flex items-center justify-between gap-3">
-            <p className="text-[10px] font-mono text-zinc-500">{text.length}/500 characters</p>
-            <Button
-              size="sm"
-              onClick={onSave}
-              disabled={saving || loading}
-              className="bg-white text-black hover:bg-zinc-200 font-mono font-bold text-xs h-9 px-5 cursor-pointer shadow-md disabled:opacity-40"
-            >
-              {saving ? <Loader2 size={13} className="animate-spin mr-1.5" /> : null}
-              {saving ? "Publishing…" : "Save announcement"}
-            </Button>
-          </div>
         </div>
         <div className="rounded-2xl border border-white/10 bg-black/40 p-4">
           <p className="text-[10px] font-bold uppercase tracking-[.18em] font-mono text-zinc-400">Live preview</p>

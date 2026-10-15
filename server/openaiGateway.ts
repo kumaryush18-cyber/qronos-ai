@@ -4511,9 +4511,10 @@ async function streamPlaygroundCompletion(input: {
     let clientDisconnected = false;
     let firstTokenAt: number | null = null;
     let stopReason = "none";
+    let streamCompletedNormally = false;
 
     const onClientClose = () => {
-      if (!input.res.writableEnded) {
+      if (!streamCompletedNormally && !input.res.writableEnded) {
         clientDisconnected = true;
         streamFailed = true;
         streamFailedMessage = "Client disconnected before stream completed.";
@@ -4527,7 +4528,10 @@ async function streamPlaygroundCompletion(input: {
     try {
       while (true) {
         const chunk = await readWithIdleTimeout(reader);
-        if (chunk.done) break;
+        if (chunk.done) {
+          streamCompletedNormally = true;
+          break;
+        }
         if (firstTokenAt === null) firstTokenAt = Date.now();
         const value = decoder.decode(chunk.value, { stream: true });
         buffer += value;
@@ -4558,6 +4562,8 @@ async function streamPlaygroundCompletion(input: {
           input.res.write(value);
         }
       }
+      input.req.off("close", onClientClose);
+      input.res.off("close", onClientClose);
     } catch {
       streamFailed = true;
       streamFailedMessage = "The selected provider stream did not complete.";

@@ -17,7 +17,7 @@ describe("TokenForge authentication presentation", () => {
   });
 
   it("retains the secure GitHub authorization, account-age, and referral hooks", () => {
-    expect(authPage).toContain("GitHub accounts must be at least 14 days old");
+    expect(authPage).toContain("GitHub accounts must be at least 3 months old");
     expect(authPage).toContain("verified permanent GitHub email address");
     expect(authPage).toContain("window.location.assign(`/api/auth/github${referralQuery}`)");
     expect(authPage).not.toContain("register.mutateAsync");

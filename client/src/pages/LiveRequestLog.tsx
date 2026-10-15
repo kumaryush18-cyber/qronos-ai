@@ -19,6 +19,7 @@ import {
   Flame,
   X,
   ArrowUpDown,
+  Terminal,
 } from "lucide-react";
 
 export type LiveRequest = {
@@ -183,6 +184,7 @@ export default function LiveRequestLog() {
 
   // Filters
   const [outcomeFilter, setOutcomeFilter] = useState<string>("all");
+  const [sourceFilter, setSourceFilter] = useState<string>("all");
   const [nonSuccessOnly, setNonSuccessOnly] = useState<boolean>(false);
   const [selectedProvider, setSelectedProvider] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState<string>("");
@@ -391,6 +393,11 @@ export default function LiveRequestLog() {
         if (outcomeFilter !== "non_success" && outcome !== outcomeFilter) return false;
       }
 
+      if (sourceFilter !== "all") {
+        const src = row.source || "api";
+        if (src !== sourceFilter) return false;
+      }
+
       if (selectedProvider) {
         const p = (row.provider || "Default").split("(")[0].trim();
         if (p !== selectedProvider) return false;
@@ -408,7 +415,7 @@ export default function LiveRequestLog() {
 
       return true;
     });
-  }, [rows, nonSuccessOnly, outcomeFilter, selectedProvider, searchQuery]);
+  }, [rows, nonSuccessOnly, outcomeFilter, sourceFilter, selectedProvider, searchQuery]);
 
   return (
     <section
@@ -585,8 +592,9 @@ export default function LiveRequestLog() {
                               ? "text-amber-300"
                               : "text-zinc-400"
                           }`}
+                          title={`Average TTFT: ${(stat.avgTtftMs / 1000).toFixed(2)}s (${stat.avgTtftMs}ms)`}
                         >
-                          TTFT: {stat.avgTtftMs}ms
+                          TTFT: {(stat.avgTtftMs / 1000).toFixed(2)}s
                         </span>
                       ) : (
                         <span className="text-zinc-600">TTFT: —</span>
@@ -645,6 +653,21 @@ export default function LiveRequestLog() {
             <Filter size={11} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none" />
           </div>
 
+          {/* Source Filter Select Dropdown (API vs Playground) */}
+          <div className="relative">
+            <select
+              aria-label="Filter by request source"
+              value={sourceFilter}
+              onChange={(e) => setSourceFilter(e.target.value)}
+              className="h-8 pl-3 pr-7 rounded-xl border border-white/10 bg-black/60 text-xs font-mono text-zinc-300 focus:outline-none focus:border-white/30 cursor-pointer appearance-none"
+            >
+              <option value="all" className="bg-neutral-900 text-white">All Sources</option>
+              <option value="api" className="bg-neutral-900 text-white">API Traffic Only</option>
+              <option value="playground" className="bg-neutral-900 text-white">Playground Only</option>
+            </select>
+            <Filter size={11} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none" />
+          </div>
+
           {/* Active Provider Filter Indicator */}
           {selectedProvider && (
             <div className="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-[#c9ff73]/15 border border-[#c9ff73]/30 text-[#c9ff73] text-xs font-mono">
@@ -694,6 +717,7 @@ export default function LiveRequestLog() {
               <th className="px-3 py-2">User</th>
               <th className="px-3 py-2">Model</th>
               <th className="px-3 py-2">Provider</th>
+              <th className="px-3 py-2">Source</th>
               <th className="px-3 py-2">Outcome</th>
               <th className="px-3 py-2">Finish Reason</th>
               <th className="px-3 py-2 text-right">In / Out</th>
@@ -705,7 +729,7 @@ export default function LiveRequestLog() {
           <tbody>
             {filteredRows.length === 0 ? (
               <tr>
-                <td colSpan={11} className="px-3 py-12 text-center text-[#858697]">
+                <td colSpan={12} className="px-3 py-12 text-center text-[#858697]">
                   <div className="mx-auto flex w-max items-center gap-2 text-[12px]">
                     {rows.length === 0 ? (
                       <>
@@ -788,6 +812,27 @@ export default function LiveRequestLog() {
                       <span className="truncate">{row.provider ? row.provider.split("(")[0].trim() : "Default"}</span>
                     </td>
 
+                    {/* Source: API vs Playground */}
+                    <td className="whitespace-nowrap px-3 py-2 font-mono text-[10px]">
+                      {row.source === "playground" ? (
+                        <span
+                          className="inline-flex items-center gap-1 rounded border border-purple-400/40 bg-purple-500/15 px-1.5 py-0.5 text-[9px] font-bold text-purple-300 shadow-xs"
+                          title="Request executed from Web Playground"
+                        >
+                          <Play size={9} className="fill-purple-300/40 text-purple-300" />
+                          PLAYGROUND
+                        </span>
+                      ) : (
+                        <span
+                          className="inline-flex items-center gap-1 rounded border border-emerald-400/30 bg-emerald-500/10 px-1.5 py-0.5 text-[9px] font-semibold text-emerald-400"
+                          title="Request executed via API Key / SDK / CLI"
+                        >
+                          <Terminal size={9} className="text-emerald-400" />
+                          API
+                        </span>
+                      )}
+                    </td>
+
                     {/* Outcome Badge */}
                     <td className="whitespace-nowrap px-3 py-2">
                       <span className={`inline-flex items-center rounded-md border px-2 py-0.5 text-[10px] font-mono font-bold ${outcomeConfig.cls}`}>
@@ -815,7 +860,7 @@ export default function LiveRequestLog() {
                       {row.inputTokens.toLocaleString()} / {row.outputTokens.toLocaleString()}
                     </td>
 
-                    {/* TTFT (Time To First Token) */}
+                    {/* TTFT (Time To First Token) - in seconds */}
                     <td className="whitespace-nowrap px-3 py-2 text-right font-mono text-[10px] tabular-nums">
                       {ttft != null ? (
                         <span
@@ -826,18 +871,21 @@ export default function LiveRequestLog() {
                               ? "text-amber-300 font-bold bg-amber-500/20 px-1 py-0.5 rounded"
                               : "text-[#a9aab8]"
                           }`}
-                          title={`Time To First Token: ${ttft}ms`}
+                          title={`Time To First Token: ${(ttft / 1000).toFixed(2)}s (${ttft.toLocaleString()}ms)`}
                         >
-                          {ttft}ms
+                          {(ttft / 1000).toFixed(2)}s
                         </span>
                       ) : (
                         <span className="text-zinc-600">—</span>
                       )}
                     </td>
 
-                    {/* Total Duration */}
-                    <td className="whitespace-nowrap px-3 py-2 text-right font-mono text-[10px] tabular-nums text-[#a9aab8]">
-                      {duration != null ? `${duration}ms` : "—"}
+                    {/* Total Duration - in seconds */}
+                    <td
+                      className="whitespace-nowrap px-3 py-2 text-right font-mono text-[10px] tabular-nums text-[#a9aab8]"
+                      title={duration != null ? `Total Duration: ${(duration / 1000).toFixed(2)}s (${duration.toLocaleString()}ms)` : undefined}
+                    >
+                      {duration != null ? `${(duration / 1000).toFixed(2)}s` : "—"}
                     </td>
 
                     {/* Diagnostic / Error */}

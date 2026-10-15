@@ -1,1 +1,162 @@
-.announcement-banner{position:relative;z-index:1;display:flex;min-height:34px;overflow:hidden;border-bottom:1px solid rgba(201,255,115,.14);background:linear-gradient(90deg,rgba(17,22,13,.98),rgba(31,42,21,.98),rgba(17,22,13,.98));color:#dce9cf;font:700 10px/1.2 "DM Mono",monospace;letter-spacing:.035em}.announcement-banner__label{position:relative;z-index:2;display:flex;align-items:center;gap:6px;flex:0 0 auto;padding:0 13px;border-right:1px solid rgba(201,255,115,.16);background:rgba(16,22,12,.95);color:#c9ff73;text-transform:uppercase;letter-spacing:.13em;box-shadow:10px 0 22px rgba(11,15,9,.28)}.announcement-banner__viewport{min-width:0;flex:1;overflow:hidden}.announcement-banner__track{display:flex;width:max-content;min-width:200%;animation:announcement-scroll-right 24s linear infinite;transform:translateX(-50%);will-change:transform}.announcement-banner__message{display:block;flex:0 0 auto;padding:10px 10vw;white-space:nowrap}.announcement-banner__message::before{content:"•";margin-right:10px;color:#c9ff73}@keyframes announcement-scroll-right{from{transform:translateX(-50%)}to{transform:translateX(0)}}@media (prefers-reduced-motion:reduce){.announcement-banner__track{animation:none;transform:translateX(0)}}@media(max-width:420px){.announcement-banner{min-height:38px}.announcement-banner__label{padding:0 10px;font-size:9px}.announcement-banner__label span{display:none}.announcement-banner__message{padding-block:12px;padding-inline:8vw;font-size:9px}}
+/* Qronos AI Announcement Banner & Rotating Star Light */
+@keyframes star-btn {
+  0% {
+    offset-distance: 0%;
+  }
+  100% {
+    offset-distance: 100%;
+  }
+}
+
+.animate-star-btn {
+  animation: star-btn calc(var(--duration, 6) * 1s) linear infinite;
+}
+
+.announcement-banner {
+  position: relative;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  min-height: 38px;
+  overflow: hidden;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(9, 10, 15, 0.95);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  color: #ffffff;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-weight: 700;
+  font-size: 11.5px;
+  letter-spacing: 0.04em;
+  isolation: isolate;
+}
+
+.announcement-banner__light {
+  position: absolute;
+  aspect-ratio: 1 / 1;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+  offset-path: var(--path);
+  offset-distance: 0%;
+  width: var(--light-width, 240px);
+  background: radial-gradient(
+    ellipse at center,
+    rgba(255, 255, 255, 0.95) 0%,
+    rgba(52, 211, 153, 0.75) 25%,
+    rgba(16, 185, 129, 0.3) 50%,
+    transparent 70%
+  );
+  filter: blur(2px);
+}
+
+.announcement-banner__label {
+  position: relative;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex: 0 0 auto;
+  padding: 0 14px;
+  height: 38px;
+  border-right: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(16, 185, 129, 0.08);
+  color: #34d399;
+  font-size: 10.5px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  box-shadow: 12px 0 24px rgba(0, 0, 0, 0.5);
+}
+
+.announcement-banner__label-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #34d399;
+  box-shadow: 0 0 8px #34d399;
+  animation: pulse-dot 1.4s ease-in-out infinite;
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 0.7; transform: scale(0.9); }
+  50% { opacity: 1; transform: scale(1.15); }
+}
+
+.announcement-banner__viewport {
+  position: relative;
+  z-index: 5;
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  mask-image: linear-gradient(to right, transparent, black 24px, black calc(100% - 24px), transparent);
+  -webkit-mask-image: linear-gradient(to right, transparent, black 24px, black calc(100% - 24px), transparent);
+}
+
+.announcement-banner__track {
+  display: flex;
+  width: max-content;
+  min-width: 200%;
+  animation: announcement-scroll-left 26s linear infinite;
+  will-change: transform;
+}
+
+.announcement-banner:hover .announcement-banner__track {
+  animation-play-state: paused;
+}
+
+.announcement-banner__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  flex: 0 0 auto;
+  padding: 8px 6vw;
+  white-space: nowrap;
+  font-weight: 700;
+  color: #ffffff;
+}
+
+.announcement-banner__separator {
+  color: #34d399;
+  opacity: 0.85;
+  font-size: 13px;
+  text-shadow: 0 0 6px rgba(52, 211, 153, 0.6);
+}
+
+@keyframes announcement-scroll-left {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .announcement-banner__track {
+    animation: none;
+    transform: translateX(0);
+  }
+  .animate-star-btn {
+    animation: none;
+  }
+}
+
+@media (max-width: 480px) {
+  .announcement-banner {
+    min-height: 36px;
+    font-size: 11px;
+  }
+  .announcement-banner__label {
+    padding: 0 10px;
+    height: 36px;
+    font-size: 9.5px;
+  }
+  .announcement-banner__label span {
+    display: none;
+  }
+  .announcement-banner__item {
+    padding: 6px 8vw;
+  }
+}

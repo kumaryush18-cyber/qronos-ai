@@ -427,7 +427,7 @@ export function SignInCard({
                 </button>
 
                 <p className="text-[11px] text-zinc-500 text-center leading-relaxed font-mono">
-                  GitHub account must be at least 14 days old with a verified email.
+                  GitHub account must be at least 3 months old with a verified email.
                 </p>
 
                 {errorMessage && (

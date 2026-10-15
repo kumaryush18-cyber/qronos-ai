@@ -44,7 +44,10 @@ export default function PublicPlayground() {
     provider: "Qronos AI",
   };
 
-  const handleOrbSubmit = async (text: string): Promise<string> => {
+  const handleOrbSubmit = async (
+    text: string,
+    onChunk: (chunk: string, meta?: { isReasoning?: boolean }) => void
+  ): Promise<string> => {
     try {
       const response = await fetch("/api/playground/chat/completions", {
         method: "POST",
@@ -64,24 +67,54 @@ export default function PublicPlayground() {
         throw new Error(errMsg);
       }
 
-      const raw = await response.text();
-      try {
-        const parsed = JSON.parse(raw);
-        return parsed.choices?.[0]?.message?.content ?? parsed.content ?? "Answer generated.";
-      } catch {
-        const lines = raw.split("\n");
-        let combined = "";
+      const reader = response.body?.getReader();
+      if (!reader) {
+        throw new Error("Unable to read streaming response from gateway.");
+      }
+
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let hasReceivedAnyContent = false;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+
         for (const line of lines) {
-          if (line.startsWith("data:") && !line.includes("[DONE]")) {
-            try {
-              const d = JSON.parse(line.slice(5).trim());
-              const delta = d.choices?.[0]?.delta?.content ?? "";
-              combined += delta;
-            } catch {}
+          const trimmed = line.trim();
+          if (!trimmed.startsWith("data:")) continue;
+          const payload = trimmed.slice(5).trim();
+          if (!payload || payload === "[DONE]") continue;
+
+          try {
+            const parsed = JSON.parse(payload);
+            const delta = parsed.choices?.[0]?.delta;
+            if (!delta) continue;
+
+            const content = delta.content;
+            const reasoning = delta.reasoning_content ?? delta.reasoning ?? delta.thinking;
+
+            if (typeof reasoning === "string" && reasoning) {
+              hasReceivedAnyContent = true;
+              onChunk(reasoning, { isReasoning: true });
+            }
+            if (typeof content === "string" && content) {
+              hasReceivedAnyContent = true;
+              onChunk(content, { isReasoning: false });
+            }
+          } catch {
+            // Partial JSON line, continue
           }
         }
-        return combined || raw;
       }
+
+      if (!hasReceivedAnyContent) {
+        return "Model completed the response with no text output. Please try rephrasing your prompt.";
+      }
+      return "";
     } catch (err: any) {
       const msg = err?.message || String(err);
       if (msg.toLowerCase().includes("maintenance")) {

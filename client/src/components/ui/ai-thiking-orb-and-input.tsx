@@ -1,6 +1,7 @@
 // AI Thinking Orb and Morphing Input Component
 import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Streamdown } from "streamdown";
+import { Copy, Check } from "lucide-react";
 import "@/index.css";
 
 /* ───────────────────────────── copy ───────────────────────────── */
@@ -17,7 +18,10 @@ const COPY = {
 type Phase = "idle" | "launch" | "assemble" | "think" | "resolve" | "condense" | "unfold" | "answered" | "reset";
 
 export interface MorphOrbProps {
-  onSubmit?: (text: string) => Promise<string> | string;
+  onSubmit?: (
+    text: string,
+    onChunk: (chunk: string, meta?: { isReasoning?: boolean }) => void
+  ) => Promise<string | void> | string;
   minThinkMs?: number;
   speed?: number;
   className?: string;
@@ -481,6 +485,8 @@ export function AIThinkingOrbInput({
   const [phase, setPhase] = useState<Phase>("idle");
   const [inputText, setInputText] = useState("");
   const [answerText, setAnswerText] = useState("");
+  const [isStreaming, setIsStreaming] = useState(false);
+  const [copied, setCopied] = useState(false);
   const [statusText, setStatusText] = useState(COPY.labels[0]);
   const [path, setPath] = useState("");
 
@@ -488,6 +494,23 @@ export function AIThinkingOrbInput({
   const pillRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const orbRef = useRef<ReturnType<typeof createOrb> | null>(null);
+  const answerScrollRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll answer container smoothly as tokens stream in
+  useEffect(() => {
+    if (isStreaming && answerScrollRef.current) {
+      answerScrollRef.current.scrollTop = answerScrollRef.current.scrollHeight;
+    }
+  }, [answerText, isStreaming]);
+
+  const handleCopy = async () => {
+    if (!answerText) return;
+    try {
+      await navigator.clipboard.writeText(answerText);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {}
+  };
 
   // Setup rotating border path on input pill
   useEffect(() => {
@@ -524,7 +547,7 @@ export function AIThinkingOrbInput({
     setPhase("launch");
 
     // Launch phase animation
-    await sleep(400);
+    await sleep(300);
     setPhase("assemble");
 
     // Start 3D orb spinning
@@ -535,7 +558,7 @@ export function AIThinkingOrbInput({
       orbRef.current.ensure();
     }
 
-    await sleep(600);
+    await sleep(400);
     setPhase("think");
 
     // Status label cycle
@@ -548,50 +571,71 @@ export function AIThinkingOrbInput({
       }
     }, 700);
 
-    // Run actual submission
-    let result = COPY.answerBody;
+    let hasOpenedBox = false;
+    let accumulatedText = "";
+    let accumulatedReasoning = "";
+
+    const openAnswerBox = () => {
+      if (hasOpenedBox) return;
+      hasOpenedBox = true;
+      clearInterval(labelTimer);
+      if (orbRef.current) {
+        orbRef.current.P.k = 0;
+        orbRef.current.P.alpha = 0;
+      }
+      setPhase("answered");
+      setIsStreaming(true);
+    };
+
+    const handleChunk = (chunk: string, meta?: { isReasoning?: boolean }) => {
+      openAnswerBox();
+      if (meta?.isReasoning) {
+        accumulatedReasoning += chunk;
+      } else {
+        accumulatedText += chunk;
+      }
+
+      if (accumulatedReasoning && accumulatedText) {
+        setAnswerText(
+          `> 💭 *Thinking process:*\n> ${accumulatedReasoning.replace(/\n/g, "\n> ")}\n\n---\n\n${accumulatedText}`
+        );
+      } else if (accumulatedReasoning) {
+        setAnswerText(
+          `> 💭 *Thinking process:*\n> ${accumulatedReasoning.replace(/\n/g, "\n> ")}`
+        );
+      } else {
+        setAnswerText(accumulatedText);
+      }
+    };
+
     try {
       if (onSubmit) {
-        const promise = onSubmit(query);
-        const [resolved] = await Promise.all([promise, sleep(minThinkMs)]);
-        result = resolved || COPY.answerBody;
+        const result = await onSubmit(query, handleChunk);
+        if (!hasOpenedBox && typeof result === "string" && result) {
+          openAnswerBox();
+          setAnswerText(result);
+        }
       } else {
         await sleep(minThinkMs);
+        openAnswerBox();
+        setAnswerText(COPY.answerBody);
       }
     } catch (err: any) {
-      result = err?.message || "Failed to generate answer.";
+      openAnswerBox();
+      setAnswerText(err?.message || "Failed to generate answer.");
     } finally {
       clearInterval(labelTimer);
+      setIsStreaming(false);
+      setPhase("answered");
     }
-
-    // Resolve & Condense
-    setPhase("resolve");
-    if (orbRef.current) {
-      orbRef.current.P.sweep = 1;
-      orbRef.current.P.gain = 0;
-      orbRef.current.P.floor = 0.95;
-    }
-    await sleep(500);
-
-    setPhase("condense");
-    if (orbRef.current) {
-      orbRef.current.P.k = 0;
-      orbRef.current.P.alpha = 0;
-    }
-    await sleep(400);
-
-    // Unfold & Answered
-    setAnswerText(result);
-    setPhase("unfold");
-    await sleep(500);
-
-    setPhase("answered");
   };
 
   const handleReset = () => {
     orbRef.current?.reset();
     setInputText("");
     setAnswerText("");
+    setIsStreaming(false);
+    setCopied(false);
     setStatusText(COPY.labels[0]);
     setPhase("idle");
   };
@@ -623,24 +667,69 @@ export function AIThinkingOrbInput({
         </div>
       </div>
 
-      {/* Answer Card State */}
+      {/* Answer Card State - Fixed Bounded Scrolling with ChatGPT-style Action Row */}
       {(phase === "unfold" || phase === "answered") && (
-        <div className="w-full max-w-xl rounded-2xl border border-white/15 bg-neutral-900/90 backdrop-blur-2xl p-6 sm:p-8 shadow-[0_0_60px_rgba(255,255,255,0.06)] animate-in fade-in zoom-in-95 duration-500">
-          <div className="flex items-center justify-between pb-4 border-b border-white/10 mb-4">
-            <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-emerald-400" />
-              <span className="text-xs font-mono uppercase tracking-wider text-zinc-400">{COPY.answerTitle}</span>
+        <div className="w-full max-w-2xl rounded-2xl border border-white/15 bg-[#0e1017]/95 backdrop-blur-2xl p-5 sm:p-7 shadow-[0_0_60px_rgba(255,255,255,0.06)] animate-in fade-in zoom-in-95 duration-500 flex flex-col text-left">
+          <div className="flex items-center justify-between pb-3.5 border-b border-white/10 mb-3.5 flex-wrap gap-2 shrink-0">
+            <div className="flex items-center gap-2.5">
+              <span className={`w-2 h-2 rounded-full ${isStreaming ? "bg-cyan-400 animate-ping" : "bg-emerald-400"}`} />
+              <span className="text-xs font-mono uppercase tracking-wider text-zinc-300 font-bold">{COPY.answerTitle}</span>
+              {isStreaming ? (
+                <span className="text-[10px] font-mono text-cyan-400 bg-cyan-500/10 border border-cyan-500/25 px-2 py-0.5 rounded-full animate-pulse">
+                  Streaming live…
+                </span>
+              ) : (
+                <span className="text-[10px] font-mono text-emerald-400 bg-emerald-500/10 border border-emerald-500/25 px-2 py-0.5 rounded-full">
+                  Completed
+                </span>
+              )}
             </div>
             <button
               onClick={handleReset}
-              className="text-xs font-mono text-zinc-400 hover:text-white px-3 py-1 rounded-full border border-white/10 bg-white/[0.04] hover:bg-white/[0.08] transition"
+              className="text-xs font-mono text-zinc-400 hover:text-white px-3 py-1 rounded-full border border-white/10 bg-white/[0.04] hover:bg-white/[0.08] transition cursor-pointer"
             >
               {COPY.reset}
             </button>
           </div>
-          <div className="prose prose-invert prose-sm text-zinc-200 leading-relaxed max-w-none break-words text-left">
+
+          {/* Bounded Fixed Scrolling Area */}
+          <div
+            ref={answerScrollRef}
+            className="max-h-[min(480px,calc(100vh-320px))] min-h-[140px] overflow-y-auto overscroll-contain pr-2 select-text text-left prose prose-invert prose-sm text-zinc-200 leading-relaxed max-w-none break-words"
+            style={{
+              scrollbarWidth: "thin",
+              scrollbarColor: "rgba(255, 255, 255, 0.2) transparent",
+            }}
+          >
             <Streamdown>{answerText}</Streamdown>
           </div>
+
+          {/* ChatGPT-style Action Row at the bottom */}
+          {!isStreaming && answerText && (
+            <div className="mt-3.5 pt-3 border-t border-white/[0.08] flex items-center justify-between gap-3 text-xs font-mono text-zinc-400 shrink-0">
+              <button
+                type="button"
+                onClick={handleCopy}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/10 bg-white/[0.04] text-zinc-300 hover:text-white hover:bg-white/[0.08] hover:border-white/20 transition-all cursor-pointer font-medium active:scale-95"
+                title="Copy response to clipboard"
+              >
+                {copied ? (
+                  <>
+                    <Check size={13} className="text-emerald-400" />
+                    <span className="text-emerald-400 font-semibold">Copied!</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy size={13} className="text-zinc-400" />
+                    <span>Copy</span>
+                  </>
+                )}
+              </button>
+              <span className="text-[11px] text-zinc-500 font-mono">
+                {answerText.length.toLocaleString()} characters
+              </span>
+            </div>
+          )}
         </div>
       )}
 

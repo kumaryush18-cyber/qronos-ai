@@ -1850,9 +1850,10 @@ function ReferralWorkspace() {
     refetchOnWindowFocus: true,
     retry: 1,
   });
+  const isLoading = referralQuery.isLoading;
   const [copied, setCopied] = useState(false);
   const referral = referralQuery.data || {
-    code: "qr01",
+    code: "",
     referrals: [],
     totalRewardNanos: 0,
     totalReferralTokens: 0,
@@ -1860,11 +1861,11 @@ function ReferralWorkspace() {
     wasReferred: false,
     receivedTokens: 0,
   };
-  const inviteUrl = buildReferralInviteUrl(referral.code);
+  const inviteUrl = referral.code ? buildReferralInviteUrl(referral.code) : "";
   const formatCredit = (nanos: number) => `$${(nanos / 1_000_000_000).toFixed(2)}`;
 
   const copyInvite = async () => {
-    if (!inviteUrl) return;
+    if (!inviteUrl || isLoading || !referral.code) return;
     await navigator.clipboard.writeText(inviteUrl);
     setCopied(true);
     toast.success("Affiliate link copied to clipboard");
@@ -1935,7 +1936,14 @@ function ReferralWorkspace() {
                     </div>
                     <div>
                       <h3 className="text-sm font-bold text-white tracking-tight">Your Unique Affiliate Link</h3>
-                      <p className="text-[11px] font-mono text-zinc-500">Affiliate code: {referral.code.toUpperCase()}</p>
+                      <p className="text-[11px] font-mono text-zinc-500 flex items-center gap-1.5">
+                        <span>Affiliate code:</span>
+                        {isLoading || !referral.code ? (
+                          <span className="inline-block h-3 w-12 rounded bg-white/10 animate-pulse" />
+                        ) : (
+                          <span className="text-zinc-200 font-bold">{referral.code.toUpperCase()}</span>
+                        )}
+                      </p>
                     </div>
                   </div>
                   <Badge className="border-0 bg-emerald-500/10 text-emerald-400 border border-emerald-500/25 font-mono text-[10px]">
@@ -1949,12 +1957,19 @@ function ReferralWorkspace() {
 
                 {/* Copy Link Input Bar */}
                 <div className="mt-5 flex flex-col sm:flex-row gap-2 rounded-2xl border border-white/10 bg-black/70 p-2 shadow-inner">
-                  <code className="min-w-0 flex-1 px-3 py-2 font-mono text-xs text-zinc-200 select-all truncate sm:leading-loose">
-                    {inviteUrl}
-                  </code>
+                  {isLoading || !inviteUrl ? (
+                    <div className="min-w-0 flex-1 px-3 py-2.5 flex items-center">
+                      <div className="h-4 w-64 max-w-full rounded bg-white/10 animate-pulse" />
+                    </div>
+                  ) : (
+                    <code className="min-w-0 flex-1 px-3 py-2 font-mono text-xs text-zinc-200 select-all truncate sm:leading-loose">
+                      {inviteUrl}
+                    </code>
+                  )}
                   <Button
                     onClick={copyInvite}
-                    className="shrink-0 bg-white text-black hover:bg-zinc-200 font-mono font-bold text-xs h-10 px-5 cursor-pointer shadow-md"
+                    disabled={isLoading || !inviteUrl}
+                    className="shrink-0 bg-white text-black hover:bg-zinc-200 font-mono font-bold text-xs h-10 px-5 cursor-pointer shadow-md disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     {copied ? <Check size={14} className="mr-1.5" /> : <Copy size={14} className="mr-1.5" />}
                     {copied ? "Copied" : "Copy Link"}
@@ -1969,26 +1984,29 @@ function ReferralWorkspace() {
                 </span>
                 <div className="flex items-center gap-2 flex-wrap">
                   <a
-                    href={`https://twitter.com/intent/tweet?text=${shareText}&url=${encodeURIComponent(inviteUrl)}`}
-                    target="_blank"
+                    href={isLoading || !inviteUrl ? "#" : `https://twitter.com/intent/tweet?text=${shareText}&url=${encodeURIComponent(inviteUrl)}`}
+                    target={isLoading || !inviteUrl ? undefined : "_blank"}
                     rel="noopener noreferrer"
-                    className="rounded-lg border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs text-zinc-300 hover:text-white hover:bg-white/[0.1] transition-all cursor-pointer"
+                    onClick={(e) => { if (isLoading || !inviteUrl) e.preventDefault(); }}
+                    className={`rounded-lg border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs text-zinc-300 hover:text-white hover:bg-white/[0.1] transition-all ${isLoading || !inviteUrl ? "opacity-40 cursor-not-allowed" : "cursor-pointer"}`}
                   >
                     Post on 𝕏
                   </a>
                   <a
-                    href={`https://t.me/share/url?url=${encodeURIComponent(inviteUrl)}&text=${shareText}`}
-                    target="_blank"
+                    href={isLoading || !inviteUrl ? "#" : `https://t.me/share/url?url=${encodeURIComponent(inviteUrl)}&text=${shareText}`}
+                    target={isLoading || !inviteUrl ? undefined : "_blank"}
                     rel="noopener noreferrer"
-                    className="rounded-lg border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs text-zinc-300 hover:text-white hover:bg-white/[0.1] transition-all cursor-pointer"
+                    onClick={(e) => { if (isLoading || !inviteUrl) e.preventDefault(); }}
+                    className={`rounded-lg border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs text-zinc-300 hover:text-white hover:bg-white/[0.1] transition-all ${isLoading || !inviteUrl ? "opacity-40 cursor-not-allowed" : "cursor-pointer"}`}
                   >
                     Telegram
                   </a>
                   <a
-                    href={`https://wa.me/?text=${shareText}%20${encodeURIComponent(inviteUrl)}`}
-                    target="_blank"
+                    href={isLoading || !inviteUrl ? "#" : `https://wa.me/?text=${shareText}%20${encodeURIComponent(inviteUrl)}`}
+                    target={isLoading || !inviteUrl ? undefined : "_blank"}
                     rel="noopener noreferrer"
-                    className="rounded-lg border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs text-zinc-300 hover:text-white hover:bg-white/[0.1] transition-all cursor-pointer"
+                    onClick={(e) => { if (isLoading || !inviteUrl) e.preventDefault(); }}
+                    className={`rounded-lg border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs text-zinc-300 hover:text-white hover:bg-white/[0.1] transition-all ${isLoading || !inviteUrl ? "opacity-40 cursor-not-allowed" : "cursor-pointer"}`}
                   >
                     WhatsApp
                   </a>
@@ -2016,17 +2034,27 @@ function ReferralWorkspace() {
             </div>
             <div className="mt-4 flex items-end justify-between gap-3 flex-wrap">
               <div>
-                <p className="text-3xl sm:text-4xl font-extrabold font-mono text-white tracking-tight">
-                  {referral.referrals.length}
-                </p>
+                {isLoading ? (
+                  <div className="h-9 w-20 rounded bg-white/10 animate-pulse my-1" />
+                ) : (
+                  <p className="text-3xl sm:text-4xl font-extrabold font-mono text-white tracking-tight">
+                    {referral.referrals.length}
+                  </p>
+                )}
                 <p className="mt-1 text-xs text-zinc-500 font-mono">Bound developers in your network</p>
               </div>
               <div className="text-right pb-0.5">
-                <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2.5 py-1 text-xs font-mono font-bold text-emerald-400">
-                  <Sparkles size={11} />
-                  +{((referral.totalReferralTokens ?? (referral.referrals.length * 1_000_000)) / 1_000_000).toLocaleString(undefined, { maximumFractionDigits: 1 })}M Tokens
-                </span>
-                <span className="text-[10px] text-zinc-500 font-mono block mt-1">+1M per referral</span>
+                {isLoading ? (
+                  <div className="h-6 w-28 rounded-full bg-white/10 animate-pulse" />
+                ) : (
+                  <>
+                    <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2.5 py-1 text-xs font-mono font-bold text-emerald-400">
+                      <Sparkles size={11} />
+                      +{((referral.totalReferralTokens ?? (referral.referrals.length * 1_000_000)) / 1_000_000).toLocaleString(undefined, { maximumFractionDigits: 1 })}M Tokens
+                    </span>
+                    <span className="text-[10px] text-zinc-500 font-mono block mt-1">+1M per referral</span>
+                  </>
+                )}
               </div>
             </div>
           </div>
@@ -2046,9 +2074,13 @@ function ReferralWorkspace() {
               </div>
             </div>
             <div className="mt-4">
-              <p className="text-3xl sm:text-4xl font-extrabold font-mono text-emerald-400 tracking-tight">
-                {formatCredit(referral.totalRewardNanos)}
-              </p>
+              {isLoading ? (
+                <div className="h-9 w-28 rounded bg-white/10 animate-pulse my-1" />
+              ) : (
+                <p className="text-3xl sm:text-4xl font-extrabold font-mono text-emerald-400 tracking-tight">
+                  {formatCredit(referral.totalRewardNanos)}
+                </p>
+              )}
               <p className="mt-1 text-xs text-zinc-500 font-mono">Credited directly to PAYG balance</p>
             </div>
           </div>
@@ -2186,12 +2218,38 @@ function ReferralWorkspace() {
             </h2>
           </div>
           <span className="text-xs font-mono text-zinc-400">
-            {referral.referrals.length} attribution{referral.referrals.length === 1 ? "" : "s"} logged
+            {isLoading ? (
+              <span className="inline-block h-3.5 w-24 rounded bg-white/10 animate-pulse align-middle" />
+            ) : (
+              `${referral.referrals.length} attribution${referral.referrals.length === 1 ? "" : "s"} logged`
+            )}
           </span>
         </div>
 
         <div className="mt-5">
-          {referral.referrals.length ? (
+          {isLoading ? (
+            <div className="space-y-3">
+              {[1, 2].map((i) => (
+                <div
+                  key={i}
+                  style={{
+                    backgroundColor: "oklch(0.18 0 0)",
+                    borderColor: "oklch(0.26 0 0)",
+                  }}
+                  className="rounded-2xl border p-4 sm:p-5 flex items-center justify-between gap-4"
+                >
+                  <div className="flex items-center gap-3.5">
+                    <div className="h-9 w-9 shrink-0 rounded-xl bg-white/10 animate-pulse" />
+                    <div className="space-y-2">
+                      <div className="h-4 w-40 rounded bg-white/10 animate-pulse" />
+                      <div className="h-3 w-28 rounded bg-white/5 animate-pulse" />
+                    </div>
+                  </div>
+                  <div className="h-7 w-24 rounded-full bg-white/10 animate-pulse" />
+                </div>
+              ))}
+            </div>
+          ) : referral.referrals.length ? (
             <div className="space-y-3">
               {referral.referrals.map((item) => (
                 <div

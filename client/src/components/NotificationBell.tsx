@@ -87,13 +87,14 @@ export function NotificationBell() {
       <PopoverContent
         align="end"
         sideOffset={8}
-        className="w-80 sm:w-96 rounded-2xl border border-white/10 bg-[#0f1015]/95 p-0 text-white shadow-2xl backdrop-blur-2xl z-50"
+        collisionPadding={12}
+        className="w-[calc(100vw-24px)] sm:w-96 max-w-[420px] rounded-2xl border border-white/10 bg-[#0f1015]/95 p-0 text-white shadow-2xl backdrop-blur-2xl z-50"
       >
-        <div className="flex items-center justify-between border-b border-white/[0.08] px-4 py-3">
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-mono font-bold uppercase tracking-wider text-white">Notifications</span>
+        <div className="flex items-center justify-between border-b border-white/[0.08] px-3.5 sm:px-4 py-3 gap-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="text-xs font-mono font-bold uppercase tracking-wider text-white truncate">Notifications</span>
             {unreadCount > 0 && (
-              <span className="rounded-full bg-rose-500/20 border border-rose-500/30 px-1.5 py-0.5 text-[10px] font-mono font-bold text-rose-300">
+              <span className="rounded-full bg-rose-500/20 border border-rose-500/30 px-1.5 py-0.5 text-[10px] font-mono font-bold text-rose-300 shrink-0">
                 {unreadCount} new
               </span>
             )}
@@ -104,7 +105,7 @@ export function NotificationBell() {
               size="sm"
               disabled={markAllRead.isPending}
               onClick={() => markAllRead.mutate()}
-              className="h-7 px-2 text-[11px] font-mono text-zinc-400 hover:text-white hover:bg-white/[0.06] cursor-pointer"
+              className="h-7 px-2 text-[11px] font-mono text-zinc-400 hover:text-white hover:bg-white/[0.06] cursor-pointer shrink-0"
             >
               {markAllRead.isPending ? (
                 <Loader2 size={12} className="animate-spin mr-1" />
@@ -116,13 +117,13 @@ export function NotificationBell() {
           )}
         </div>
 
-        <ScrollArea className="max-h-[380px] overflow-y-auto">
+        <ScrollArea className="max-h-[min(420px,calc(100vh-140px))] overflow-y-auto overscroll-contain">
           {listQuery.isLoading ? (
             <div className="flex h-32 items-center justify-center">
               <Loader2 size={18} className="animate-spin text-zinc-500" />
             </div>
           ) : notifications.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12 text-center text-zinc-500">
+            <div className="flex flex-col items-center justify-center py-12 text-center text-zinc-500 px-4">
               <Bell size={24} className="opacity-30 mb-2" />
               <p className="text-xs font-mono font-medium">No notifications yet</p>
               <p className="text-[11px] text-zinc-600 mt-0.5">Announcements and alerts will appear here</p>
@@ -143,8 +144,8 @@ export function NotificationBell() {
                       : "bg-white/[0.03] hover:bg-white/[0.06]"
                   }`}
                 >
-                  <div className="mt-0.5">{getIcon(item.type)}</div>
-                  <div className="min-w-0 flex-1">
+                  <div className="mt-0.5 shrink-0">{getIcon(item.type)}</div>
+                  <div className="min-w-0 flex-1 overflow-hidden">
                     <div className="flex items-center justify-between gap-2">
                       <p className={`text-xs font-semibold truncate ${item.isRead ? "text-zinc-300" : "text-white"}`}>
                         {item.title}
@@ -153,7 +154,7 @@ export function NotificationBell() {
                         <span className="h-1.5 w-1.5 rounded-full bg-rose-500 shrink-0" />
                       )}
                     </div>
-                    <p className="mt-1 text-[11px] leading-relaxed text-zinc-400 break-words whitespace-pre-line">
+                    <p className="mt-1 text-[11px] leading-relaxed text-zinc-400 break-words whitespace-pre-line [overflow-wrap:anywhere]">
                       {item.message}
                     </p>
                     <p className="mt-1.5 text-[10px] font-mono text-zinc-500">

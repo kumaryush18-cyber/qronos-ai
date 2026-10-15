@@ -35,7 +35,7 @@ export default function LocalAuth({ mode }: LocalAuthProps) {
     const githubErr = params.get("github");
     if (githubErr) {
       if (githubErr === "account-too-new") {
-        setErrorMessage("GitHub accounts must be at least 14 days old to register on Qronos AI.");
+        setErrorMessage("GitHub accounts must be at least 3 months old to register on Qronos AI.");
       } else if (githubErr === "email-not-allowed") {
         setErrorMessage("Your GitHub account email is not allowed. Please use a verified permanent email address.");
       } else if (githubErr === "link-required") {
@@ -70,7 +70,7 @@ export default function LocalAuth({ mode }: LocalAuthProps) {
         setGithubLoading(false);
         const err = event.data.error;
         if (err === "account-too-new") {
-          setErrorMessage("GitHub accounts must be at least 14 days old to register on Qronos AI.");
+          setErrorMessage("GitHub accounts must be at least 3 months old to register on Qronos AI.");
         } else if (err === "email-not-allowed") {
           setErrorMessage("Your GitHub account email is not allowed. Please use a verified permanent email address.");
         } else if (err === "link-required") {

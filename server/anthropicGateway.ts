@@ -1051,9 +1051,10 @@ async function handleNativeTokenRouterMessagesRequest(req: Request, res: Respons
   let clientDisconnected = false;
   let firstTokenAt: number | null = null;
   let stopReason = "none";
+  let streamCompletedNormally = false;
 
   const onClientDisconnect = () => {
-    if (!res.writableEnded) {
+    if (!streamCompletedNormally && !res.writableEnded) {
       clientDisconnected = true;
       failed = true;
       failedMessage = "Client disconnected before stream completed.";
@@ -1067,7 +1068,10 @@ async function handleNativeTokenRouterMessagesRequest(req: Request, res: Respons
   try {
     while (true) {
       const next = await readWithIdleTimeout(reader);
-      if (next.done) break;
+      if (next.done) {
+        streamCompletedNormally = true;
+        break;
+      }
       if (firstTokenAt === null) firstTokenAt = Date.now();
       buffer += decoder.decode(next.value, { stream: true });
       const lines = buffer.split("\n");
@@ -1118,6 +1122,8 @@ async function handleNativeTokenRouterMessagesRequest(req: Request, res: Respons
       }
     }
     if (buffer) res.write(`${buffer}\n`);
+    req.off("close", onClientDisconnect);
+    res.off("close", onClientDisconnect);
   } catch {
     failed = true;
   } finally {
