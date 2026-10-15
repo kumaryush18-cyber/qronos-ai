@@ -8389,6 +8389,60 @@ export async function grantAllUsersPaygBalance(input: {
   };
 }
 
+/**
+ * Grants Token Plan quota (in millions of tokens) to all user accounts without any Discord restrictions.
+ */
+export async function grantAllUsersTokenPlan(input: {
+  tokensMillion: number;
+  actorUserId?: number;
+  note?: string;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("Qronos AI database is unavailable");
+  const tokensMillion = Math.max(1, Math.round(input.tokensMillion));
+  const tokensAdded = tokensMillion * 1_000_000;
+  const note = input.note?.trim() || `+${tokensMillion}M Token Plan grant to all users`;
+
+  // 1. Ensure all users exist in credit_accounts
+  await db.execute(sql`
+    INSERT INTO credit_accounts (userId, balanceNanos, paygBalanceNanos, codingPlanTokens, createdAt, updatedAt)
+    SELECT id, 0, 0, 0, NOW(), NOW()
+    FROM users
+    WHERE id NOT IN (SELECT userId FROM credit_accounts)
+  `);
+
+  // 2. Add tokens to codingPlanTokens for all accounts unconditionally (no Discord requirement)
+  await db.execute(sql`
+    UPDATE credit_accounts
+    SET codingPlanTokens = codingPlanTokens + ${tokensAdded}
+  `);
+
+  // 3. Batch insert ledger entries
+  const allUsers = await db.select({ id: users.id }).from(users);
+  const batchId = randomBytes(8).toString("hex");
+  const chunkSize = 500;
+  for (let i = 0; i < allUsers.length; i += chunkSize) {
+    const chunk = allUsers.slice(i, i + chunkSize);
+    await db.insert(creditLedger).values(
+      chunk.map(u => ({
+        userId: u.id,
+        kind: "manual_adjustment" as const,
+        amountNanos: 0,
+        balanceAfterNanos: tokensAdded,
+        referenceId: `bulk-tokens-grant:${batchId}:${u.id}`,
+        note,
+      }))
+    );
+  }
+
+  return {
+    success: true,
+    updatedCount: allUsers.length,
+    tokensMillion,
+    tokensAdded,
+  };
+}
+
 let _accessRequestsTableChecked = false;
 export async function ensureAccessRequestsTable() {
   if (_accessRequestsTableChecked) return;

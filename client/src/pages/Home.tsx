@@ -691,12 +691,17 @@ export default function Home() {
       <section id="pricing" className="relative overflow-hidden py-24 lg:py-32 bg-black">
         <div className="mx-auto max-w-[1344px] px-6 lg:px-0">
           <div className="max-w-3xl">
-            <p className="text-xs font-mono uppercase tracking-[0.2em] text-zinc-500">Pricing</p>
+            <div className="flex items-center gap-3 flex-wrap">
+              <p className="text-xs font-mono uppercase tracking-[0.2em] text-zinc-500">Pricing</p>
+              <span className="text-[10px] font-mono font-extrabold px-2.5 py-0.5 rounded-full bg-amber-400 text-black uppercase tracking-wider shadow-sm">
+                Active Offer: 3X &amp; 2X Token Grant
+              </span>
+            </div>
             <h2 className="mt-4 text-[clamp(2rem,5vw,4rem)] font-display leading-[0.98] tracking-tight text-white">
               Pay per token, settled to the nanodollar.
             </h2>
             <p className="mt-6 max-w-2xl text-base leading-relaxed text-zinc-400">
-              Start with free credits, then top up as your workloads grow. Every charge is reserved before a request runs and settled when it completes.
+              Start with free starter tokens, or supercharge your development with our limited-time <strong className="text-amber-300">3X Token Grant</strong> on Plus (750M tokens) and <strong className="text-amber-300">2X Token Grant</strong> on Pro &amp; above plans. Every charge is reserved before a request runs and settled when it completes.
             </p>
           </div>
           <div className="mt-14 grid gap-4 md:grid-cols-3">

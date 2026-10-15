@@ -131,6 +131,7 @@ import {
   markUserSignedIn,
   setAllUsersCreditBalance,
   grantAllUsersPaygBalance,
+  grantAllUsersTokenPlan,
   setUserTier,
   getUserById,
   isUserCreditsEnabled,
@@ -1469,6 +1470,32 @@ ${input.intent ? `Requested Notification Type: ${input.intent}` : ""}`;
           action: "account.all_users_payg_granted",
           entityType: "credit_account",
           metadata: { amountUsd: input.amountUsd, updatedCount: result.updatedCount, note: input.note },
+        });
+        return result;
+      }),
+    grantAllUsersTokenPlan: adminProcedure
+      .input(
+        z.object({
+          tokensMillion: z.number().positive().max(100_000).default(100),
+          note: z.string().max(256).optional(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const result = await grantAllUsersTokenPlan({
+          tokensMillion: input.tokensMillion,
+          actorUserId: ctx.user.id,
+          note: input.note,
+        });
+        await writeAuditEvent({
+          actorUserId: ctx.user.id,
+          action: "account.all_users_token_plan_granted",
+          entityType: "credit_account",
+          metadata: {
+            tokensMillion: input.tokensMillion,
+            tokensAdded: result.tokensAdded,
+            updatedCount: result.updatedCount,
+            note: input.note,
+          },
         });
         return result;
       }),

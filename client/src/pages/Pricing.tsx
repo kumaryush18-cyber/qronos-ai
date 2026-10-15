@@ -187,7 +187,33 @@ export default function Pricing() {
         <div className="relative z-20 max-w-7xl mx-auto px-4 py-6">
           {activePlanType === "token_plan" ? (
             /* 5 TOKEN PLAN CARDS: Free, Plus, Pro, Ultra, Enterprise */
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-5 items-stretch">
+            <>
+              {/* Limited Time Promotion Banner */}
+              <div className="mb-8 rounded-2xl border border-amber-400/30 bg-gradient-to-r from-amber-500/15 via-amber-500/5 to-transparent p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-xl">
+                <div className="flex items-center gap-3.5">
+                  <div className="h-10 w-10 rounded-xl bg-amber-400/20 border border-amber-400/40 flex items-center justify-center text-amber-300 shrink-0">
+                    <Sparkles size={20} />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-mono font-bold uppercase tracking-wider text-amber-300">
+                        Special Offer Active: 3X &amp; 2X Token Grant
+                      </span>
+                      <span className="text-[9px] font-mono font-extrabold px-2 py-0.5 rounded-full bg-amber-400 text-black uppercase tracking-wider">
+                        Active Now
+                      </span>
+                    </div>
+                    <p className="text-xs sm:text-sm text-zinc-300 mt-0.5">
+                      Get <strong className="text-amber-200 font-bold">3X Token Grant</strong> on Plus (750M tokens) &amp; <strong className="text-amber-200 font-bold">2X Token Grant</strong> on Pro (1.0B), Ultra (2.0B) &amp; Enterprise (4.4B) plans!
+                    </p>
+                  </div>
+                </div>
+                <div className="text-[11px] font-mono text-zinc-400 shrink-0 border border-white/10 px-3 py-1.5 rounded-xl bg-black/40">
+                  Instant Allocation · No Expiry
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-5 items-stretch">
               {TOKEN_PLAN_TIERS.map((tier) => {
                 const isFree = tier.amountUsd === 0;
                 const isPro = tier.popular === true;
@@ -228,11 +254,23 @@ export default function Pricing() {
                               {isFree ? "forever" : `/mo · ₹${tier.amountInr.toLocaleString()}`}
                             </span>
                           </div>
-                          <p className="text-[11px] font-mono text-emerald-400 font-bold mt-1">
-                            {tier.tokensMillions >= 1000
-                              ? `${(tier.tokensMillions / 1000).toFixed(1)}B Tokens Allocation`
-                              : `${tier.tokensMillions}M Tokens Allocation`}
-                          </p>
+                          <div className="mt-1 flex items-center gap-1.5 flex-wrap">
+                            <p className="text-[11px] font-mono text-emerald-400 font-bold">
+                              {tier.tokensMillions >= 1000
+                                ? `${(tier.tokensMillions / 1000).toFixed(1)}B Tokens`
+                                : `${tier.tokensMillions}M Tokens`}
+                            </p>
+                            {tier.originalTokensMillions && (
+                              <span className="text-[10px] font-mono text-zinc-500 line-through">
+                                (was {tier.originalTokensMillions >= 1000 ? `${(tier.originalTokensMillions / 1000).toFixed(1)}B` : `${tier.originalTokensMillions}M`})
+                              </span>
+                            )}
+                            {tier.offerMultiplier && (
+                              <span className="text-[9px] font-mono font-extrabold px-1.5 py-0.2 rounded bg-amber-400/20 text-amber-300 border border-amber-400/40">
+                                {tier.offerMultiplier} OFFER
+                              </span>
+                            )}
+                          </div>
                           <p className="text-xs text-neutral-400 mt-2 leading-relaxed">
                             {tier.description}
                           </p>
@@ -282,6 +320,7 @@ export default function Pricing() {
                 );
               })}
             </div>
+            </>
           ) : (
             /* PAYG ON-DEMAND COMPUTE CARDS & DEPOSIT TIERS */
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-stretch max-w-5xl mx-auto">

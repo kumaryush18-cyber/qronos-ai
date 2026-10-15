@@ -96,6 +96,8 @@ export interface TokenPlanTier {
   name: string;
   tokens: number;
   tokensMillions: number;
+  originalTokensMillions?: number;
+  offerMultiplier?: string;
   amountUsd: number;
   amountInr: number;
   scanAmountUsd: number;
@@ -132,16 +134,18 @@ export const TOKEN_PLAN_TIERS: TokenPlanTier[] = [
   {
     id: "token_plus_15",
     name: "Plus",
-    tokens: 150_000_000,
-    tokensMillions: 150,
-    amountUsd: 15,
-    amountInr: 1440,
-    scanAmountUsd: 16,
-    scanAmountInr: 1536,
-    badge: "SOLO BUILDERS",
-    description: "150 Million tokens · 10M tokens / $1 · Ideal for scripts, tools & prototyping",
+    tokens: 750_000_000,
+    tokensMillions: 750,
+    originalTokensMillions: 250,
+    offerMultiplier: "3X",
+    amountUsd: 25,
+    amountInr: 2400,
+    scanAmountUsd: 26,
+    scanAmountInr: 2496,
+    badge: "3X TOKENS OFFER",
+    description: "750 Million tokens (3X Offer · was 250M) · 30M tokens / $1 · Ideal for scripts, tools & prototyping",
     features: [
-      "150 Million tokens dedicated quota",
+      "750 Million tokens dedicated quota (3X Special Offer)",
       "Claude Opus 5, Sonnet 4.6 & 3.7",
       "GLM 5.3, Qwen 3.8 Max, DeepSeek V4 Pro",
       "Full tool-use & multi-file context",
@@ -152,17 +156,19 @@ export const TOKEN_PLAN_TIERS: TokenPlanTier[] = [
   {
     id: "coding_starter_25",
     name: "Pro",
-    tokens: 250_000_000,
-    tokensMillions: 250,
-    amountUsd: 25,
-    amountInr: 2400,
-    scanAmountUsd: 26,
-    scanAmountInr: 2496,
+    tokens: 1_000_000_000,
+    tokensMillions: 1000,
+    originalTokensMillions: 500,
+    offerMultiplier: "2X",
+    amountUsd: 50,
+    amountInr: 4800,
+    scanAmountUsd: 51,
+    scanAmountInr: 4896,
     popular: true,
-    badge: "MOST POPULAR",
-    description: "250 Million tokens · 10M tokens / $1 · Production engineering and autonomous agents",
+    badge: "2X TOKENS · POPULAR",
+    description: "1.0 Billion tokens (2X Offer · was 500M) · 20M tokens / $1 · Production engineering and autonomous agents",
     features: [
-      "250 Million tokens dedicated quota",
+      "1,000 Million (1.0 Billion) tokens dedicated quota (2X Special Offer)",
       "Claude Opus 5, Sonnet 4.6 & 3.7",
       "GLM 5.3, Qwen 3.8 Max, DeepSeek V4 Pro",
       "GPT-6 Astra & Kimi K3 Coder",
@@ -173,17 +179,19 @@ export const TOKEN_PLAN_TIERS: TokenPlanTier[] = [
   {
     id: "coding_power_100",
     name: "Ultra",
-    tokens: 1_000_000_000,
-    tokensMillions: 1000,
-    amountUsd: 100,
-    amountInr: 9600,
-    scanAmountUsd: 101,
-    scanAmountInr: 9696,
+    tokens: 2_000_000_000,
+    tokensMillions: 2000,
+    originalTokensMillions: 1000,
+    offerMultiplier: "2X",
+    amountUsd: 80,
+    amountInr: 7680,
+    scanAmountUsd: 81,
+    scanAmountInr: 7776,
     popular: false,
-    badge: "POWER SCALE",
-    description: "1.0 Billion tokens · High-throughput teams, multi-agent loops & CI pipelines",
+    badge: "2X TOKENS OFFER",
+    description: "2.0 Billion tokens (2X Offer · was 1.0B) · High-throughput teams, multi-agent loops & CI pipelines",
     features: [
-      "1,000 Million (1 Billion) tokens",
+      "2,000 Million (2.0 Billion) tokens (2X Special Offer)",
       "Maximum concurrency allocation",
       "VIP upstream failover routing",
       "Multi-agent swarm continuous runs",
@@ -194,17 +202,19 @@ export const TOKEN_PLAN_TIERS: TokenPlanTier[] = [
   {
     id: "coding_ultra_200",
     name: "Enterprise",
-    tokens: 2_200_000_000,
-    tokensMillions: 2200,
-    amountUsd: 200,
-    amountInr: 19200,
-    scanAmountUsd: 201,
-    scanAmountInr: 19296,
+    tokens: 4_400_000_000,
+    tokensMillions: 4400,
+    originalTokensMillions: 2200,
+    offerMultiplier: "2X",
+    amountUsd: 150,
+    amountInr: 14400,
+    scanAmountUsd: 151,
+    scanAmountInr: 14496,
     popular: false,
-    badge: "+200M BONUS",
-    description: "2.2 Billion tokens · Includes 200M bonus tokens · Maximum compute capacity for enterprises",
+    badge: "2X TOKENS OFFER",
+    description: "4.4 Billion tokens (2X Offer · was 2.2B) · Maximum compute capacity for enterprises",
     features: [
-      "2.2 Billion tokens (Includes 200M bonus)",
+      "4.4 Billion tokens (2X Special Offer)",
       "Maximum cluster priority & bandwidth",
       "Enterprise SLA & dedicated support",
       "Continuous autonomous agents",
@@ -218,7 +228,9 @@ export const CODING_PLAN_TIERS: TokenPlanTier[] = TOKEN_PLAN_TIERS;
 
 export function getCodingPlanTier(idOrUsd: string | number): TokenPlanTier | undefined {
   if (typeof idOrUsd === "number") {
-    return TOKEN_PLAN_TIERS.find((t) => t.amountUsd === idOrUsd || t.tokensMillions === idOrUsd);
+    return TOKEN_PLAN_TIERS.find(
+      (t) => t.amountUsd === idOrUsd || t.tokensMillions === idOrUsd || t.originalTokensMillions === idOrUsd
+    );
   }
   const clean = String(idOrUsd || "").trim().toLowerCase();
   return (
@@ -227,10 +239,13 @@ export function getCodingPlanTier(idOrUsd: string | number): TokenPlanTier | und
         t.id.toLowerCase() === clean ||
         t.name.toLowerCase() === clean ||
         String(t.amountUsd) === clean ||
-        String(t.tokensMillions) === clean
+        String(t.tokensMillions) === clean ||
+        (t.originalTokensMillions !== undefined && String(t.originalTokensMillions) === clean)
     ) ||
     (clean.includes("25") ? TOKEN_PLAN_TIERS.find((t) => t.amountUsd === 25) : undefined) ||
-    (clean.includes("50") ? TOKEN_PLAN_TIERS.find((t) => t.amountUsd === 25) : undefined)
+    (clean.includes("50") ? TOKEN_PLAN_TIERS.find((t) => t.amountUsd === 50) : undefined) ||
+    (clean.includes("80") ? TOKEN_PLAN_TIERS.find((t) => t.amountUsd === 80) : undefined) ||
+    (clean.includes("150") ? TOKEN_PLAN_TIERS.find((t) => t.amountUsd === 150) : undefined)
   );
 }
 

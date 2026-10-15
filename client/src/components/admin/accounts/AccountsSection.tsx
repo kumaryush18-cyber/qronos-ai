@@ -20,7 +20,6 @@ import { Input } from "@/components/ui/input";
 import { Eye, Loader2, Mail, Power, RefreshCw, Search, Trash2, UsersRound, WalletCards } from "lucide-react";
 import { toast } from "sonner";
 import { UserTierBadge, USER_TIER_CONFIGS, UserTier } from "@/components/UserTierBadge";
-import { UserTierAssignmentCard } from "./UserTierAssignmentCard";
 
 export function AccountRow({
   account,
@@ -94,15 +93,10 @@ export function AccountRow({
       if (result.balanceType === "tokens") {
         const targetM = (result as any).targetTokens ? ((result as any).targetTokens / 1_000_000).toLocaleString() : ((result.targetAmountNanos ?? 0) / 1_000_000).toLocaleString();
         toast.success(`Coding tokens set to ${targetM}M tokens for ${account.name || account.email}`);
-      } else if (result.balanceType === "payg") {
-        const targetFormatted = `$${(result.targetAmountNanos / 1_000_000_000).toFixed(2)}`;
-        toast.success(
-          `PAYG balance set to ${targetFormatted} for ${account.name || account.email}`
-        );
       } else {
-        const targetFormatted = `$${(result.targetAmountNanos / 1_000_000_000).toFixed(2)}`;
+        const targetFormatted = `$${(((result as any).targetAmountNanos ?? 0) / 1_000_000_000).toFixed(2)}`;
         toast.success(
-          `Bundle credits set to ${targetFormatted} for ${account.name || account.email}`
+          `Balance set to ${targetFormatted} for ${account.name || account.email}`
         );
       }
     },
@@ -132,7 +126,6 @@ export function AccountRow({
       const config = USER_TIER_CONFIGS[data.tier as UserTier];
       toast.success(`Updated tier for ${account.name || account.email} to ${config.label}`);
       void utils.admin.accounts.invalidate();
-      void utils.admin.searchUsersForTier.invalidate();
     },
     onError: (error) => toast.error(error.message || "Failed to update tier"),
   });
@@ -535,16 +528,16 @@ export function AccountRow({
 
 export function SetAllUsersCreditCard() {
   const utils = trpc.useUtils();
-  const [activeTab, setActiveTab] = useState<"payg" | "promo">("payg");
-  const [bulkCreditAmount, setBulkCreditAmount] = useState("5.00");
+  const [activeTab, setActiveTab] = useState<"tokens" | "payg">("tokens");
+  const [bulkCreditAmount, setBulkCreditAmount] = useState("100");
   const [bulkCreditNote, setBulkCreditNote] = useState("");
 
-  const grantAllUsersPayg = trpc.admin.grantAllUsersPayg.useMutation({
+  const grantAllUsersTokenPlan = trpc.admin.grantAllUsersTokenPlan.useMutation({
     onSuccess: async (result) => {
-      setBulkCreditAmount("5.00");
+      setBulkCreditAmount("100");
       setBulkCreditNote("");
       toast.success(
-        `Successfully granted $${result.amountDollars.toFixed(2)} PAYG balance to all ${result.updatedCount} accounts!`
+        `Successfully granted ${result.tokensMillion}M tokens to all ${result.updatedCount} accounts!`
       );
       await Promise.all([
         utils.admin.overview.invalidate(),
@@ -555,17 +548,12 @@ export function SetAllUsersCreditCard() {
     onError: (error) => toast.error(error.message),
   });
 
-  const setAllUsersCredit = trpc.admin.setAllUsersCredit.useMutation({
+  const grantAllUsersPayg = trpc.admin.grantAllUsersPayg.useMutation({
     onSuccess: async (result) => {
-      setBulkCreditAmount("");
+      setBulkCreditAmount("5.00");
       setBulkCreditNote("");
-      const targetUsd = typeof result?.targetAmountUsd === "number"
-        ? result.targetAmountUsd
-        : ((result?.targetAmountNanos ?? 0) / 1_000_000_000);
       toast.success(
-        `Updated credit balance to $${targetUsd.toFixed(2)} for ${result?.updatedCount ?? 0} account${
-          result?.updatedCount === 1 ? "" : "s"
-        }`
+        `Successfully granted $${result.amountDollars.toFixed(2)} PAYG balance to all ${result.updatedCount} accounts!`
       );
       await Promise.all([
         utils.admin.overview.invalidate(),
@@ -587,14 +575,28 @@ export function SetAllUsersCreditCard() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
         <SectionHeader
           icon={<WalletCards size={17} className="text-white" />}
-          title={activeTab === "payg" ? "Grant All Users PAYG Balance" : "Set All Users Promotional Credit Balance"}
+          title={activeTab === "tokens" ? "Grant All Users Token Plan" : "Grant All Users PAYG Balance"}
           detail={
-            activeTab === "payg"
-              ? "Add a dollar amount directly into every user's Pay-As-You-Go compute balance."
-              : "Enter any amount to overwrite every user's promotional credit balance immediately."
+            activeTab === "tokens"
+              ? "Add token plan tokens (in millions) directly to every user's coding token balance."
+              : "Add a dollar amount directly into every user's Pay-As-You-Go compute balance."
           }
         />
         <div className="flex items-center gap-1 p-0.5 rounded-xl bg-black/40 border border-white/10 self-start sm:self-auto">
+          <button
+            type="button"
+            onClick={() => {
+              setActiveTab("tokens");
+              setBulkCreditAmount("100");
+            }}
+            className={`px-3 py-1 text-xs font-mono font-semibold rounded-lg transition-all cursor-pointer ${
+              activeTab === "tokens"
+                ? "bg-white text-black font-bold shadow-sm"
+                : "text-zinc-400 hover:text-white"
+            }`}
+          >
+            Token Plan (M Tokens)
+          </button>
           <button
             type="button"
             onClick={() => {
@@ -607,21 +609,7 @@ export function SetAllUsersCreditCard() {
                 : "text-zinc-400 hover:text-white"
             }`}
           >
-            PAYG Compute
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setActiveTab("promo");
-              setBulkCreditAmount("50.00");
-            }}
-            className={`px-3 py-1 text-xs font-mono font-semibold rounded-lg transition-all cursor-pointer ${
-              activeTab === "promo"
-                ? "bg-white text-black font-bold shadow-sm"
-                : "text-zinc-400 hover:text-white"
-            }`}
-          >
-            Promotional Credits
+            PAYG Compute ($ USD)
           </button>
         </div>
       </div>
@@ -632,29 +620,29 @@ export function SetAllUsersCreditCard() {
           event.preventDefault();
           const val = Number(bulkCreditAmount);
           if (isNaN(val) || val <= 0) return;
-          if (activeTab === "payg") {
-            grantAllUsersPayg.mutate({ amountUsd: val, note: bulkCreditNote.trim() || undefined });
+          if (activeTab === "tokens") {
+            grantAllUsersTokenPlan.mutate({ tokensMillion: val, note: bulkCreditNote.trim() || undefined });
           } else {
-            setAllUsersCredit.mutate({ amountUsd: val, note: bulkCreditNote.trim() || undefined });
+            grantAllUsersPayg.mutate({ amountUsd: val, note: bulkCreditNote.trim() || undefined });
           }
         }}
       >
         <div>
           <label className="text-xs font-mono font-semibold text-zinc-300" htmlFor="bulk-credit-amount">
-            {activeTab === "payg" ? "PAYG Grant Amount ($ USD)" : "Credit Balance Target ($ USD)"}
+            {activeTab === "tokens" ? "Token Grant Amount (Millions of Tokens)" : "PAYG Grant Amount ($ USD)"}
           </label>
           <Input
             id="bulk-credit-amount"
             type="number"
-            min={activeTab === "payg" ? "0.01" : "0"}
+            min={activeTab === "tokens" ? "1" : "0.01"}
             max="100000"
-            step="0.01"
-            inputMode="decimal"
+            step={activeTab === "tokens" ? "1" : "0.01"}
+            inputMode={activeTab === "tokens" ? "numeric" : "decimal"}
             value={bulkCreditAmount}
             onChange={(event) => setBulkCreditAmount(event.target.value)}
-            placeholder={activeTab === "payg" ? "e.g. 5.00" : "e.g. 50.00"}
+            placeholder={activeTab === "tokens" ? "e.g. 100" : "e.g. 5.00"}
             className="mt-2 h-10 border border-white/10 bg-black/40 text-sm font-mono font-semibold text-white placeholder:text-zinc-500 focus:border-white/30"
-            disabled={grantAllUsersPayg.isPending || setAllUsersCredit.isPending}
+            disabled={grantAllUsersTokenPlan.isPending || grantAllUsersPayg.isPending}
           />
         </div>
         <div>
@@ -665,9 +653,9 @@ export function SetAllUsersCreditCard() {
             id="bulk-credit-note"
             value={bulkCreditNote}
             onChange={(event) => setBulkCreditNote(event.target.value)}
-            placeholder={activeTab === "payg" ? "$5.00 PAYG starting compute grant" : "e.g. Platform credit reset / promotion"}
+            placeholder={activeTab === "tokens" ? "e.g. 100M tokens welcome bonus" : "$5.00 PAYG starting compute grant"}
             className="mt-2 h-10 border-white/10 bg-black/40 text-sm font-mono text-white placeholder:text-zinc-500 focus:border-white/30"
-            disabled={grantAllUsersPayg.isPending || setAllUsersCredit.isPending}
+            disabled={grantAllUsersTokenPlan.isPending || grantAllUsersPayg.isPending}
           />
         </div>
         <div className="flex items-end">
@@ -678,35 +666,35 @@ export function SetAllUsersCreditCard() {
               bulkCreditAmount === "" ||
               isNaN(Number(bulkCreditAmount)) ||
               Number(bulkCreditAmount) <= 0 ||
-              grantAllUsersPayg.isPending ||
-              setAllUsersCredit.isPending
+              grantAllUsersTokenPlan.isPending ||
+              grantAllUsersPayg.isPending
             }
           >
-            {grantAllUsersPayg.isPending || setAllUsersCredit.isPending ? (
+            {grantAllUsersTokenPlan.isPending || grantAllUsersPayg.isPending ? (
               <>
                 <Loader2 className="animate-spin mr-1" size={14} />
                 Executing Bulk Update…
               </>
-            ) : activeTab === "payg" ? (
+            ) : activeTab === "tokens" ? (
+              `+${
+                !isNaN(Number(bulkCreditAmount)) && bulkCreditAmount !== ""
+                  ? Number(bulkCreditAmount)
+                  : "100"
+              }M Tokens to All Users`
+            ) : (
               `Grant +$${
                 !isNaN(Number(bulkCreditAmount)) && bulkCreditAmount !== ""
                   ? Number(bulkCreditAmount).toFixed(2)
                   : "5.00"
               } PAYG to All Users`
-            ) : (
-              `Set All Users to $${
-                !isNaN(Number(bulkCreditAmount)) && bulkCreditAmount !== ""
-                  ? Number(bulkCreditAmount).toFixed(2)
-                  : "0.00"
-              }`
             )}
           </Button>
         </div>
       </form>
       <p className="mt-3 text-[10px] leading-5 text-[#858697]">
-        {activeTab === "payg"
-          ? "Adds the specified balance to all user PAYG balances without overwriting existing deposited funds. Writes immutable ledger records."
-          : "Overwrites all user promotional credit accounts to the exact amount entered and writes immutable ledger records."}
+        {activeTab === "tokens"
+          ? "Adds the specified millions of coding tokens to all user balances without overwriting existing tokens. Writes immutable ledger records with no Discord requirement."
+          : "Adds the specified balance to all user PAYG balances without overwriting existing deposited funds. Writes immutable ledger records."}
       </p>
     </section>
   );
@@ -788,7 +776,6 @@ export function AccountsSection({ activeAdminId }: { activeAdminId: number }) {
 
   return (
     <div className="space-y-4">
-      <UserTierAssignmentCard />
       <SetAllUsersCreditCard />
 
       <section className="dashboard-card">

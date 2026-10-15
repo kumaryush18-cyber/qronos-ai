@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { ArrowUpRight, X } from "lucide-react";
+import { ArrowRight, ArrowUpRight, Sparkles, X } from "lucide-react";
 
 export const DISCORD_INVITE_URL = "https://discord.gg/xVDscH5ezj";
 export const LOGIN_WELCOME_TOUR_COMPLETED_KEY = "qronos_welcome_tour_completed";
@@ -43,6 +43,7 @@ export function showWelcomeModal() {
 
 export function LoginWelcomeTour({ user }: { user: LoginWelcomeUser | null | undefined }) {
   const [open, setOpen] = useState(false);
+  const [step, setStep] = useState<1 | 2>(1);
   const marker = useMemo(() => (user ? loginWelcomeSessionMarker(user) : ""), [user]);
 
   useEffect(() => {
@@ -50,12 +51,16 @@ export function LoginWelcomeTour({ user }: { user: LoginWelcomeUser | null | und
     if (typeof window !== "undefined") {
       const search = window.location.search;
       if (search.includes("welcome") || search.includes("tour") || search.includes("onboarding") || search.includes("guild")) {
+        setStep(1);
         setOpen(true);
       }
     }
 
     // 2. Force open via custom event
-    const handleForceOpen = () => setOpen(true);
+    const handleForceOpen = () => {
+      setStep(1);
+      setOpen(true);
+    };
     window.addEventListener("qronos:show-welcome", handleForceOpen);
 
     // 3. Normal session evaluation
@@ -66,6 +71,7 @@ export function LoginWelcomeTour({ user }: { user: LoginWelcomeUser | null | und
       } catch {}
 
       if (shouldShowLoginWelcomeTour(marker, completedMarker)) {
+        setStep(1);
         setOpen(true);
       }
     }
@@ -86,93 +92,176 @@ export function LoginWelcomeTour({ user }: { user: LoginWelcomeUser | null | und
         showCloseButton={false}
         className="overflow-hidden border-0 bg-transparent p-0 shadow-none sm:max-w-md focus:outline-none"
       >
-        {/* Futuristic Obsidian Card Chassis */}
-        <div className="relative overflow-hidden rounded-3xl border border-white/[0.12] bg-[#090a10]/95 p-6 sm:p-8 text-white shadow-[0_30px_100px_rgba(0,0,0,0.95)] backdrop-blur-2xl text-center">
-          {/* Ambient Lighting Depth Glow */}
-          <div className="pointer-events-none absolute -right-20 -top-20 h-56 w-56 rounded-full bg-[#5865F2]/20 blur-[80px]" />
-          <div className="pointer-events-none absolute -left-20 -bottom-20 h-56 w-56 rounded-full bg-emerald-500/15 blur-[80px]" />
+        {step === 1 ? (
+          /* STEP 1: Special Announcement Card with Image */
+          <div className="relative overflow-hidden rounded-3xl border border-white/[0.12] bg-[#090a10]/95 p-6 sm:p-7 text-white shadow-[0_30px_100px_rgba(0,0,0,0.95)] backdrop-blur-2xl text-center">
+            {/* Ambient Lighting Depth Glow */}
+            <div className="pointer-events-none absolute -right-20 -top-20 h-56 w-56 rounded-full bg-amber-500/15 blur-[80px]" />
+            <div className="pointer-events-none absolute -left-20 -bottom-20 h-56 w-56 rounded-full bg-emerald-500/15 blur-[80px]" />
 
-          {/* Top Status Header */}
-          <div className="relative z-10 flex items-center justify-between pb-3 border-b border-white/[0.08]">
-            <div className="flex items-center gap-2">
-              <span className="flex h-2 w-2 relative">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-                <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400" />
-              </span>
-              <span className="text-[10px] font-mono font-bold uppercase tracking-[0.2em] text-emerald-400">
-                10,000,000 FREE TOKENS READY
-              </span>
+            {/* Top Status Header */}
+            <div className="relative z-10 flex items-center justify-between pb-3 border-b border-white/[0.08]">
+              <div className="flex items-center gap-2">
+                <span className="flex h-2 w-2 relative">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-400 opacity-75" />
+                  <span className="relative inline-flex h-2 w-2 rounded-full bg-amber-400" />
+                </span>
+                <span className="text-[10px] font-mono font-bold uppercase tracking-[0.2em] text-amber-300">
+                  SPECIAL ANNOUNCEMENT · 1 OF 2
+                </span>
+              </div>
+
+              <button
+                type="button"
+                onClick={completeTour}
+                className="flex h-7 w-7 items-center justify-center rounded-full bg-white/[0.04] text-zinc-400 transition-colors hover:bg-white/10 hover:text-white cursor-pointer"
+                aria-label="Close modal"
+              >
+                <X size={14} />
+              </button>
             </div>
 
-            <button
-              type="button"
-              onClick={completeTour}
-              className="flex h-7 w-7 items-center justify-center rounded-full bg-white/[0.04] text-zinc-400 transition-colors hover:bg-white/10 hover:text-white cursor-pointer"
-              aria-label="Close modal"
-            >
-              <X size={14} />
-            </button>
-          </div>
+            {/* The Image Card */}
+            <div className="relative z-10 my-4 flex items-center justify-center">
+              <div className="relative w-full overflow-hidden rounded-2xl border border-white/15 bg-black/70 shadow-[0_12px_40px_rgba(0,0,0,0.85)] group">
+                <img
+                  src="https://res.cloudinary.com/dhrh8heb5/image/upload/v1792045776/file_00000000019081f4bc5ef7935a45d7a3_tc9n8u.png"
+                  alt="Qronos AI Platform Announcement"
+                  className="w-full h-auto max-h-[300px] sm:max-h-[340px] object-contain rounded-2xl transition-transform duration-500 group-hover:scale-[1.02]"
+                  loading="eager"
+                />
+              </div>
+            </div>
 
-          {/* Dark Grey Shimmering Discord Emblem with Rotating Star Light */}
-          <div className="relative z-10 my-6 flex items-center justify-center">
-            {/* Rotating Star Light Orbit */}
-            <div className="relative p-[2px] rounded-3xl overflow-hidden shadow-[0_0_50px_rgba(0,0,0,0.9)]">
-              {/* Rotating Star Beam */}
-              <div
-                className="absolute inset-[-150%] animate-[spin_4s_linear_infinite]"
-                style={{
-                  background: "conic-gradient(from 0deg, transparent 0deg 310deg, rgba(255,255,255,0.95) 350deg, #ffffff 360deg)",
-                }}
-              />
-              {/* Dark Grey Shimmering Emblem Surface */}
-              <div className="relative flex items-center justify-center w-24 h-24 sm:w-28 sm:h-28 rounded-[22px] bg-gradient-to-b from-[#24252e] via-[#15161f] to-[#0c0d12] border border-white/20 shadow-2xl overflow-hidden group">
-                {/* Iridescent Metallic Shimmer Sweeper */}
+            {/* Title & Catchy Description */}
+            <div className="relative z-10 space-y-1.5 mt-2">
+              <DialogTitle className="text-xl sm:text-2xl font-extrabold tracking-tight text-white leading-tight">
+                Welcome to Qronos AI
+              </DialogTitle>
+              <DialogDescription className="text-xs sm:text-sm text-zinc-300 max-w-sm mx-auto leading-relaxed">
+                Universal AI gateway for OpenAI &amp; Anthropic protocols. Limited offer: <strong className="text-amber-300">3X Tokens</strong> on Plus &amp; <strong className="text-amber-300">2X Tokens</strong> on Pro &amp; above plans.
+              </DialogDescription>
+            </div>
+
+            {/* Actions: Continue to Step 2 & Skip */}
+            <div className="relative z-10 mt-5 flex flex-col items-center gap-2.5">
+              <button
+                type="button"
+                onClick={() => setStep(2)}
+                className="w-full flex h-12 items-center justify-center gap-2 rounded-2xl bg-white hover:bg-zinc-200 text-black font-mono font-bold text-xs sm:text-sm transition-all hover:shadow-[0_0_35px_rgba(255,255,255,0.4)] hover:scale-[1.01] active:scale-[0.99] cursor-pointer shadow-xl"
+              >
+                <span>Continue: Join Community</span>
+                <ArrowRight size={16} />
+              </button>
+
+              <button
+                type="button"
+                onClick={completeTour}
+                className="text-xs font-mono text-zinc-500 hover:text-zinc-200 transition-colors cursor-pointer py-1 underline-offset-4 hover:underline"
+              >
+                Skip tour →
+              </button>
+            </div>
+          </div>
+        ) : (
+          /* STEP 2: Discord Join Card */
+          <div className="relative overflow-hidden rounded-3xl border border-white/[0.12] bg-[#090a10]/95 p-6 sm:p-8 text-white shadow-[0_30px_100px_rgba(0,0,0,0.95)] backdrop-blur-2xl text-center">
+            {/* Ambient Lighting Depth Glow */}
+            <div className="pointer-events-none absolute -right-20 -top-20 h-56 w-56 rounded-full bg-[#5865F2]/20 blur-[80px]" />
+            <div className="pointer-events-none absolute -left-20 -bottom-20 h-56 w-56 rounded-full bg-emerald-500/15 blur-[80px]" />
+
+            {/* Top Status Header */}
+            <div className="relative z-10 flex items-center justify-between pb-3 border-b border-white/[0.08]">
+              <div className="flex items-center gap-2">
+                <span className="flex h-2 w-2 relative">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                  <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400" />
+                </span>
+                <span className="text-[10px] font-mono font-bold uppercase tracking-[0.2em] text-emerald-400">
+                  DEVELOPER GUILD · 2 OF 2
+                </span>
+              </div>
+
+              <button
+                type="button"
+                onClick={completeTour}
+                className="flex h-7 w-7 items-center justify-center rounded-full bg-white/[0.04] text-zinc-400 transition-colors hover:bg-white/10 hover:text-white cursor-pointer"
+                aria-label="Close modal"
+              >
+                <X size={14} />
+              </button>
+            </div>
+
+            {/* Dark Grey Shimmering Discord Emblem with Rotating Star Light */}
+            <div className="relative z-10 my-6 flex items-center justify-center">
+              {/* Rotating Star Light Orbit */}
+              <div className="relative p-[2px] rounded-3xl overflow-hidden shadow-[0_0_50px_rgba(0,0,0,0.9)]">
+                {/* Rotating Star Beam */}
                 <div
-                  className="pointer-events-none absolute inset-0 -translate-x-full animate-[shimmer_3s_infinite]"
+                  className="absolute inset-[-150%] animate-[spin_4s_linear_infinite]"
                   style={{
-                    background: "linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.2) 50%, transparent 100%)",
+                    background: "conic-gradient(from 0deg, transparent 0deg 310deg, rgba(255,255,255,0.95) 350deg, #ffffff 360deg)",
                   }}
                 />
-                {/* Discord Controller SVG in shimmering dark metallic platinum */}
-                <DiscordIcon className="h-12 w-12 sm:h-14 sm:w-14 text-zinc-200 drop-shadow-[0_4px_16px_rgba(0,0,0,0.95)] filter brightness-110" />
+                {/* Dark Grey Shimmering Emblem Surface */}
+                <div className="relative flex items-center justify-center w-24 h-24 sm:w-28 sm:h-28 rounded-[22px] bg-gradient-to-b from-[#24252e] via-[#15161f] to-[#0c0d12] border border-white/20 shadow-2xl overflow-hidden group">
+                  {/* Iridescent Metallic Shimmer Sweeper */}
+                  <div
+                    className="pointer-events-none absolute inset-0 -translate-x-full animate-[shimmer_3s_infinite]"
+                    style={{
+                      background: "linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.2) 50%, transparent 100%)",
+                    }}
+                  />
+                  {/* Discord Controller SVG in shimmering dark metallic platinum */}
+                  <DiscordIcon className="h-12 w-12 sm:h-14 sm:w-14 text-zinc-200 drop-shadow-[0_4px_16px_rgba(0,0,0,0.95)] filter brightness-110" />
+                </div>
+              </div>
+            </div>
+
+            {/* Title & Single Catchy Line */}
+            <div className="relative z-10 space-y-2">
+              <DialogTitle className="text-xl sm:text-2xl font-extrabold tracking-tight text-white leading-tight">
+                Join the Developer Guild
+              </DialogTitle>
+              <DialogDescription className="text-xs sm:text-sm text-zinc-400 max-w-sm mx-auto leading-relaxed">
+                Connect with core gateway engineers to unlock private model drops, live outage radar, and your 10M free tokens.
+              </DialogDescription>
+            </div>
+
+            {/* Actions: Big Join Discord Button & Below Small Text Link */}
+            <div className="relative z-10 mt-6 flex flex-col items-center gap-3">
+              <a
+                href={DISCORD_INVITE_URL}
+                target="_blank"
+                rel="noreferrer"
+                onClick={completeTour}
+                className="w-full flex h-12 items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#5865F2] to-[#4752c4] hover:from-[#6572f8] hover:to-[#525de0] text-white font-mono font-bold text-xs sm:text-sm transition-all hover:shadow-[0_0_35px_rgba(88,101,242,0.55)] hover:scale-[1.01] active:scale-[0.99] cursor-pointer border border-[#7289da]/40 shadow-xl"
+              >
+                <DiscordIcon className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
+                <span>Join Official Discord</span>
+                <ArrowUpRight size={15} className="opacity-90" />
+              </a>
+
+              <div className="flex items-center gap-3 w-full justify-center">
+                <button
+                  type="button"
+                  onClick={() => setStep(1)}
+                  className="text-xs font-mono text-zinc-400 hover:text-white transition-colors cursor-pointer py-1"
+                >
+                  ← Back
+                </button>
+                <span className="text-zinc-600">·</span>
+                <button
+                  type="button"
+                  onClick={completeTour}
+                  className="text-xs font-mono text-zinc-500 hover:text-zinc-200 transition-colors cursor-pointer py-1 underline-offset-4 hover:underline"
+                >
+                  Continue to workspace →
+                </button>
               </div>
             </div>
           </div>
-
-          {/* Title & Single Catchy Line */}
-          <div className="relative z-10 space-y-2">
-            <DialogTitle className="text-xl sm:text-2xl font-extrabold tracking-tight text-white leading-tight">
-              Join the Developer Guild
-            </DialogTitle>
-            <DialogDescription className="text-xs sm:text-sm text-zinc-400 max-w-sm mx-auto leading-relaxed">
-              Connect with core gateway engineers to unlock private model drops, live outage radar, and your 10M free tokens.
-            </DialogDescription>
-          </div>
-
-          {/* Actions: Big Join Discord Button & Below Small Text Link */}
-          <div className="relative z-10 mt-6 flex flex-col items-center gap-3">
-            <a
-              href={DISCORD_INVITE_URL}
-              target="_blank"
-              rel="noreferrer"
-              onClick={completeTour}
-              className="w-full flex h-12 items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#5865F2] to-[#4752c4] hover:from-[#6572f8] hover:to-[#525de0] text-white font-mono font-bold text-xs sm:text-sm transition-all hover:shadow-[0_0_35px_rgba(88,101,242,0.55)] hover:scale-[1.01] active:scale-[0.99] cursor-pointer border border-[#7289da]/40 shadow-xl"
-            >
-              <DiscordIcon className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
-              <span>Join Official Discord</span>
-              <ArrowUpRight size={15} className="opacity-90" />
-            </a>
-
-            <button
-              type="button"
-              onClick={completeTour}
-              className="text-xs font-mono text-zinc-500 hover:text-zinc-200 transition-colors cursor-pointer py-1 underline-offset-4 hover:underline"
-            >
-              Continue to workspace →
-            </button>
-          </div>
-        </div>
+        )}
       </DialogContent>
     </Dialog>
   );
