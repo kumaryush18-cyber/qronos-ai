@@ -58,7 +58,7 @@ import { decryptBaiReasoningContinuation, encryptBaiReasoningContinuation } from
 import { decryptGlmToolContinuation, encryptGlmToolContinuation, type GlmPrivateToolContinuation } from "./glmToolContinuationVault";
 import { decryptProviderRuntimeConfig, encryptProviderRuntimeConfig } from "./providerRuntimeConfigVault";
 import { cached, bustCache } from "./memoryCache";
-import { QRONOS_REFERRAL_SIGNUP_TOKENS, TOKENFORGE_REFERRAL_REWARD_NANOS, isSpecialReferralCampaignCode, normalizeReferralCode } from "../shared/referrals";
+import { QRONOS_REFERRAL_SIGNUP_TOKENS, QRONOS_REFERRAL_SIGNUP_INVITER_TOKENS, QRONOS_REFERRAL_SIGNUP_NEW_USER_TOKENS, TOKENFORGE_REFERRAL_REWARD_NANOS, isSpecialReferralCampaignCode, normalizeReferralCode } from "../shared/referrals";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 let _pool: mysql.Pool | null = null;
@@ -1459,7 +1459,10 @@ export async function getReferralOverview(userId: number) {
       code: "qr01",
       referrals: [],
       totalRewardNanos: 0,
+      totalReferralTokens: 0,
       receivedRewardNanos: 0,
+      wasReferred: false,
+      receivedTokens: 0,
     };
   }
   const code = await getOrCreateReferralCode(userId);
@@ -1470,23 +1473,36 @@ export async function getReferralOverview(userId: number) {
         .innerJoin(users, eq(referralAttributions.referredUserId, users.id))
         .where(eq(referralAttributions.referrerUserId, userId))
         .orderBy(desc(referralAttributions.createdAt)),
-      db.select({ rewardNanos: referralAttributions.rewardNanos, createdAt: referralAttributions.createdAt })
+      db.select({ id: referralAttributions.id, rewardNanos: referralAttributions.rewardNanos, createdAt: referralAttributions.createdAt })
         .from(referralAttributions)
         .where(eq(referralAttributions.referredUserId, userId))
         .limit(1),
     ]);
+    const wasReferred = Boolean(received[0]);
     return {
       code: code?.code || "qr01",
-      referrals: attributions.map(item => ({ id: item.id, name: item.memberName || "Verified Developer", createdAt: item.createdAt, rewardNanos: item.rewardNanos })),
+      referrals: attributions.map(item => ({
+        id: item.id,
+        name: item.memberName || "Verified Developer",
+        createdAt: item.createdAt,
+        rewardNanos: item.rewardNanos,
+        tokensAwarded: QRONOS_REFERRAL_SIGNUP_INVITER_TOKENS,
+      })),
       totalRewardNanos: attributions.reduce((total, item) => total + item.rewardNanos, 0),
+      totalReferralTokens: attributions.length * QRONOS_REFERRAL_SIGNUP_INVITER_TOKENS,
       receivedRewardNanos: received[0]?.rewardNanos ?? 0,
+      wasReferred,
+      receivedTokens: wasReferred ? QRONOS_REFERRAL_SIGNUP_NEW_USER_TOKENS : 0,
     };
   } catch (err) {
     return {
       code: code?.code || "qr01",
       referrals: [],
       totalRewardNanos: 0,
+      totalReferralTokens: 0,
       receivedRewardNanos: 0,
+      wasReferred: false,
+      receivedTokens: 0,
     };
   }
 }
@@ -2282,7 +2298,7 @@ export async function getDb(): Promise<ReturnType<typeof drizzle> | null> {
         user: decodeURIComponent(parsed.username),
         password: decodeURIComponent(parsed.password),
         database: parsed.pathname.replace(/^\//, "").split("?")[0],
-        connectTimeout: 7000,
+        connectTimeout: 15000,
         waitForConnections: true,
         connectionLimit: 10,
         maxIdle: 2,

@@ -1855,7 +1855,10 @@ function ReferralWorkspace() {
     code: "qr01",
     referrals: [],
     totalRewardNanos: 0,
+    totalReferralTokens: 0,
     receivedRewardNanos: 0,
+    wasReferred: false,
+    receivedTokens: 0,
   };
   const inviteUrl = buildReferralInviteUrl(referral.code);
   const formatCredit = (nanos: number) => `$${(nanos / 1_000_000_000).toFixed(2)}`;
@@ -1869,7 +1872,7 @@ function ReferralWorkspace() {
   };
 
   const shareText = encodeURIComponent(
-    `Route Claude Opus 5.5, GLM-5.3 & DeepSeek with sub-millisecond failover on Qronos AI. Sign up with my link to get 10M free coding tokens:`
+    `Route Claude Opus 5.5, GLM-5.3 & DeepSeek with sub-millisecond failover on Qronos AI. Sign up with my link to get 5M free coding tokens bonus (15M total):`
   );
 
   return (
@@ -1941,7 +1944,7 @@ function ReferralWorkspace() {
                 </div>
 
                 <p className="mt-4 text-xs text-zinc-400 leading-relaxed">
-                  Anyone who joins through this link receives an automatic 10M free tokens grant upon login. Every time they recharge their balance, 25% of that payment lands in your PAYG balance instantly.
+                  Anyone who joins through this link receives an automatic +5M free referral tokens bonus (15M free tokens total upon login). Every time they recharge their balance, 25% of that payment lands in your PAYG balance instantly.
                 </p>
 
                 {/* Copy Link Input Bar */}
@@ -2011,11 +2014,20 @@ function ReferralWorkspace() {
                 <Users size={16} />
               </div>
             </div>
-            <div className="mt-4">
-              <p className="text-3xl sm:text-4xl font-extrabold font-mono text-white tracking-tight">
-                {referral.referrals.length}
-              </p>
-              <p className="mt-1 text-xs text-zinc-500 font-mono">Bound developers in your network</p>
+            <div className="mt-4 flex items-end justify-between gap-3 flex-wrap">
+              <div>
+                <p className="text-3xl sm:text-4xl font-extrabold font-mono text-white tracking-tight">
+                  {referral.referrals.length}
+                </p>
+                <p className="mt-1 text-xs text-zinc-500 font-mono">Bound developers in your network</p>
+              </div>
+              <div className="text-right pb-0.5">
+                <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2.5 py-1 text-xs font-mono font-bold text-emerald-400">
+                  <Sparkles size={11} />
+                  +{((referral.totalReferralTokens ?? (referral.referrals.length * 1_000_000)) / 1_000_000).toLocaleString(undefined, { maximumFractionDigits: 1 })}M Tokens
+                </span>
+                <span className="text-[10px] text-zinc-500 font-mono block mt-1">+1M per referral</span>
+              </div>
             </div>
           </div>
 
@@ -2134,7 +2146,7 @@ function ReferralWorkspace() {
       </section>
 
       {/* 3. Welcome Bonus Banner (if received) */}
-      {referral.receivedRewardNanos > 0 && (
+      {(Boolean((referral as any).wasReferred) || Number((referral as any).receivedTokens ?? 0) > 0 || referral.receivedRewardNanos > 0) && (
         <section
           style={{
             backgroundColor: "oklch(0.14 0 0)",
@@ -2148,7 +2160,7 @@ function ReferralWorkspace() {
           <div>
             <h3 className="text-sm font-bold text-white tracking-tight">Welcome Affiliate Bonus Credited</h3>
             <p className="mt-0.5 text-xs text-zinc-400 leading-relaxed">
-              You received <strong className="text-white">{formatCredit(referral.receivedRewardNanos)}</strong> in welcome compute balance when you joined Qronos AI via an affiliate invite.
+              You joined Qronos AI via an affiliate invite! You received <strong className="text-emerald-400 font-mono font-bold">+5,000,000 Free Coding Tokens</strong> added to your Token Plan Quota{referral.receivedRewardNanos > 0 ? ` plus ${formatCredit(referral.receivedRewardNanos)} in compute balance` : ""}.
             </p>
           </div>
         </section>
@@ -2203,7 +2215,7 @@ function ReferralWorkspace() {
                   </div>
                   <div className="text-right">
                     <span className="text-sm font-mono font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-3 py-1 rounded-full">
-                      +{formatCredit(item.rewardNanos)}
+                      +1M Tokens{item.rewardNanos > 0 ? ` · +${formatCredit(item.rewardNanos)}` : ""}
                     </span>
                   </div>
                 </div>

@@ -688,7 +688,10 @@ export const appRouter = router({
         code: "qr01",
         referrals: [],
         totalRewardNanos: 0,
+        totalReferralTokens: 0,
         receivedRewardNanos: 0,
+        wasReferred: false,
+        receivedTokens: 0,
       };
     }),
     specialReferralGift: verifiedDeveloperProcedure.query(async ({ ctx }) => getSpecialReferralGiftStatus(ctx.user.id)),
