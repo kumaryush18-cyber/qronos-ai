@@ -496,17 +496,17 @@ export default function Home() {
       {/* =========================================================
           HERO — full-bleed vortex canvas, centered copy
       ========================================================= */}
-      <section className="relative min-h-screen flex flex-col justify-center items-start overflow-hidden bg-black">
+      <section className="relative min-h-screen flex flex-col justify-center items-start overflow-hidden bg-[#010101]">
         <div className="absolute inset-y-0 left-1/2 z-0 w-full max-w-[1344px] -translate-x-1/2 overflow-hidden sm:w-[calc(100%-2rem)] lg:w-[calc(100%-3.5rem)]">
           <VortexHourglass
-            background="#000000"
+            background="#010101"
             lineOptions={{ color: "#ffffff", glow: 10 }}
             dotOptions={{ color: "#ffffff", glow: 10 }}
             cometOptions={{ color: "#eca8d6", glow: 6 }}
             repel
           />
-          <div className="absolute inset-0 pointer-events-none bg-gradient-to-r from-black/70 via-black/30 to-transparent" />
-          <div className="absolute inset-0 pointer-events-none bg-gradient-to-b from-black/20 via-transparent to-black/60" />
+          <div className="absolute inset-0 pointer-events-none bg-gradient-to-r from-[#010101]/70 via-[#010101]/30 to-transparent" />
+          <div className="absolute inset-0 pointer-events-none bg-gradient-to-b from-[#010101]/20 via-transparent to-[#010101]/60" />
         </div>
 
         <div className="relative z-10 w-full max-w-[1400px] mx-auto px-4 py-28 sm:px-8 sm:py-32 lg:px-14 lg:py-40">
@@ -535,7 +535,7 @@ export default function Home() {
 
             <div className="flex w-full flex-col items-center justify-center gap-3 min-[390px]:flex-row">
               <Link href="/signup">
-                <StarButton backgroundColor="#000000" className="rounded-full border border-slate-200/50 px-5 text-sm font-medium">
+                <StarButton backgroundColor="#010101" className="rounded-full border border-slate-200/50 px-5 text-sm font-medium">
                   <span>GET STARTED</span>
                   <span className="ml-1 tracking-tighter font-mono font-bold text-xs">»</span>
                 </StarButton>
@@ -583,7 +583,7 @@ export default function Home() {
       {/* =========================================================
           FEATURES — stateful execution, live schedule preview
       ========================================================= */}
-      <section id="features" className="relative overflow-hidden pt-24 lg:pt-32 bg-black">
+      <section id="features" className="relative overflow-hidden pt-24 lg:pt-32 bg-[#010101]">
         <div className="mx-auto max-w-[1344px] px-6 lg:px-0">
           <div className="max-w-3xl">
             <p className="text-xs font-mono uppercase tracking-[0.2em] text-zinc-500">Stateful execution.</p>
@@ -603,7 +603,7 @@ export default function Home() {
       {/* =========================================================
           HOW IT WORKS — durable autonomy, live pipeline
       ========================================================= */}
-      <section id="how-it-works" className="relative overflow-hidden py-24 lg:py-32 bg-black">
+      <section id="how-it-works" className="relative overflow-hidden py-24 lg:py-32 bg-[#010101]">
         <div className="mx-auto max-w-[1344px] px-6 lg:px-0">
           <div className="max-w-3xl">
             <p className="text-xs font-mono uppercase tracking-[0.2em] text-zinc-500">Durable autonomy.</p>
@@ -633,7 +633,7 @@ export default function Home() {
       {/* =========================================================
           INSIGHTS — live telemetry
       ========================================================= */}
-      <section id="insights" className="relative overflow-hidden py-24 lg:py-32 bg-black">
+      <section id="insights" className="relative overflow-hidden py-24 lg:py-32 bg-[#010101]">
         <div className="mx-auto max-w-[1344px] px-6 lg:px-0">
           <div className="max-w-3xl">
             <p className="text-xs font-mono uppercase tracking-[0.2em] text-zinc-500">Insights</p>
@@ -668,7 +668,7 @@ export default function Home() {
       {/* =========================================================
           PLATFORM EXPLAINERS — core architecture & features
       ========================================================= */}
-      <section className="relative overflow-hidden py-24 lg:py-32 bg-black">
+      <section className="relative overflow-hidden py-24 lg:py-32 bg-[#010101]">
         <div className="mx-auto max-w-[1344px] px-6 lg:px-0">
           <div className="max-w-3xl mb-14">
             <p className="text-xs font-mono uppercase tracking-[0.2em] text-zinc-500">How Qronos Works</p>
@@ -688,7 +688,7 @@ export default function Home() {
       {/* =========================================================
           PRICING
       ========================================================= */}
-      <section id="pricing" className="relative overflow-hidden py-24 lg:py-32 bg-black">
+      <section id="pricing" className="relative overflow-hidden py-24 lg:py-32 bg-[#010101]">
         <div className="mx-auto max-w-[1344px] px-6 lg:px-0">
           <div className="max-w-3xl">
             <div className="flex items-center gap-3 flex-wrap">
@@ -731,7 +731,7 @@ export default function Home() {
       {/* =========================================================
           TESTIMONIALS — Teams moving faster with autonomous work
       ========================================================= */}
-      <section id="customers" className="relative overflow-hidden py-24 lg:py-32 bg-black">
+      <section id="customers" className="relative overflow-hidden py-24 lg:py-32 bg-[#010101]">
         <div className="mx-auto max-w-[1344px] px-6 lg:px-0">
           <div className="max-w-3xl">
             <p className="text-xs font-mono uppercase tracking-[0.2em] text-zinc-500">Customers</p>
@@ -797,7 +797,7 @@ export default function Home() {
       {/* =========================================================
           CLOSING CTA
       ========================================================= */}
-      <section className="relative overflow-hidden py-28 lg:py-36 bg-black border-t border-white/[0.08]">
+      <section className="relative overflow-hidden py-28 lg:py-36 bg-[#010101] border-t border-white/[0.08]">
         <div className="mx-auto max-w-3xl px-6 text-center">
           <div className="mb-6 flex justify-center -space-x-2">
             {[
@@ -822,7 +822,7 @@ export default function Home() {
           </p>
           <div className="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row">
             <Link href="/signup">
-              <StarButton backgroundColor="#000000" className="rounded-full border border-slate-200/50 px-6 py-2.5 text-sm font-medium">
+              <StarButton backgroundColor="#010101" className="rounded-full border border-slate-200/50 px-6 py-2.5 text-sm font-medium">
                 <span>GET STARTED</span>
                 <span className="ml-1 tracking-tighter font-mono font-bold text-xs">»</span>
               </StarButton>
@@ -846,7 +846,7 @@ export default function Home() {
       {/* =========================================================
           FOOTER
       ========================================================= */}
-      <footer className="relative bg-black border-t border-white/10">
+      <footer className="relative bg-[#010101] border-t border-white/10">
         <div className="mx-auto max-w-[1344px] px-6 py-14 lg:px-0">
           <div className="flex flex-col gap-10 md:flex-row md:justify-between">
             <div className="max-w-sm">

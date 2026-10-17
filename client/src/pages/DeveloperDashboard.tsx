@@ -48,7 +48,7 @@ import {
   X,
   Zap,
 } from "lucide-react";
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "wouter";
 import { toast } from "sonner";
 import "../dashboard.css";
@@ -65,10 +65,105 @@ import { CheckoutModal } from "@/components/CheckoutModal";
 import { TransactionsWorkspace } from "@/components/TransactionsWorkspace";
 import { PaymentsWorkspace } from "@/components/payments/PaymentsWorkspace";
 import { UserTierBadge } from "@/components/UserTierBadge";
+import { QronosGlyph } from "@/components/QronosGlyph";
 import VapourAccent from "@/components/ui/vapour-accent";
 import { buildQronosCurl, buildQronosJavaScript, buildQronosPython, QRONOS_API_BASE_URL } from "../../../shared/qronosApi";
 import { clearOneTimeApiKey, getOneTimeApiKey, rememberOneTimeApiKey } from "../../../shared/oneTimeApiKey";
 import { buildReferralInviteUrl } from "../../../shared/referrals";
+
+export const DASHBOARD_VIDEO_URL = "https://res.cloudinary.com/dhrh8heb5/video/upload/v1792215533/QV_1792214944093_szkkmh.mp4";
+
+let _hasGlobalVideoPreloaded = false;
+
+export function useDashboardVideoPreloader(videoUrl: string = DASHBOARD_VIDEO_URL) {
+  const [isReady, setIsReady] = useState(() => {
+    if (typeof window === "undefined") return false;
+    if (_hasGlobalVideoPreloaded) return true;
+    try {
+      return sessionStorage.getItem("qronos_video_preloaded") === "true";
+    } catch {
+      return false;
+    }
+  });
+
+  useEffect(() => {
+    if (isReady) return;
+    let cancelled = false;
+
+    const markReady = () => {
+      if (cancelled) return;
+      _hasGlobalVideoPreloaded = true;
+      try {
+        sessionStorage.setItem("qronos_video_preloaded", "true");
+      } catch {}
+      setIsReady(true);
+    };
+
+    const video = document.createElement("video");
+    video.preload = "auto";
+    video.muted = true;
+    video.playsInline = true;
+    video.src = videoUrl;
+
+    if (video.readyState >= 3) {
+      markReady();
+      return;
+    }
+
+    video.addEventListener("canplaythrough", markReady, { once: true });
+    video.addEventListener("canplay", markReady, { once: true });
+    video.addEventListener("loadeddata", markReady, { once: true });
+    video.addEventListener("error", markReady, { once: true });
+
+    // Preload stream via fetch to prime browser cache
+    fetch(videoUrl, { mode: "cors" })
+      .then((res) => {
+        if (res.ok) markReady();
+      })
+      .catch(() => {});
+
+    // Safety timeout so user is never permanently blocked on poor connection
+    const timer = setTimeout(markReady, 4000);
+
+    video.load();
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+      video.removeEventListener("canplaythrough", markReady);
+      video.removeEventListener("canplay", markReady);
+      video.removeEventListener("loadeddata", markReady);
+      video.removeEventListener("error", markReady);
+    };
+  }, [videoUrl, isReady]);
+
+  return isReady;
+}
+
+export function DashboardVideoLoadingScreen() {
+  return (
+    <div className="flex min-h-[520px] w-full flex-col items-center justify-center rounded-3xl border border-white/10 bg-[#010101] p-8 text-center backdrop-blur-2xl shadow-2xl">
+      <div className="relative mb-6 flex h-20 w-20 items-center justify-center">
+        <div className="absolute inset-0 rounded-3xl bg-emerald-500/20 blur-2xl animate-pulse" />
+        <div className="relative flex h-16 w-16 items-center justify-center rounded-2xl border border-white/15 bg-black/90 shadow-2xl">
+          <QronosGlyph size={32} className="animate-pulse" />
+        </div>
+      </div>
+      <div className="space-y-2">
+        <h2 className="text-xl sm:text-2xl font-extrabold font-mono text-white tracking-tight">
+          Entering Developer Workspace
+        </h2>
+        <p className="text-xs font-mono text-zinc-400 max-w-sm mx-auto flex items-center justify-center gap-2">
+          <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-ping" />
+          <span>Preloading dashboard media & telemetry stream…</span>
+        </p>
+      </div>
+      <div className="mt-8 w-56 h-1 bg-white/10 rounded-full overflow-hidden">
+        <div className="h-full bg-gradient-to-r from-emerald-500 via-cyan-400 to-emerald-400 animate-pulse w-full" />
+      </div>
+    </div>
+  );
+}
 
 type Section = "overview" | "keys" | "usage" | "playground" | "profile" | "referrals" | "models" | "model" | "transactions" | "payments" | "pricing";
 type UsageData = {
@@ -1168,7 +1263,7 @@ function UnifiedBalancesPortfolio() {
         borderColor: "oklch(0.26 0 0)",
         boxShadow: "0 25px 60px rgba(0,0,0,0.85), inset 0 1px 0 rgba(255,255,255,0.06)",
       }}
-      className="rounded-3xl border p-5 sm:p-7 shadow-2xl backdrop-blur-xl relative overflow-hidden mb-6"
+      className="rounded-3xl border p-5 sm:p-7 shadow-2xl backdrop-blur-xl relative overflow-hidden mb-6 mt-0"
     >
       {/* Header bar of Portfolio */}
       <div className="relative z-10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-6 border-b border-white/[0.08]">
@@ -1187,7 +1282,7 @@ function UnifiedBalancesPortfolio() {
         {/* Single Pay / Top Up Button */}
         <div className="flex items-center gap-3 flex-wrap">
           <Link href="/dashboard/pricing">
-            <StarButton backgroundColor="#000000" className="rounded-full border border-slate-200/50 px-5 text-xs font-mono h-9">
+            <StarButton backgroundColor="#010101" className="rounded-full border border-slate-200/50 px-5 text-xs font-mono h-9">
               <span>Add Balance & Plans</span>
               <ArrowUpRight size={13} className="ml-1 inline-block" />
             </StarButton>
@@ -1346,11 +1441,12 @@ function OverviewHero({
         borderColor: "oklch(0.26 0 0)",
         boxShadow: "0 25px 60px rgba(0,0,0,0.85), inset 0 1px 0 rgba(255,255,255,0.06)",
       }}
-      className="relative mb-6 overflow-hidden rounded-3xl border p-6 sm:p-8"
+      className="relative mb-0 overflow-hidden rounded-3xl border p-6 sm:p-8"
     >
       <div className="pointer-events-none absolute -right-20 -top-20 h-64 w-64 rounded-full bg-white/[0.03] blur-3xl" />
       <div className="pointer-events-none absolute -bottom-16 left-1/3 h-48 w-48 rounded-full bg-emerald-500/[0.03] blur-2xl" />
 
+      {/* Welcome sentence and controls (directly above the video) */}
       <div className="relative z-10 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
         <div>
           <div className="flex items-center gap-2.5 flex-wrap">
@@ -1380,7 +1476,7 @@ function OverviewHero({
 
         <div className="flex items-center gap-2.5 flex-wrap shrink-0">
           <Link href="/dashboard/pricing">
-            <StarButton backgroundColor="#000000" className="rounded-full border border-slate-200/50 px-5 text-xs font-mono h-10 shadow-lg">
+            <StarButton backgroundColor="#010101" className="rounded-full border border-slate-200/50 px-5 text-xs font-mono h-10 shadow-lg">
               <Zap size={13} className="mr-1.5 inline-block text-white" />
               <span>Recharge & Plans</span>
             </StarButton>
@@ -1409,16 +1505,84 @@ function OverviewHero({
   );
 }
 
-function Overview({ user, loading, usage }: { user: ReturnType<typeof useAuth>["user"]; loading: boolean; usage: { data?: UsageData; isLoading: boolean } }) {
+function DashboardVideoShowcase() {
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  useEffect(() => {
+    if (videoRef.current) {
+      videoRef.current.muted = true;
+      videoRef.current.defaultMuted = true;
+      videoRef.current.volume = 0;
+      videoRef.current.play().catch(() => {});
+    }
+  }, []);
+
+  return (
+    <div className="relative my-0 -mx-3 min-[481px]:-mx-4 min-[821px]:-mx-5 lg:-mx-8 w-[calc(100%+1.5rem)] min-[481px]:w-[calc(100%+2rem)] min-[821px]:w-[calc(100%+2.5rem)] lg:w-[calc(100%+4rem)] max-w-none overflow-hidden border-0 bg-black">
+      <div className="relative aspect-video w-full overflow-hidden bg-black">
+        <video
+          ref={videoRef}
+          src={DASHBOARD_VIDEO_URL}
+          autoPlay
+          loop
+          muted
+          playsInline
+          preload="auto"
+          onEnded={(e) => {
+            e.currentTarget.currentTime = 0;
+            e.currentTarget.play().catch(() => {});
+          }}
+          className="block w-full h-full object-cover object-center"
+        />
+
+        {/* Responsive Overlay Card positioned directly over the bottom-right corner to cleanly and completely hide any watermark */}
+        <div className="absolute bottom-2 right-2 sm:bottom-3.5 sm:right-3.5 md:bottom-4 md:right-4 z-20 flex items-center gap-2 sm:gap-2.5 md:gap-3 rounded-xl sm:rounded-2xl border border-white/20 bg-[#030406]/98 px-2.5 py-1.5 sm:px-4 sm:py-2 md:px-5 md:py-2.5 shadow-[0_12px_45px_rgba(0,0,0,0.98)] backdrop-blur-2xl pointer-events-none select-none max-w-[calc(100%-1rem)]">
+          <div className="flex h-7 w-7 sm:h-8 sm:w-8 md:h-9 md:w-9 shrink-0 items-center justify-center rounded-lg sm:rounded-xl bg-white/[0.08] border border-white/15">
+            <QronosGlyph size={18} className="w-3.5 h-3.5 sm:w-4 sm:h-4 md:w-5 md:h-5" />
+          </div>
+          <div className="flex flex-col text-left min-w-0">
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              <span className="text-[10px] sm:text-xs md:text-sm font-mono font-extrabold uppercase tracking-wider text-white whitespace-nowrap">
+                Qronos AI Mesh
+              </span>
+              <span className="h-1.5 w-1.5 sm:h-2 sm:w-2 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_8px_#34d399] shrink-0" />
+            </div>
+            <div className="flex items-center gap-1.5 mt-0.5">
+              <span className="text-[8px] sm:text-[9.5px] md:text-xs font-mono text-zinc-300 whitespace-nowrap">Universal Gateway Engine</span>
+              <span className="hidden min-[420px]:inline-block text-[7.5px] sm:text-[8.5px] font-mono uppercase tracking-widest text-emerald-400 bg-emerald-500/15 border border-emerald-500/30 px-1.5 py-0.2 rounded font-bold shrink-0">
+                ACTIVE
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Overview({
+  user,
+  loading,
+  usage,
+  videoReady,
+}: {
+  user: ReturnType<typeof useAuth>["user"];
+  loading: boolean;
+  usage: { data?: UsageData; isLoading: boolean };
+  videoReady: boolean;
+}) {
   const quota = usage.data?.quota;
-  if (loading || usage.isLoading) return <div className="dashboard-loading-panel"><Loader2 className="animate-spin" /></div>;
+  if (loading || usage.isLoading || !videoReady) return <DashboardVideoLoadingScreen />;
 
   return (
     <>
-      {/* Commanding Obsidian Ambient Hero */}
+      {/* 1. Welcome Header Card (Above the video) */}
       <OverviewHero user={user} />
 
-      {/* Unified Balances & Token Allocation Bento with Traveling Star Beam */}
+      {/* 2. Standalone Video Showcase on the Dashboard Background */}
+      <DashboardVideoShowcase />
+
+      {/* 3. Unified Balances & Token Allocation Bento with Traveling Star Beam */}
       <UnifiedBalancesPortfolio />
 
       {/* 2-Column Command & Performance Grid */}
@@ -1736,6 +1900,10 @@ export default function DeveloperDashboard({ section = "overview", modelId }: { 
   const { user, loading } = useAuth();
   const workspaceVerified = Boolean(user);
   const usage = trpc.developer.usage.useQuery(undefined, { enabled: Boolean(user) });
+  const videoReady = useDashboardVideoPreloader(DASHBOARD_VIDEO_URL);
+
+  const isOverview = section === "overview";
+  const isWaitingForVideo = isOverview && !videoReady;
   const content =
     section === "pricing" ? (
       <DashboardPricingSection />
@@ -1836,9 +2004,18 @@ export default function DeveloperDashboard({ section = "overview", modelId }: { 
     ) : section === "referrals" ? (
       <ReferralWorkspace />
     ) : (
-      <Overview user={user} loading={loading} usage={usage} />
+      <Overview user={user} loading={loading} usage={usage} videoReady={videoReady} />
     );
-  return <DashboardLayout><div className="dashboard-page-surface"><div className="dashboard-page-content"><SpecialReferralGiftBox enabled={Boolean(user) && workspaceVerified} />{content}</div></div></DashboardLayout>;
+  return (
+    <DashboardLayout>
+      <div className="dashboard-page-surface">
+        <div className="dashboard-page-content">
+          <SpecialReferralGiftBox enabled={Boolean(user) && workspaceVerified} />
+          {isWaitingForVideo ? <DashboardVideoLoadingScreen /> : content}
+        </div>
+      </div>
+    </DashboardLayout>
+  );
 }
 
 function ReferralWorkspace() {

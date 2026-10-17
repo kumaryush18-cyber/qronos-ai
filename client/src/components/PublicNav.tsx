@@ -21,7 +21,7 @@ export function PublicNav() {
   return (
     <>
       <header className="fixed top-3 left-0 right-0 z-50 transition-all duration-500">
-        <nav className="relative mx-auto w-full max-w-[1344px] before:absolute before:inset-x-0 before:top-0 before:z-10 before:h-px before:bg-white/10 after:absolute after:inset-x-0 after:bottom-0 after:z-10 after:h-px after:bg-white/10 lg:w-[calc(100%-3.5rem)] bg-[#08090d]/80 backdrop-blur-xl border-x border-white/[0.07] rounded-none sm:rounded-xl">
+        <nav className="relative mx-auto w-full max-w-[1344px] before:absolute before:inset-x-0 before:top-0 before:z-10 before:h-px before:bg-white/10 after:absolute after:inset-x-0 after:bottom-0 after:z-10 after:h-px after:bg-white/10 lg:w-[calc(100%-3.5rem)] bg-[#010101]/80 backdrop-blur-xl border-x border-white/[0.07] rounded-none sm:rounded-xl">
           <div className="flex h-14 items-center justify-between px-5 transition-all duration-500">
             {/* Brand Logo */}
             <Link
@@ -67,7 +67,7 @@ export function PublicNav() {
               {user ? (
                 <Link href="/dashboard">
                   <StarButton
-                    backgroundColor="#000000"
+                    backgroundColor="#010101"
                     className="h-8 border border-slate-200/50 px-4 text-xs font-mono"
                   >
                     <LayoutDashboard size={13} className="mr-1.5 inline-block text-white" />
@@ -84,7 +84,7 @@ export function PublicNav() {
                   </Link>
                   <Link href="/signup">
                     <StarButton
-                      backgroundColor="#000000"
+                      backgroundColor="#010101"
                       className="h-8 border border-slate-200/50 px-4 text-xs font-mono"
                     >
                       <span>GET STARTED</span>
