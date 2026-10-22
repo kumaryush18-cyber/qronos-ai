@@ -20,14 +20,15 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { useIsMobile } from "@/hooks/useMobile";
-import { ArrowLeftRight, Boxes, ChartNoAxesCombined, ChevronDown, CreditCard, FlaskConical, Gift, KeyRound, LayoutDashboard, LifeBuoy, LogOut, PanelLeft, Receipt, Settings2, Shield, Terminal, UserRound } from "lucide-react";
+import { ArrowLeftRight, Boxes, ChartNoAxesCombined, Check, ChevronDown, CreditCard, FlaskConical, Gift, KeyRound, LayoutDashboard, LifeBuoy, LogOut, PanelLeft, Receipt, Settings2, Shield, Terminal, UserRound } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { ThreeDButton } from "@/components/ui/3d-button";
 import { QRONOS_POST_LOGOUT_PATH } from "../../../shared/authNavigation";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
-import { LoginWelcomeTour } from "./LoginWelcomeTour";
+import { DiscordIcon } from "./LoginWelcomeTour";
+import { StarButton } from "./StarButton";
 import { AnnouncementBanner } from "./AnnouncementBanner";
 import { MaintenanceCountdownBanner } from "./MaintenanceCountdownBanner";
 import { QronosGlyph } from "./QronosGlyph";
@@ -106,7 +107,6 @@ export default function DashboardLayout({
       <DashboardLayoutContent setSidebarWidth={setSidebarWidth}>
         {children}
       </DashboardLayoutContent>
-      <LoginWelcomeTour user={user} />
     </SidebarProvider>
   );
 }
@@ -121,6 +121,7 @@ function DashboardLayoutContent({
   setSidebarWidth,
 }: DashboardLayoutContentProps) {
   const { user, logout } = useAuth();
+  const isDiscordVerified = Boolean((user as any)?.discordVerifiedAt || (user as any)?.isAdminSession);
   const [location, setLocation] = useLocation();
   const { state, toggleSidebar } = useSidebar();
   const isCollapsed = state === "collapsed";
@@ -253,16 +254,33 @@ function DashboardLayoutContent({
             <Link href="/dashboard/pricing" className="hidden md:inline-block hover:text-white transition-colors">Pricing</Link>
             <Link href="/docs" className="hidden lg:inline-block hover:text-white transition-colors">Documentation</Link>
 
-            {/* Preview Guild Onboarding Card */}
-            <button
-              type="button"
-              onClick={() => window.dispatchEvent(new CustomEvent("qronos:show-welcome"))}
-              className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 hover:border-white/20 text-[10px] font-mono font-bold text-zinc-300 hover:text-white transition-all cursor-pointer"
-              title="View Developer Guild Card"
-            >
-              <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse" />
-              <span>Guild Card</span>
-            </button>
+            {/* Discord Verification Status Button / Badge */}
+            {isDiscordVerified ? (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#5865F2]/10 border border-[#5865F2]/25 text-[10px] font-mono font-bold text-[#9ba5f7] shadow-[0_0_12px_rgba(88,101,242,0.15)]">
+                <DiscordIcon className="w-3 h-3 text-[#5865F2]" />
+                <Check size={11} className="text-emerald-400 stroke-[3]" />
+                <span className="hidden sm:inline">Discord Verified</span>
+                <span className="sm:hidden">Verified</span>
+              </span>
+            ) : (
+              <a href="/api/auth/discord" className="inline-block shrink-0">
+                <StarButton
+                  backgroundColor="#06070b"
+                  lightColor="rgba(88, 101, 242, 0.95)"
+                  starColor="#5865F2"
+                  borderWidth={1.5}
+                  duration={3.5}
+                  className="h-7 sm:h-8 px-2.5 sm:px-3 rounded-full border border-[#5865F2]/60 hover:border-[#7289da] text-[10px] sm:text-xs font-mono font-bold shadow-[0_0_18px_rgba(88,101,242,0.35)]"
+                >
+                  <DiscordIcon className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-[#5865F2]" />
+                  <span className="hidden min-[480px]:inline">Verify Discord</span>
+                  <span className="min-[480px]:hidden">Verify</span>
+                  <span className="hidden md:inline-block ml-0.5 text-[9px] uppercase tracking-wider text-amber-300 font-bold bg-amber-400/15 border border-amber-400/30 px-1 py-0.2 rounded">
+                    10M Free
+                  </span>
+                </StarButton>
+              </a>
+            )}
 
             {/* Notification Bell */}
             <NotificationBell />

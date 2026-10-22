@@ -86,6 +86,8 @@ import {
   acknowledgeSpecialReferralGift,
   getSpecialReferralCampaignAdminOverview,
   resetDiscordVerification,
+  bypassDiscordVerificationByEmail,
+  listDiscordVerifiedAccounts,
   setPlatformMaintenanceConfig,
   resumePlatformAfterTimedMaintenance,
   setMaintenanceCountdown,
@@ -677,7 +679,7 @@ export const appRouter = router({
       discordInviteUrl: "https://discord.gg/xVDscH5ezj",
     })),
     apiKeys: verifiedDeveloperProcedure.query(async ({ ctx }) => listApiKeys(ctx.user.id)),
-    referrals: verifiedDeveloperProcedure.query(async ({ ctx }) => {
+    referrals: protectedProcedure.query(async ({ ctx }) => {
       try {
         const referrals = await getReferralOverview(ctx.user.id);
         if (referrals) return referrals;
@@ -703,12 +705,18 @@ export const appRouter = router({
     createApiKey: verifiedDeveloperProcedure
       .input(z.object({ label: apiKeyLabel, keyGroup: z.enum(["payg", "bundle", "token_plan", "tokens", "coding_plan"]).default("token_plan") }))
       .mutation(async ({ ctx, input }) => {
+        if (!ctx.user.isAdminSession && !ctx.user.discordVerifiedAt) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "Discord verification is required to generate API keys. Please verify your Discord membership.",
+          });
+        }
         try {
           return await createApiKey(ctx.user.id, input.label, input.keyGroup);
         } catch (error) {
           const message = error instanceof Error ? error.message : "Qronos AI could not create this key";
           throw new TRPCError({
-            code: message.includes("Maximum limit of 10") ? "BAD_REQUEST" : "INTERNAL_SERVER_ERROR",
+            code: message.includes("Maximum limit of 10") ? "BAD_REQUEST" : message.includes("Discord") ? "FORBIDDEN" : "INTERNAL_SERVER_ERROR",
             message,
           });
         }
@@ -730,7 +738,7 @@ export const appRouter = router({
         if (!result) throw new TRPCError({ code: "NOT_FOUND", message: "This active API key was not found" });
         return result;
       }),
-    quota: verifiedDeveloperProcedure.query(async ({ ctx }) => {
+    quota: protectedProcedure.query(async ({ ctx }) => {
       const quota = await getQuotaStatus(ctx.user.id);
       if (!quota) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Quota status is temporarily unavailable" });
       return quota;
@@ -750,9 +758,9 @@ export const appRouter = router({
       }
       return getGpt6AstraQuotaStatus(ctx.user);
     }),
-    modelAvailability: verifiedDeveloperProcedure.query(() => getModelAvailabilitySnapshot()),
-    usage: verifiedDeveloperProcedure.query(async ({ ctx }) => getUsageSummary(ctx.user.id)),
-    usageLogs: verifiedDeveloperProcedure
+    modelAvailability: protectedProcedure.query(() => getModelAvailabilitySnapshot()),
+    usage: protectedProcedure.query(async ({ ctx }) => getUsageSummary(ctx.user.id)),
+    usageLogs: protectedProcedure
       .input(z.object({
         modelId: tokenForgeModelId.optional(),
         source: z.enum(["api", "playground"]).optional(),
@@ -768,7 +776,7 @@ export const appRouter = router({
         to: input?.to ? new Date(input.to) : undefined,
         limit: input?.limit,
       })),
-    wallet: verifiedDeveloperProcedure.query(async ({ ctx }) => {
+    wallet: protectedProcedure.query(async ({ ctx }) => {
       try {
         const wallet = await getCreditProfile(ctx.user.id);
         if (wallet) return wallet;
@@ -798,7 +806,7 @@ export const appRouter = router({
       await syncDodoPaymentsFromApi();
       return await listUserDodoPayments(ctx.user.id);
     }),
-    profile: verifiedDeveloperProcedure.query(({ ctx }) => ({
+    profile: protectedProcedure.query(({ ctx }) => ({
       id: ctx.user.id,
       name: ctx.user.name,
       email: ctx.user.email,
@@ -825,6 +833,12 @@ export const appRouter = router({
         reasoningEffort: z.enum(["default", "low", "medium", "high", "xhigh", "max"]).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
+        if (!ctx.user.isAdminSession && !ctx.user.discordVerifiedAt) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "Discord verification is required to use the Playground. Please verify your Discord membership.",
+          });
+        }
         try {
           return await runPlaygroundCompletion({
             userId: ctx.user.id,
@@ -1518,6 +1532,36 @@ ${input.intent ? `Requested Notification Type: ${input.intent}` : ""}`;
       });
       return { success: true, reset: result.reset } as const;
     }),
+    bypassDiscordVerification: adminProcedure
+      .input(z.object({ email: z.string().trim().min(3) }))
+      .mutation(async ({ ctx, input }) => {
+        const result = await bypassDiscordVerificationByEmail(input.email);
+        if (!result.found || !result.user) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: `User with email "${input.email}" does not exist in the database.`,
+          });
+        }
+        await writeAuditEvent({
+          actorUserId: ctx.user.id,
+          targetUserId: result.user.id,
+          action: "account.discord_verification.bypassed",
+          entityType: "account",
+          entityId: String(result.user.id),
+          metadata: {
+            email: result.user.email,
+            wasAlreadyVerified: result.alreadyVerified,
+            tokensAwarded: result.user.tokensAwarded,
+            bypassedByAdmin: true,
+          },
+        });
+        return result;
+      }),
+    discordVerifiedAccountsList: adminProcedure
+      .input(z.object({ limit: z.number().int().min(1).max(200).default(50).optional() }).optional())
+      .query(async ({ input }) => {
+        return await listDiscordVerifiedAccounts(input?.limit ?? 50);
+      }),
     flags: adminProcedure.query(() => listOpenFlags()),
     accessRequests: adminProcedure
       .input(

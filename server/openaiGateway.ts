@@ -1011,7 +1011,7 @@ export async function resolveModelCandidateProviders<T extends { id?: string; la
   throw new MultimodalRoutingError(errorMsg);
 }
 
-export const UNOROUTER_KEY_COOLDOWN_MS = 60_000;
+export const UNOROUTER_KEY_COOLDOWN_MS = 0;
 
 export function isUnorouterClaudeOpus5Provider(provider: { id?: string; label?: string; baseUrl?: string }): boolean {
   const id = (provider.id ?? "").trim().toLowerCase();
@@ -1027,7 +1027,6 @@ function selectNextLeastLoadedCredential(
   keyCursors: Map<string, number>
 ) {
   const telemetryProvider = `${telemetryPrefix}:${provider.id}` as CredentialTelemetryProvider;
-  const isUnorouter = isUnorouterClaudeOpus5Provider(provider);
   const start = keyCursors.get(provider.id) ?? 0;
   const candidates: Array<{ slot: number; rawKey: string; activeRequests: number; offset: number }> = [];
 
@@ -1038,8 +1037,6 @@ function selectNextLeastLoadedCredential(
     if (!isManagedProviderCredentialEnabled(provider, slot)) continue;
     if (!provider.bypassCooldown && !isCredentialSlotEligible(telemetryProvider, slot)) continue;
     const activeRequests = getProviderSlotConcurrency(telemetryProvider, slot);
-    // Unorouter rate limit: enforce at most 1 in-flight request per API key
-    if (isUnorouter && activeRequests > 0) continue;
     candidates.push({ slot, rawKey, activeRequests, offset });
   }
 
@@ -2260,16 +2257,12 @@ function wrapClaudeOpus5ProviderResponseWithFailureLog(
   requestStartTime?: number,
   releaseConcurrency?: () => void
 ) {
-  const isUnorouter = isUnorouterClaudeOpus5Provider(provider);
   let recorded = false;
   let released = false;
   const safeRelease = () => {
     if (!released) {
       released = true;
       if (releaseConcurrency) releaseConcurrency();
-      if (isUnorouter && telemetryProvider && typeof credentialSlot === "number") {
-        setCredentialCooldown(telemetryProvider, credentialSlot, UNOROUTER_KEY_COOLDOWN_MS);
-      }
     }
   };
 
@@ -2769,9 +2762,6 @@ async function forwardDedicatedClaudeOpus5Request(input: ChatInput, signal: Abor
             const payload = await response.clone().json().catch(() => null);
             if (isClaudeOpus5ZeroOutputFailure(payload)) {
               releaseConcurrency();
-              if (isUnorouter) {
-                setCredentialCooldown(selectedCredential.telemetryProvider, selectedCredential.slot, UNOROUTER_KEY_COOLDOWN_MS);
-              }
               void recordClaudeOpus5FailureLog({
                 sourceType: "provider",
                 sourceId: qwenFailureSource?.sourceId ?? provider.id,
@@ -2798,9 +2788,6 @@ async function forwardDedicatedClaudeOpus5Request(input: ChatInput, signal: Abor
               latencyMs,
             });
             releaseConcurrency();
-            if (isUnorouter) {
-              setCredentialCooldown(selectedCredential.telemetryProvider, selectedCredential.slot, UNOROUTER_KEY_COOLDOWN_MS);
-            }
           }
           const forwarded = wrapClaudeOpus5ProviderResponseWithFailureLog(
             response,
@@ -2818,9 +2805,6 @@ async function forwardDedicatedClaudeOpus5Request(input: ChatInput, signal: Abor
           return wrapBaiResponseWithCapacityLease(forwarded, baiCapacityLease, signal);
         }
         releaseConcurrency();
-        if (isUnorouter) {
-          setCredentialCooldown(selectedCredential.telemetryProvider, selectedCredential.slot, UNOROUTER_KEY_COOLDOWN_MS);
-        }
         const retryable = retryableProviderStatus(response.status);
         const rawBody = await response.text().catch(() => "");
         const diagnostic = renderedHttpFailureDiagnostic(response.status, rawBody);
@@ -2857,9 +2841,6 @@ async function forwardDedicatedClaudeOpus5Request(input: ChatInput, signal: Abor
         }
       } catch (error) {
         releaseConcurrency();
-        if (isUnorouter) {
-          setCredentialCooldown(selectedCredential.telemetryProvider, selectedCredential.slot, UNOROUTER_KEY_COOLDOWN_MS);
-        }
         responseStart.clear();
         lastError = error;
         if (isBai) recordBaiFailure(provider.id);
@@ -4652,6 +4633,9 @@ export function registerPlaygroundGateway(app: Express) {
     const user = await sdk.authenticateRequest(req).catch(() => null);
     const sourceIpHash = tokenForgeRequestIpHash(req);
     if (!user) return errorResponse(res, `tf_pg_${randomUUID().replaceAll("-", "")}`, 401, "Sign in to use the Qronos AI Playground.", "unauthorized");
+    if (!user.isAdminSession && !user.discordVerifiedAt) {
+      return errorResponse(res, `tf_pg_${randomUUID().replaceAll("-", "")}`, 403, "Discord membership verification is required to use the Playground. Please verify your Discord membership.", "discord_verification_required");
+    }
     const raw = (req.body ?? {}) as Record<string, unknown>;
     const model = raw.model;
     const maxOutputTokens = raw.maxOutputTokens;

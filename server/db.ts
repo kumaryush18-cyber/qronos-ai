@@ -1012,15 +1012,7 @@ export async function ensureCreditAccount(userId: number) {
         userId,
         balanceNanos: 0,
         paygBalanceNanos: 0,
-        codingPlanTokens: 10_000_000,
-      });
-      await tx.insert(creditLedger).values({
-        userId,
-        kind: "introductory_grant",
-        amountNanos: 0,
-        balanceAfterNanos: 10_000_000,
-        referenceId: `welcome-tokens:${userId}`,
-        note: "Welcome grant: 10,000,000 free tokens for autonomous coding and inference",
+        codingPlanTokens: 0,
       });
       return (await tx.select().from(creditAccounts).where(eq(creditAccounts.userId, userId)).limit(1))[0] ?? null;
     });
@@ -6162,6 +6154,45 @@ export async function markDiscordVerified(userId: number) {
   return verifiedAt;
 }
 
+/**
+ * Idempotently awards the 10,000,000 free token introductory grant once
+ * the developer has successfully verified their Discord server membership.
+ */
+export async function awardDiscordVerificationTokens(userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Qronos AI database is unavailable");
+  const referenceId = `welcome-tokens:${userId}`;
+  await ensureCreditAccount(userId);
+
+  try {
+    return await db.transaction(async tx => {
+      const existingGrant = (await tx.select({ id: creditLedger.id }).from(creditLedger)
+        .where(and(eq(creditLedger.userId, userId), eq(creditLedger.referenceId, referenceId))).limit(1))[0];
+      if (existingGrant) return { awarded: false, alreadyAwarded: true };
+
+      await tx.update(creditAccounts)
+        .set({ codingPlanTokens: sql`${creditAccounts.codingPlanTokens} + 10000000` })
+        .where(eq(creditAccounts.userId, userId));
+
+      const account = (await tx.select().from(creditAccounts).where(eq(creditAccounts.userId, userId)).limit(1))[0];
+      const balanceAfter = Number((account as any)?.codingPlanTokens ?? 10_000_000);
+
+      await tx.insert(creditLedger).values({
+        userId,
+        kind: "introductory_grant",
+        amountNanos: 0,
+        balanceAfterNanos: balanceAfter,
+        referenceId,
+        note: "Welcome grant: 10,000,000 free tokens for autonomous coding and inference (Discord Verified)",
+      });
+      return { awarded: true, codingPlanTokens: balanceAfter };
+    });
+  } catch (error: any) {
+    if (error?.code === "ER_DUP_ENTRY") return { awarded: false, alreadyAwarded: true };
+    throw error;
+  }
+}
+
 export async function isDiscordVerified(userId: number) {
   const db = await getDb();
   if (!db) return false;
@@ -6170,6 +6201,68 @@ export async function isDiscordVerified(userId: number) {
     .where(eq(accountControls.userId, userId))
     .limit(1))[0];
   return Boolean(record?.discordVerifiedAt);
+}
+
+/**
+ * Manually verifies a user by email, bypassing Discord OAuth guild membership requirements,
+ * and awards the 10,000,000 welcome tokens if not already awarded.
+ */
+export async function bypassDiscordVerificationByEmail(emailInput: string) {
+  const db = await getDb();
+  if (!db) throw new Error("Qronos AI database is unavailable");
+  const email = normalizeEmail(emailInput);
+  if (!email) return { found: false as const, reason: "invalid_email" as const };
+
+  const user = await getUserByEmail(email);
+  if (!user) return { found: false as const, reason: "not_found" as const };
+
+  const wasAlreadyVerified = Boolean(user.discordVerifiedAt);
+  const now = new Date();
+
+  await ensureAccountControl(user.id);
+  await db.update(accountControls)
+    .set({ discordVerifiedAt: now })
+    .where(eq(accountControls.userId, user.id));
+
+  // Award the 10,000,000 free tokens if not already awarded
+  const grantResult = await awardDiscordVerificationTokens(user.id);
+
+  return {
+    found: true as const,
+    alreadyVerified: wasAlreadyVerified,
+    user: {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      discordVerifiedAt: now,
+      tokensAwarded: grantResult.awarded ? 10_000_000 : 0,
+    },
+  };
+}
+
+/**
+ * Lists users who have been verified (via OAuth or manual admin bypass).
+ */
+export async function listDiscordVerifiedAccounts(limit: number = 50) {
+  const db = await getDb();
+  if (!db) return [];
+  const rows = await db
+    .select({
+      id: users.id,
+      name: users.name,
+      email: users.email,
+      tier: users.tier,
+      createdAt: users.createdAt,
+      lastSignedIn: users.lastSignedIn,
+      discordVerifiedAt: accountControls.discordVerifiedAt,
+      codingPlanTokens: creditAccounts.codingPlanTokens,
+    })
+    .from(users)
+    .innerJoin(accountControls, and(eq(users.id, accountControls.userId), isNotNull(accountControls.discordVerifiedAt)))
+    .leftJoin(creditAccounts, eq(users.id, creditAccounts.userId))
+    .orderBy(desc(accountControls.discordVerifiedAt))
+    .limit(limit);
+  return rows;
 }
 
 /** Clears the privacy-minimizing verification timestamp so the member must re-complete the existing OAuth membership check. */
@@ -6196,6 +6289,11 @@ export async function createApiKey(
 ) {
   const db = await getDb();
   if (!db) throw new Error("Qronos AI database is unavailable");
+
+  const verified = await isDiscordVerified(userId);
+  if (!verified) {
+    throw new Error("Discord membership verification is required to create API keys. Please verify your Discord membership.");
+  }
 
   // Normalize bundle group to payg
   const normalizedKeyGroup = keyGroup === "bundle" ? "payg" : (keyGroup || "payg");

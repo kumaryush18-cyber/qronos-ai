@@ -445,10 +445,7 @@ export function ClaudeOpus5ProviderBalancerPanel({
             {drafts.map((draft, index) => {
               const isSelected = (selectedDraft?.id ?? "") === draft.id;
               const isBai = draft.label.trim().toLowerCase() === "b.ai";
-              const isUnorouter =
-                draft.id === "provider-1788422197682-23" ||
-                draft.label.trim().toLowerCase().includes("unorouter") ||
-                draft.baseUrl.toLowerCase().includes("unorouter.com");
+              const isUnorouter = false;
               const saved = configured.get(draft.id);
               const keyCount = draft.apiKeys.filter((k) => k.trim()).length || saved?.apiKeyMasks.length || 0;
               const draftSlots = metrics?.providers?.find(

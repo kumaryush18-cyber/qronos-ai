@@ -5,6 +5,9 @@ import { Sparkles, Terminal, Cpu, ShieldCheck, ChevronDown, Check } from "lucide
 import { Badge } from "@/components/ui/badge";
 import { QRONOS_MODELS } from "@/lib/modelCatalogue";
 import { trpc } from "@/lib/trpc";
+import { useAuth } from "@/_core/hooks/useAuth";
+import { StarButton } from "@/components/StarButton";
+import { DiscordIcon } from "@/components/LoginWelcomeTour";
 import "./infergate-landing.css";
 
 const FEATURED_MODELS = [
@@ -21,6 +24,8 @@ const FEATURED_MODELS = [
 ];
 
 export default function Playground() {
+  const { user } = useAuth();
+  const isDiscordVerified = Boolean((user as any)?.discordVerifiedAt || (user as any)?.isAdminSession);
   const [activeModel, setActiveModel] = useState("claude-opus-5.5");
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
@@ -117,6 +122,9 @@ export default function Playground() {
       return "";
     } catch (err: any) {
       const msg = err?.message || String(err);
+      if (msg.includes("Discord") || msg.includes("discord")) {
+        return `⚠️ Discord Verification Required:\n\nDiscord server membership verification is required to send messages in the Playground.\n\n👉 Join the community and connect your Discord account at /verify-discord to unlock full access and claim 10M free tokens.`;
+      }
       if (msg.toLowerCase().includes("maintenance")) {
         return `⚠️ ${msg}`;
       }
@@ -183,6 +191,41 @@ export default function Playground() {
         <p className="mb-6 max-w-lg text-center text-xs sm:text-sm leading-relaxed text-zinc-400">
           Ask any question to watch the 3D particle orb launch, reason across frontier models, and stream live intelligence.
         </p>
+
+        {/* Discord Verification Alert for Unverified Developers */}
+        {user && !isDiscordVerified && (
+          <div className="mb-6 w-full max-w-xl overflow-hidden rounded-2xl border border-[#5865F2]/40 bg-gradient-to-r from-[#5865F2]/15 via-[#07080e] to-[#5865F2]/10 p-3.5 sm:p-4 text-left shadow-xl backdrop-blur-xl">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#5865F2]/20 border border-[#5865F2]/40 text-[#5865F2]">
+                  <DiscordIcon className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-white flex items-center gap-1.5 font-mono">
+                    <span>Discord Verification Required</span>
+                    <span className="h-1.5 w-1.5 rounded-full bg-amber-400 animate-ping" />
+                  </p>
+                  <p className="text-[11px] text-zinc-300 mt-0.5">
+                    Connect Discord to unlock live streaming completions &amp; 10M free tokens.
+                  </p>
+                </div>
+              </div>
+              <a href="/api/auth/discord" className="shrink-0">
+                <StarButton
+                  backgroundColor="#06070b"
+                  lightColor="rgba(88, 101, 242, 0.95)"
+                  starColor="#5865F2"
+                  borderWidth={1.5}
+                  duration={3.5}
+                  className="h-8 px-3 rounded-full border border-[#5865F2]/70 hover:border-[#7289da] text-xs font-mono font-bold shadow-[0_0_15px_rgba(88,101,242,0.35)]"
+                >
+                  <DiscordIcon className="h-3 w-3 text-[#5865F2] mr-1" />
+                  <span>Verify Discord</span>
+                </StarButton>
+              </a>
+            </div>
+          </div>
+        )}
 
         {/* Model Selection Row: Featured Chips + Full Catalogue Dropdown */}
         <div className="flex flex-col items-center gap-3 mb-7 z-20 w-full max-w-xl">

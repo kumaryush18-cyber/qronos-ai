@@ -93,7 +93,7 @@ function Router() {
         <RouteBoundary><LocalAuth mode="signup" /></RouteBoundary>
       </Route>
       <Route path={"/verify-discord"}>
-        <Redirect to="/dashboard" />
+        <RouteBoundary><DiscordVerify /></RouteBoundary>
       </Route>
       <Route path={"/dashboard"}>
         <RouteBoundary><DeveloperDashboard section="overview" /></RouteBoundary>

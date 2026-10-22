@@ -19,9 +19,9 @@ describe("Discord verification and administrator entry presentation", () => {
     expect(verificationPage).toContain("<SystemNotices /><main");
   });
 
-  it("renders the passcode unlock surface independently of a TokenForge user session", () => {
-    expect(administratorPage).toContain("Administrator access is independent of a TokenForge developer account");
+  it("renders the passcode unlock surface independently of a developer session", () => {
     expect(administratorPage).toContain("if (!isAdminSession)");
-    expect(administratorPage).toContain("Unlock administrator access");
+    expect(administratorPage).toContain("Unlock Control Plane");
+    expect(administratorPage).toContain("Unlock Administrator Access");
   });
 });

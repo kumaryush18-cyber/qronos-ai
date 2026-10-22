@@ -117,6 +117,9 @@ export default function PublicPlayground() {
       return "";
     } catch (err: any) {
       const msg = err?.message || String(err);
+      if (msg.includes("Discord") || msg.includes("discord")) {
+        return `⚠️ Discord Verification Required:\n\nDiscord server membership verification is required to send messages in the Playground.\n\n👉 Join the community and connect your Discord account at /verify-discord to unlock full access and claim 10M free tokens.`;
+      }
       if (msg.toLowerCase().includes("maintenance")) {
         return `⚠️ ${msg}`;
       }

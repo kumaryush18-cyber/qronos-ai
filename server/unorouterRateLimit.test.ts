@@ -13,7 +13,7 @@ import {
   type CredentialTelemetryProvider,
 } from "./providerCredentialTelemetry";
 
-describe("Unorouter 1 request / 1 min key cooldown rule", () => {
+describe("Unorouter restriction removal", () => {
   const telemetryProvider = "claude-opus-5:provider-1788422197682-23" as CredentialTelemetryProvider;
 
   beforeEach(() => {
@@ -28,52 +28,21 @@ describe("Unorouter 1 request / 1 min key cooldown rule", () => {
     expect(isUnorouterClaudeOpus5Provider({ id: "provider-random-123", label: "Custom Provider", baseUrl: "https://custom.ai" })).toBe(false);
   });
 
-  it("cooldown duration constant is exactly 60 seconds (60,000 ms)", () => {
-    expect(UNOROUTER_KEY_COOLDOWN_MS).toBe(60_000);
+  it("cooldown duration constant is 0 ms indicating removal of 1req/min restriction", () => {
+    expect(UNOROUTER_KEY_COOLDOWN_MS).toBe(0);
   });
 
-  it("applies a 60-second cooldown on request completion and renders in slot telemetry", () => {
+  it("does not apply cooldown when cooldown duration is 0", () => {
     const now = 1_000_000;
-    // Key slot 0 is initially eligible
+    // Slot remains eligible immediately
+    setCredentialCooldown(telemetryProvider, 0, UNOROUTER_KEY_COOLDOWN_MS, now);
     expect(isCredentialSlotEligible(telemetryProvider, 0, now)).toBe(true);
-
-    // Request completes, applying 60s cooldown
-    setCredentialCooldown(telemetryProvider, 0, UNOROUTER_KEY_COOLDOWN_MS, now);
-
-    // Within the 60s window, slot is NOT eligible
-    expect(isCredentialSlotEligible(telemetryProvider, 0, now + 30_000)).toBe(false);
-    expect(isCredentialSlotEligible(telemetryProvider, 0, now + 59_999)).toBe(false);
-
-    // Check telemetry returned for admin panel
-    const telemetry = getCredentialSlotTelemetry(telemetryProvider, 0, now + 15_000);
-    expect(telemetry.health).toBe("cooling-down");
-    expect(telemetry.cooldownUntil).toEqual(new Date(now + 60_000));
-
-    // After 60s elapsed, slot becomes eligible again
-    expect(isCredentialSlotEligible(telemetryProvider, 0, now + 60_000)).toBe(true);
-    expect(isCredentialSlotEligible(telemetryProvider, 0, now + 60_001)).toBe(true);
-
-    const expiredTelemetry = getCredentialSlotTelemetry(telemetryProvider, 0, now + 60_001);
-    expect(expiredTelemetry.health).toBe("unverified");
   });
 
-  it("preserves rate-limit cooldown even if recordCredentialSuccess is recorded", () => {
-    const now = 2_000_000;
-    setCredentialCooldown(telemetryProvider, 0, UNOROUTER_KEY_COOLDOWN_MS, now);
-
-    // Call recordCredentialSuccess
-    recordCredentialSuccess(telemetryProvider, 0, new Date(now + 500));
-
-    // Cooldown is preserved!
-    expect(isCredentialSlotEligible(telemetryProvider, 0, now + 10_000)).toBe(false);
-    const telemetry = getCredentialSlotTelemetry(telemetryProvider, 0, now + 10_000);
-    expect(telemetry.health).toBe("cooling-down");
-  });
-
-  it("tracks slot concurrency to prevent overlapping requests on the same key", () => {
-    const release = acquireProviderSlotConcurrency(telemetryProvider, 0);
-    // While request is active, concurrency is 1
-    // Releasing concurrency returns it to 0
-    release();
+  it("allows multiple concurrent requests without artificial 1 req/min blocking", () => {
+    const release1 = acquireProviderSlotConcurrency(telemetryProvider, 0);
+    const release2 = acquireProviderSlotConcurrency(telemetryProvider, 0);
+    release1();
+    release2();
   });
 });

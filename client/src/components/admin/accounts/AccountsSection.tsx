@@ -17,9 +17,10 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Eye, Loader2, Mail, Power, RefreshCw, Search, Trash2, UsersRound, WalletCards } from "lucide-react";
+import { Check, Eye, Loader2, Mail, Power, RefreshCw, Search, Trash2, UsersRound, WalletCards, X } from "lucide-react";
 import { toast } from "sonner";
 import { UserTierBadge, USER_TIER_CONFIGS, UserTier } from "@/components/UserTierBadge";
+import { DiscordIcon } from "@/components/LoginWelcomeTour";
 
 export function AccountRow({
   account,
@@ -193,13 +194,25 @@ export function AccountRow({
             {toggleLogging.isPending && <Loader2 className="h-2.5 w-2.5 animate-spin" />}
           </button>
           <Badge className="border-0 bg-white/6 text-[10px] text-zinc-300 font-mono">Standard account</Badge>
-          <Badge
-            className={`border-0 text-[10px] font-mono ${
-              account.discordVerifiedAt ? "bg-emerald-500/10 text-emerald-400" : "bg-amber-500/10 text-amber-300"
-            }`}
-          >
-            {account.discordVerifiedAt ? "Discord verified" : "Discord re-verification required"}
-          </Badge>
+          {account.discordVerifiedAt ? (
+            <Badge
+              title={`Discord verified on ${new Date(account.discordVerifiedAt).toLocaleDateString()}`}
+              className="border border-emerald-500/30 bg-emerald-500/15 text-emerald-400 text-[10px] font-mono font-bold inline-flex items-center gap-1.5"
+            >
+              <DiscordIcon className="h-3 w-3 text-[#5865F2]" />
+              <Check size={11} className="text-emerald-400 stroke-[3]" />
+              <span>Discord: Verified</span>
+            </Badge>
+          ) : (
+            <Badge
+              title="Not yet verified on Discord"
+              className="border border-amber-500/30 bg-amber-500/10 text-amber-300 text-[10px] font-mono inline-flex items-center gap-1.5"
+            >
+              <DiscordIcon className="h-3 w-3 text-amber-400/70" />
+              <X size={11} className="text-amber-400" />
+              <span>Discord: Unverified</span>
+            </Badge>
+          )}
           {account.specialReferralSlot && (
             <Badge
               className={`border-0 text-[10px] font-mono ${

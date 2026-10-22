@@ -1,7 +1,7 @@
 import { randomBytes, timingSafeEqual } from "node:crypto";
 import { parse as parseCookieHeader } from "cookie";
 import type { Express, Request, Response } from "express";
-import { bindDiscordIdentity, markDiscordVerified } from "./db";
+import { awardDiscordVerificationTokens, bindDiscordIdentity, markDiscordVerified } from "./db";
 import { appOrigin } from "./githubOAuth";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { ENV } from "./_core/env";
@@ -173,8 +173,9 @@ export function registerDiscordOAuthRoutes(app: Express) {
         return;
       }
       await markDiscordVerified(user.id);
-      
-      res.redirect(302, "/dashboard");
+      await awardDiscordVerificationTokens(user.id);
+
+      res.redirect(302, "/dashboard?verified=discord");
     } catch (error) {
       console.error("[Discord OAuth] Membership verification failed", error instanceof Error ? error.message : "unknown error");
       redirectToVerificationError(res, "failed");

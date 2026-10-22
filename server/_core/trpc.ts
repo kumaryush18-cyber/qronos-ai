@@ -28,13 +28,19 @@ const requireUser = t.middleware(async opts => {
 export const protectedProcedure = t.procedure.use(requireUser);
 
 /**
- * Developer workspace procedure for authenticated users.
+ * Developer workspace procedure for Discord-verified developers and administrators.
  */
 export const verifiedDeveloperProcedure = t.procedure.use(
   t.middleware(async opts => {
     const { ctx, next } = opts;
     if (!ctx.user) {
       throw new TRPCError({ code: "UNAUTHORIZED", message: UNAUTHED_ERR_MSG });
+    }
+    if (!ctx.user.isAdminSession && !ctx.user.discordVerifiedAt) {
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: "Discord membership verification is required to access developer workspace resources.",
+      });
     }
     return next({ ctx: { ...ctx, user: ctx.user } });
   }),

@@ -57,6 +57,7 @@ import { CreditOverview, Profile, UsageLogs, formatCreditWhole, useIsCreditsEnab
 import { DashboardModels } from "./DashboardModels";
 import { DashboardPricingSection } from "@/components/dashboard/DashboardPricingSection";
 import { StarButton } from "@/components/StarButton";
+import { DiscordIcon } from "@/components/LoginWelcomeTour";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { StarBorderCard } from "@/components/StarBorderCard";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
@@ -419,6 +420,7 @@ function SdkQuickStart({ apiKey }: { apiKey?: string }) {
 
 function KeyCreateForm({ onSuccess, activeCount = 0 }: { onSuccess: (value: NewApiKeyResult) => void; activeCount?: number }) {
   const { user } = useAuth();
+  const isDiscordVerified = Boolean((user as any)?.discordVerifiedAt || (user as any)?.isAdminSession);
   const emailLower = (user?.email ?? "").trim().toLowerCase();
   const isWhitelistedUser = emailLower === "konchoor@gmail.com" || emailLower === "kumaryush18@gmail.com";
   const creditsEnabled = isWhitelistedUser || Boolean((user as any)?.creditsEnabled);
@@ -436,6 +438,47 @@ function KeyCreateForm({ onSuccess, activeCount = 0 }: { onSuccess: (value: NewA
     },
     onError: (error) => toast.error(error.message),
   });
+
+  if (!isDiscordVerified) {
+    return (
+      <div
+        style={{
+          backgroundColor: "oklch(0.14 0 0)",
+          borderColor: "oklch(0.26 0 0)",
+          boxShadow: "0 25px 60px rgba(0,0,0,0.85), inset 0 1px 0 rgba(255,255,255,0.06)",
+        }}
+        className="rounded-3xl border p-6 sm:p-8 shadow-2xl mb-6 relative overflow-hidden text-center"
+      >
+        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-[#5865F2]/15 border border-[#5865F2]/30 text-[#5865F2] mb-4 shadow-lg shadow-[#5865F2]/20">
+          <DiscordIcon className="h-7 w-7" />
+        </div>
+        <p className="text-[10px] font-mono font-bold uppercase tracking-[.18em] text-[#9ba5f7]">
+          Verification Required
+        </p>
+        <h2 className="mt-1 text-xl sm:text-2xl font-extrabold text-white tracking-tight">
+          Verify Discord to Generate API Keys
+        </h2>
+        <p className="mt-2 text-xs sm:text-sm text-zinc-400 max-w-md mx-auto leading-relaxed">
+          To protect community quota pools and activate cryptographic key generation, verify your membership in the Qronos AI Discord server.
+        </p>
+        <div className="mt-6 flex justify-center">
+          <a href="/api/auth/discord">
+            <StarButton
+              backgroundColor="#06070b"
+              lightColor="rgba(88, 101, 242, 0.95)"
+              starColor="#5865F2"
+              borderWidth={2}
+              duration={3}
+              className="h-11 px-6 rounded-full border border-[#5865F2]/70 hover:border-[#7289da] text-xs font-mono font-bold shadow-[0_0_25px_rgba(88,101,242,0.4)]"
+            >
+              <DiscordIcon className="h-4 w-4 text-[#5865F2] mr-2" />
+              <span>Connect Discord &amp; Claim 10M Tokens</span>
+            </StarButton>
+          </a>
+        </div>
+      </div>
+    );
+  }
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
@@ -1433,6 +1476,7 @@ function OverviewHero({
   user: ReturnType<typeof useAuth>["user"];
 }) {
   const firstName = user?.name ? user.name.split(" ")[0] : "";
+  const isDiscordVerified = Boolean((user as any)?.discordVerifiedAt || (user as any)?.isAdminSession);
 
   return (
     <div
@@ -1462,6 +1506,13 @@ function OverviewHero({
               Zero Artificial Rate Limits
             </span>
             <UserTierBadge tier={(user as any)?.tier} showTag size="sm" />
+            {isDiscordVerified && (
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-[#5865F2]/40 bg-[#5865F2]/15 px-3 py-1 text-[10px] font-mono font-bold uppercase tracking-wider text-[#9ba5f7] shadow-[0_0_12px_rgba(88,101,242,0.25)]">
+                <DiscordIcon className="h-3 w-3 text-[#5865F2]" />
+                <Check size={11} className="text-emerald-400 stroke-[3]" />
+                Discord Verified
+              </span>
+            )}
           </div>
 
           <h1 className="mt-3.5 text-2xl sm:text-4xl font-extrabold tracking-tight text-white flex items-center gap-2.5 flex-wrap">
@@ -1475,6 +1526,24 @@ function OverviewHero({
         </div>
 
         <div className="flex items-center gap-2.5 flex-wrap shrink-0">
+          {!isDiscordVerified && (
+            <a href="/api/auth/discord" className="inline-block">
+              <StarButton
+                backgroundColor="#06070b"
+                lightColor="rgba(88, 101, 242, 0.95)"
+                starColor="#5865F2"
+                borderWidth={2}
+                duration={3}
+                className="rounded-full border border-[#5865F2]/60 hover:border-[#7289da] px-4 sm:px-5 text-xs font-mono font-bold h-10 shadow-[0_0_24px_rgba(88,101,242,0.4)]"
+              >
+                <DiscordIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-[#5865F2] mr-1.5" />
+                <span className="text-white">Verify Discord</span>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-amber-300 bg-amber-400/20 border border-amber-400/35 px-1.5 py-0.5 rounded ml-1">
+                  10M Free
+                </span>
+              </StarButton>
+            </a>
+          )}
           <Link href="/dashboard/pricing">
             <StarButton backgroundColor="#010101" className="rounded-full border border-slate-200/50 px-5 text-xs font-mono h-10 shadow-lg">
               <Zap size={13} className="mr-1.5 inline-block text-white" />
@@ -1560,6 +1629,51 @@ function DashboardVideoShowcase() {
   );
 }
 
+function DiscordVerificationAlertBanner() {
+  return (
+    <div className="relative mb-3 overflow-hidden rounded-2xl border border-[#5865F2]/30 bg-gradient-to-r from-[#5865F2]/10 via-[#07080e] to-[#5865F2]/5 p-4 sm:p-4.5 shadow-[0_10px_35px_rgba(0,0,0,0.8)] backdrop-blur-xl">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div className="flex items-start sm:items-center gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#5865F2]/15 border border-[#5865F2]/30 text-[#5865F2] shadow-lg shadow-[#5865F2]/20">
+            <DiscordIcon className="h-5 w-5" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-[#9ba5f7]">
+                Action Required · Discord Verification
+              </span>
+              <span className="h-1.5 w-1.5 rounded-full bg-amber-400 animate-ping" />
+            </div>
+            <p className="mt-1 text-xs sm:text-sm font-semibold text-white">
+              Connect your Discord account to claim your <strong className="text-emerald-400 font-bold">10,000,000 Free Tokens</strong> &amp; activate API keys.
+            </p>
+            <p className="mt-0.5 text-[11px] text-zinc-400">
+              Active Discord server membership unlocks Playground completions, high-concurrency routing, and cryptographic key generation.
+            </p>
+          </div>
+        </div>
+
+        <div className="shrink-0">
+          <a href="/api/auth/discord" className="inline-block">
+            <StarButton
+              backgroundColor="#06070b"
+              lightColor="rgba(88, 101, 242, 0.95)"
+              starColor="#5865F2"
+              borderWidth={1.5}
+              duration={3.5}
+              className="h-9 px-4 rounded-full border border-[#5865F2]/70 hover:border-[#7289da] text-xs font-mono font-bold shadow-[0_0_20px_rgba(88,101,242,0.35)]"
+            >
+              <DiscordIcon className="h-3.5 w-3.5 text-[#5865F2] mr-1.5" />
+              <span>Verify Discord</span>
+              <ArrowRight size={13} className="ml-1 text-zinc-300" />
+            </StarButton>
+          </a>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function Overview({
   user,
   loading,
@@ -1571,11 +1685,15 @@ function Overview({
   usage: { data?: UsageData; isLoading: boolean };
   videoReady: boolean;
 }) {
+  const isDiscordVerified = Boolean((user as any)?.discordVerifiedAt || (user as any)?.isAdminSession);
   const quota = usage.data?.quota;
   if (loading || usage.isLoading || !videoReady) return <DashboardVideoLoadingScreen />;
 
   return (
     <>
+      {/* Discord Verification Alert Banner if unverified */}
+      {!isDiscordVerified && <DiscordVerificationAlertBanner />}
+
       {/* 1. Welcome Header Card (Above the video) */}
       <OverviewHero user={user} />
 

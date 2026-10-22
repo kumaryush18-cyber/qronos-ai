@@ -70,7 +70,7 @@ export function DynamicProviderKeyPool({
 }) {
   const requiredKeyCount = providerName === "Claude Opus Qwen" ? Math.max(2, minKeys) : minKeys;
   const canRemove = values.length > 0;
-  const isUnorouter = providerName.toLowerCase().includes("unorouter");
+  const isUnorouter = false;
   const [localEnabledStates, setLocalEnabledStates] = useState<boolean[]>(() =>
     masks.map((item) => item.enabled !== false)
   );
@@ -405,7 +405,7 @@ export function ManagedProviderKeyMetrics({
     unknown: "border-white/10 bg-white/5 text-[#a9aab8]",
   } as const;
 
-  const isUnorouter = providerName.toLowerCase().includes("unorouter");
+  const isUnorouter = false;
 
   return (
     <div className="mt-5 border-t border-white/8 pt-4">
