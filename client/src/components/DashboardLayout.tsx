@@ -29,6 +29,7 @@ import { QRONOS_POST_LOGOUT_PATH } from "../../../shared/authNavigation";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
 import { DiscordIcon } from "./LoginWelcomeTour";
 import { StarButton } from "./StarButton";
+import { DiscordVerifyModal, openDiscordVerifyModal } from "./DiscordVerifyModal";
 import { AnnouncementBanner } from "./AnnouncementBanner";
 import { MaintenanceCountdownBanner } from "./MaintenanceCountdownBanner";
 import { QronosGlyph } from "./QronosGlyph";
@@ -107,6 +108,7 @@ export default function DashboardLayout({
       <DashboardLayoutContent setSidebarWidth={setSidebarWidth}>
         {children}
       </DashboardLayoutContent>
+      <DiscordVerifyModal />
     </SidebarProvider>
   );
 }
@@ -263,7 +265,11 @@ function DashboardLayoutContent({
                 <span className="sm:hidden">Verified</span>
               </span>
             ) : (
-              <a href="/api/auth/discord" className="inline-block shrink-0">
+              <button
+                type="button"
+                onClick={openDiscordVerifyModal}
+                className="inline-block shrink-0 cursor-pointer focus:outline-none"
+              >
                 <StarButton
                   backgroundColor="#06070b"
                   lightColor="rgba(88, 101, 242, 0.95)"
@@ -279,7 +285,7 @@ function DashboardLayoutContent({
                     10M Free
                   </span>
                 </StarButton>
-              </a>
+              </button>
             )}
 
             {/* Notification Bell */}
@@ -346,7 +352,7 @@ function DashboardLayoutContent({
             <Link href="/legal/privacy">Privacy Policy</Link>
             <Link href="/legal/refund">Refund Policy</Link>
             <a
-              href="https://discord.gg/xVDscH5ezj"
+              href="https://discord.gg/PGVmBGht7r"
               target="_blank"
               rel="noreferrer"
               className="inline-flex items-center gap-1"

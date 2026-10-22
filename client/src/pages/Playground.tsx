@@ -8,6 +8,7 @@ import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { StarButton } from "@/components/StarButton";
 import { DiscordIcon } from "@/components/LoginWelcomeTour";
+import { openDiscordVerifyModal } from "@/components/DiscordVerifyModal";
 import "./infergate-landing.css";
 
 const FEATURED_MODELS = [
@@ -210,7 +211,11 @@ export default function Playground() {
                   </p>
                 </div>
               </div>
-              <a href="/api/auth/discord" className="shrink-0">
+              <button
+                type="button"
+                onClick={openDiscordVerifyModal}
+                className="shrink-0 cursor-pointer focus:outline-none"
+              >
                 <StarButton
                   backgroundColor="#06070b"
                   lightColor="rgba(88, 101, 242, 0.95)"
@@ -222,7 +227,7 @@ export default function Playground() {
                   <DiscordIcon className="h-3 w-3 text-[#5865F2] mr-1" />
                   <span>Verify Discord</span>
                 </StarButton>
-              </a>
+              </button>
             </div>
           </div>
         )}

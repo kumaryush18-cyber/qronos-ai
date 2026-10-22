@@ -440,7 +440,7 @@ export default function Legal() {
                   Need assistance with an invoice, corporate agreement, or security audit?
                 </p>
                 <a
-                  href="https://discord.gg/xVDscH5ezj"
+                  href="https://discord.gg/PGVmBGht7r"
                   target="_blank"
                   rel="noreferrer"
                   className="inline-flex items-center gap-1.5 text-xs text-white hover:text-zinc-300 font-medium pt-1"

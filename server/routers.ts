@@ -676,7 +676,7 @@ export const appRouter = router({
     discordVerificationStatus: protectedProcedure.query(({ ctx }) => ({
       verified: ctx.user.isAdminSession === true || Boolean(ctx.user.discordVerifiedAt),
       administratorBypass: ctx.user.isAdminSession === true,
-      discordInviteUrl: "https://discord.gg/xVDscH5ezj",
+      discordInviteUrl: "https://discord.gg/PGVmBGht7r",
     })),
     apiKeys: verifiedDeveloperProcedure.query(async ({ ctx }) => listApiKeys(ctx.user.id)),
     referrals: protectedProcedure.query(async ({ ctx }) => {

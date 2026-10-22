@@ -445,7 +445,7 @@ export function SignInCard({
 
                 <div className="pt-2 text-center">
                   <a
-                    href="https://discord.gg/xVDscH5ezj"
+                    href="https://discord.gg/PGVmBGht7r"
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-xs text-zinc-500 hover:text-white transition font-mono inline-block underline decoration-zinc-700 underline-offset-4 hover:decoration-white"

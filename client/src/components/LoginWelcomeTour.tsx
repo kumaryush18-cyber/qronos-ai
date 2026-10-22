@@ -1,6 +1,6 @@
 import React from "react";
 
-export const DISCORD_INVITE_URL = "https://discord.gg/xVDscH5ezj";
+export const DISCORD_INVITE_URL = "https://discord.gg/PGVmBGht7r";
 export const LOGIN_WELCOME_TOUR_COMPLETED_KEY = "qronos_welcome_tour_completed";
 
 export type LoginWelcomeUser = {

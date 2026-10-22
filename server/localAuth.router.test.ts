@@ -249,9 +249,9 @@ describe("GitHub-only authentication and developer protections", () => {
     const verified = await appRouter.createCaller(makeContext({ ...localUser, discordVerifiedAt: new Date("2026-08-16T00:00:00.000Z") }).ctx).developer.discordVerificationStatus();
     const administrator = await appRouter.createCaller(makeContext({ ...localUser, isAdminSession: true }).ctx).developer.discordVerificationStatus();
 
-    expect(unverified).toEqual({ verified: false, administratorBypass: false, discordInviteUrl: "https://discord.gg/xVDscH5ezj" });
-    expect(verified).toEqual({ verified: true, administratorBypass: false, discordInviteUrl: "https://discord.gg/xVDscH5ezj" });
-    expect(administrator).toEqual({ verified: true, administratorBypass: true, discordInviteUrl: "https://discord.gg/xVDscH5ezj" });
+    expect(unverified).toEqual({ verified: false, administratorBypass: false, discordInviteUrl: "https://discord.gg/PGVmBGht7r" });
+    expect(verified).toEqual({ verified: true, administratorBypass: false, discordInviteUrl: "https://discord.gg/PGVmBGht7r" });
+    expect(administrator).toEqual({ verified: true, administratorBypass: true, discordInviteUrl: "https://discord.gg/PGVmBGht7r" });
     expect(Object.keys(verified)).not.toContain("discordUserId");
   });
 

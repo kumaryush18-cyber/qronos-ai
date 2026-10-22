@@ -58,6 +58,7 @@ import { DashboardModels } from "./DashboardModels";
 import { DashboardPricingSection } from "@/components/dashboard/DashboardPricingSection";
 import { StarButton } from "@/components/StarButton";
 import { DiscordIcon } from "@/components/LoginWelcomeTour";
+import { openDiscordVerifyModal } from "@/components/DiscordVerifyModal";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { StarBorderCard } from "@/components/StarBorderCard";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
@@ -462,7 +463,7 @@ function KeyCreateForm({ onSuccess, activeCount = 0 }: { onSuccess: (value: NewA
           To protect community quota pools and activate cryptographic key generation, verify your membership in the Qronos AI Discord server.
         </p>
         <div className="mt-6 flex justify-center">
-          <a href="/api/auth/discord">
+          <button type="button" onClick={openDiscordVerifyModal} className="cursor-pointer focus:outline-none">
             <StarButton
               backgroundColor="#06070b"
               lightColor="rgba(88, 101, 242, 0.95)"
@@ -474,7 +475,7 @@ function KeyCreateForm({ onSuccess, activeCount = 0 }: { onSuccess: (value: NewA
               <DiscordIcon className="h-4 w-4 text-[#5865F2] mr-2" />
               <span>Connect Discord &amp; Claim 10M Tokens</span>
             </StarButton>
-          </a>
+          </button>
         </div>
       </div>
     );
@@ -1527,7 +1528,7 @@ function OverviewHero({
 
         <div className="flex items-center gap-2.5 flex-wrap shrink-0">
           {!isDiscordVerified && (
-            <a href="/api/auth/discord" className="inline-block">
+            <button type="button" onClick={openDiscordVerifyModal} className="inline-block cursor-pointer focus:outline-none">
               <StarButton
                 backgroundColor="#06070b"
                 lightColor="rgba(88, 101, 242, 0.95)"
@@ -1542,7 +1543,7 @@ function OverviewHero({
                   10M Free
                 </span>
               </StarButton>
-            </a>
+            </button>
           )}
           <Link href="/dashboard/pricing">
             <StarButton backgroundColor="#010101" className="rounded-full border border-slate-200/50 px-5 text-xs font-mono h-10 shadow-lg">
@@ -1654,7 +1655,7 @@ function DiscordVerificationAlertBanner() {
         </div>
 
         <div className="shrink-0">
-          <a href="/api/auth/discord" className="inline-block">
+          <button type="button" onClick={openDiscordVerifyModal} className="inline-block cursor-pointer focus:outline-none">
             <StarButton
               backgroundColor="#06070b"
               lightColor="rgba(88, 101, 242, 0.95)"
@@ -1667,7 +1668,7 @@ function DiscordVerificationAlertBanner() {
               <span>Verify Discord</span>
               <ArrowRight size={13} className="ml-1 text-zinc-300" />
             </StarButton>
-          </a>
+          </button>
         </div>
       </div>
     </div>
