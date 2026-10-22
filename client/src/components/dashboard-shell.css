@@ -178,25 +178,6 @@
   color: oklch(1.00 0 0);
 }
 
-.dashboard-topbar__status {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 10px;
-  border: 1px solid oklch(0.26 0 0);
-  border-radius: 999px;
-  background: oklch(0.14 0 0);
-  color: oklch(0.72 0 0);
-  font: 10px var(--font-mono, monospace);
-}
-
-.dashboard-topbar__status i {
-  width: 6px;
-  height: 6px;
-  border-radius: 999px;
-  background: #10b981;
-}
-
 .dashboard-topbar__trigger {
   width: 32px;
   height: 32px;
@@ -282,19 +263,31 @@
 
 @media (max-width: 768px) {
   .dashboard-topbar {
-    height: 58px;
-    padding: 0 14px;
+    height: 56px;
+    padding: 0 12px;
+    gap: 8px;
+  }
+  .dashboard-topbar__brand {
+    gap: 8px;
+    flex-shrink: 0;
+    min-width: 0;
+  }
+  .dashboard-topbar__actions {
+    gap: 6px;
+    flex-shrink: 0;
+    margin-left: auto;
   }
   .dashboard-topbar__logo {
-    font-size: 15px;
+    font-size: 14px;
+    gap: 6px;
   }
   .dashboard-topbar__glyph {
-    width: 24px;
-    height: 24px;
+    width: 22px;
+    height: 22px;
   }
-  .dashboard-topbar__status {
-    font-size: 9px;
-    padding: 3px 8px;
+  .dashboard-topbar__trigger {
+    width: 30px;
+    height: 30px;
   }
   .dashboard-footer {
     align-items: flex-start;

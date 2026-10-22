@@ -4,6 +4,7 @@ import { PublicNav } from "@/components/PublicNav";
 import { QronosGlyph } from "@/components/QronosGlyph";
 import { VortexHourglass } from "@/components/VortexHourglass";
 import { StarButton } from "@/components/StarButton";
+import { StarBorderCard } from "@/components/StarBorderCard";
 import { QRONOS_MODELS } from "@/lib/modelCatalogue";
 import { trpc } from "@/lib/trpc";
 import {
@@ -597,6 +598,63 @@ export default function Home() {
           <div className="mt-14">
             <GatewayTerminalSimulator />
           </div>
+
+          {/* Infrastructure Partner - Powered by UnoRouter.com Big Badge */}
+          <div className="mt-8 sm:mt-10 flex justify-center w-full">
+            <a
+              href="https://unorouter.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="group block w-full max-w-2xl text-decoration-none"
+            >
+              <StarBorderCard
+                lightWidth={200}
+                duration={7}
+                lightColor="rgba(255, 60, 20, 0.95)"
+                className="rounded-2xl transition-all duration-300 hover:scale-[1.015] shadow-[0_0_30px_rgba(255,42,12,0.14)] hover:shadow-[0_0_45px_rgba(255,42,12,0.25)]"
+              >
+                <div className="py-3 px-5 sm:py-3.5 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-5 text-center sm:text-left">
+                  {/* UnoRouter Logo & Identity */}
+                  <div className="flex flex-col sm:flex-row items-center gap-3 sm:gap-3.5">
+                    <div className="relative shrink-0">
+                      <div className="absolute -inset-1 rounded-xl bg-gradient-to-br from-[#ff2a0c]/40 to-transparent blur-sm group-hover:from-[#ff2a0c]/80 transition-all duration-300" />
+                      <img
+                        src="/unorouter/unorouter-apple-icon.png"
+                        alt="UnoRouter"
+                        className="relative h-10 w-10 sm:h-11 sm:w-11 rounded-lg border border-white/20 object-contain shadow-md shadow-[#ff2a0c]/25 bg-[#1f2022]"
+                      />
+                    </div>
+                    <div>
+                      <div className="flex items-center justify-center sm:justify-start gap-2 mb-0.5">
+                        <span className="text-[9px] sm:text-[10px] font-mono uppercase tracking-[0.2em] font-bold text-zinc-400">
+                          Routing Infrastructure
+                        </span>
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded-full text-[8.5px] font-mono font-semibold bg-[#ff2a0c]/15 text-[#ff684a] border border-[#ff2a0c]/30">
+                          <span className="w-1.5 h-1.5 rounded-full bg-[#ff2a0c] animate-pulse" />
+                          PARTNER
+                        </span>
+                      </div>
+                      <h3 className="text-base sm:text-lg font-bold font-display tracking-tight text-white flex items-center justify-center sm:justify-start gap-1.5 leading-snug">
+                        <span>Powered by</span>
+                        <span className="bg-gradient-to-r from-white via-zinc-100 to-zinc-300 bg-clip-text text-transparent group-hover:text-white">
+                          UnoRouter.com
+                        </span>
+                      </h3>
+                      <p className="mt-0.5 text-[11px] sm:text-xs text-zinc-400 max-w-md leading-normal">
+                        Universal multi-provider LLM routing, high-concurrency failover, and zero rate limits.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Visit Chip */}
+                  <div className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/[0.05] group-hover:bg-[#ff2a0c]/20 border border-white/10 group-hover:border-[#ff2a0c]/40 text-xs font-mono font-medium text-zinc-300 group-hover:text-white transition-all">
+                    <span>unorouter.com</span>
+                    <ExternalLink size={12} className="group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform text-zinc-400 group-hover:text-white" />
+                  </div>
+                </div>
+              </StarBorderCard>
+            </a>
+          </div>
         </div>
       </section>
 
@@ -693,15 +751,15 @@ export default function Home() {
           <div className="max-w-3xl">
             <div className="flex items-center gap-3 flex-wrap">
               <p className="text-xs font-mono uppercase tracking-[0.2em] text-zinc-500">Pricing</p>
-              <span className="text-[10px] font-mono font-extrabold px-2.5 py-0.5 rounded-full bg-amber-400 text-black uppercase tracking-wider shadow-sm">
-                Active Offer: 3X &amp; 2X Token Grant
+              <span className="text-[10px] font-mono font-extrabold px-2.5 py-0.5 rounded-full bg-white/10 text-white border border-white/20 uppercase tracking-wider shadow-sm">
+                Transparent Token Plans
               </span>
             </div>
             <h2 className="mt-4 text-[clamp(2rem,5vw,4rem)] font-display leading-[0.98] tracking-tight text-white">
               Pay per token, settled to the nanodollar.
             </h2>
             <p className="mt-6 max-w-2xl text-base leading-relaxed text-zinc-400">
-              Start with free starter tokens, or supercharge your development with our limited-time <strong className="text-amber-300">3X Token Grant</strong> on Plus (750M tokens) and <strong className="text-amber-300">2X Token Grant</strong> on Pro &amp; above plans. Every charge is reserved before a request runs and settled when it completes.
+              Start with free starter tokens, or scale your production workloads with dedicated high-throughput token plans — Plus ($15 for 600M tokens), Pro ($30 for 1.4B tokens), or Ultra ($60 for 3.2B tokens). Every charge is settled transparently with zero platform markup.
             </p>
           </div>
           <div className="mt-14 grid gap-4 md:grid-cols-3">
