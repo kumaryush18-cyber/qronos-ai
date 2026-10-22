@@ -40,14 +40,14 @@ export function AnnouncementBanner() {
       ref={bannerRef}
       style={{
         ["--duration" as any]: 8,
-        ["--light-width" as any]: "260px",
+        ["--light-width" as any]: "160px",
         ["--path" as any]: path,
       }}
       className="announcement-banner group"
       aria-label="Qronos AI announcement"
       role="status"
     >
-      {/* Revolving Orbiting Star Light along the banner perimeter */}
+      {/* Revolving Orbiting Star Light along the banner border path */}
       {path && (
         <div
           aria-hidden="true"
@@ -55,31 +55,34 @@ export function AnnouncementBanner() {
         />
       )}
 
-      {/* Label Badge on Left */}
-      <div className="announcement-banner__label">
-        <span className="announcement-banner__label-dot" aria-hidden="true" />
-        <Megaphone size={13} aria-hidden="true" className="shrink-0" />
-        <span>Announcement</span>
-      </div>
+      {/* Inner surface that covers the interior so the star light ONLY travels along the border */}
+      <div className="announcement-banner__surface">
+        {/* Label Badge on Left */}
+        <div className="announcement-banner__label">
+          <span className="announcement-banner__label-dot" aria-hidden="true" />
+          <Megaphone size={13} aria-hidden="true" className="shrink-0" />
+          <span>Announcement</span>
+        </div>
 
-      {/* Continuous Marquee Stream with bold, punchy text */}
-      <div className="announcement-banner__viewport">
-        <div className="announcement-banner__track">
-          <div className="announcement-banner__item">
-            <span>{text}</span>
-            <span className="announcement-banner__separator" aria-hidden="true">✦</span>
-          </div>
-          <div className="announcement-banner__item" aria-hidden="true">
-            <span>{text}</span>
-            <span className="announcement-banner__separator">✦</span>
-          </div>
-          <div className="announcement-banner__item" aria-hidden="true">
-            <span>{text}</span>
-            <span className="announcement-banner__separator">✦</span>
-          </div>
-          <div className="announcement-banner__item" aria-hidden="true">
-            <span>{text}</span>
-            <span className="announcement-banner__separator">✦</span>
+        {/* Continuous Marquee Stream with bold, punchy text */}
+        <div className="announcement-banner__viewport">
+          <div className="announcement-banner__track">
+            <div className="announcement-banner__item">
+              <span>{text}</span>
+              <span className="announcement-banner__separator" aria-hidden="true">✦</span>
+            </div>
+            <div className="announcement-banner__item" aria-hidden="true">
+              <span>{text}</span>
+              <span className="announcement-banner__separator">✦</span>
+            </div>
+            <div className="announcement-banner__item" aria-hidden="true">
+              <span>{text}</span>
+              <span className="announcement-banner__separator">✦</span>
+            </div>
+            <div className="announcement-banner__item" aria-hidden="true">
+              <span>{text}</span>
+              <span className="announcement-banner__separator">✦</span>
+            </div>
           </div>
         </div>
       </div>

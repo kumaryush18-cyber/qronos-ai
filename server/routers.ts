@@ -703,7 +703,15 @@ export const appRouter = router({
       return gift;
     }),
     createApiKey: verifiedDeveloperProcedure
-      .input(z.object({ label: apiKeyLabel, keyGroup: z.enum(["payg", "bundle", "token_plan", "tokens", "coding_plan"]).default("token_plan") }))
+      .input(
+        z.object({
+          label: apiKeyLabel,
+          keyGroup: z.enum(["payg", "bundle", "token_plan", "tokens", "coding_plan"]).default("token_plan"),
+          expiresAt: z.string().datetime().nullable().optional(),
+          spendLimitTokens: z.number().int().positive().nullable().optional(),
+          spendLimitNanos: z.number().int().positive().nullable().optional(),
+        })
+      )
       .mutation(async ({ ctx, input }) => {
         if (!ctx.user.isAdminSession && !ctx.user.discordVerifiedAt) {
           throw new TRPCError({
@@ -712,7 +720,11 @@ export const appRouter = router({
           });
         }
         try {
-          return await createApiKey(ctx.user.id, input.label, input.keyGroup);
+          return await createApiKey(ctx.user.id, input.label, input.keyGroup, {
+            expiresAt: input.expiresAt ? new Date(input.expiresAt) : null,
+            spendLimitTokens: input.spendLimitTokens,
+            spendLimitNanos: input.spendLimitNanos,
+          });
         } catch (error) {
           const message = error instanceof Error ? error.message : "Qronos AI could not create this key";
           throw new TRPCError({

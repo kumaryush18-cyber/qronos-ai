@@ -2250,6 +2250,9 @@ export function publicApiKey(key: ApiKeyRecord) {
     prefix: key.keyPrefix,
     keyGroup: normalizedGroup as "payg" | "bundle" | "token_plan" | "tokens" | "coding_plan",
     status: key.status,
+    expiresAt: (key as any).expiresAt ? new Date((key as any).expiresAt) : null,
+    spendLimitTokens: (key as any).spendLimitTokens != null ? Number((key as any).spendLimitTokens) : null,
+    spendLimitNanos: (key as any).spendLimitNanos != null ? Number((key as any).spendLimitNanos) : null,
     createdAt: key.createdAt,
     lastUsedAt: key.lastUsedAt,
     revokedAt: key.revokedAt,
@@ -2321,6 +2324,7 @@ export async function getDb(): Promise<ReturnType<typeof drizzle> | null> {
         void ensureUserTierColumn(_pool);
         void ensureModelConfigsMinTierColumn(_pool);
         void ensureApiKeysKeyGroupColumn(_pool);
+        void ensureApiKeysColumns(_pool);
         void ensureModelConfigsAccessColumns(_pool);
         void ensureUserCreditsEnabledColumn(_pool);
         void ensureCreditAccountsColumns(_pool);
@@ -2515,6 +2519,21 @@ async function ensureCreditAccountsColumns(pool: mysql.Pool) {
   } catch {}
   try {
     await pool.query("UPDATE credit_accounts SET paygBalanceNanos = 0 WHERE paygBalanceNanos IS NULL");
+  } catch {}
+}
+
+let _apiKeysColumnsEnsured = false;
+async function ensureApiKeysColumns(pool: mysql.Pool) {
+  if (_apiKeysColumnsEnsured) return;
+  _apiKeysColumnsEnsured = true;
+  try {
+    await pool.query("ALTER TABLE api_keys ADD COLUMN expiresAt TIMESTAMP NULL");
+  } catch {}
+  try {
+    await pool.query("ALTER TABLE api_keys ADD COLUMN spendLimitTokens BIGINT NULL");
+  } catch {}
+  try {
+    await pool.query("ALTER TABLE api_keys ADD COLUMN spendLimitNanos BIGINT NULL");
   } catch {}
 }
 
@@ -2855,30 +2874,39 @@ export async function getUserByOpenId(openId: string) {
 }
 
 export async function getUserByEmail(emailInput: string) {
-  const db = await getDb();
-  if (!db) return undefined;
   const email = normalizeEmail(emailInput);
-  const result = await db
-    .select({
-      id: users.id,
-      openId: users.openId,
-      name: users.name,
-      email: users.email,
-      loginMethod: users.loginMethod,
-      role: users.role,
-      tier: users.tier,
-      creditsEnabled: users.creditsEnabled,
-      createdAt: users.createdAt,
-      updatedAt: users.updatedAt,
-      lastSignedIn: users.lastSignedIn,
-      discordVerifiedAt: accountControls.discordVerifiedAt,
-      isSuspended: accountControls.isSuspended,
-    })
-    .from(users)
-    .leftJoin(accountControls, eq(users.id, accountControls.userId))
-    .where(eq(users.email, email))
-    .limit(1);
-  return result[0];
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const db = await getDb();
+    if (!db) return undefined;
+    try {
+      const result = await db
+        .select({
+          id: users.id,
+          openId: users.openId,
+          name: users.name,
+          email: users.email,
+          loginMethod: users.loginMethod,
+          role: users.role,
+          tier: users.tier,
+          creditsEnabled: users.creditsEnabled,
+          createdAt: users.createdAt,
+          updatedAt: users.updatedAt,
+          lastSignedIn: users.lastSignedIn,
+          discordVerifiedAt: accountControls.discordVerifiedAt,
+          isSuspended: accountControls.isSuspended,
+        })
+        .from(users)
+        .leftJoin(accountControls, eq(users.id, accountControls.userId))
+        .where(eq(users.email, email))
+        .limit(1);
+      return result[0];
+    } catch (err: any) {
+      if (attempt === 0 && (err?.code === "PROTOCOL_CONNECTION_LOST" || /connection lost/i.test(err?.message))) {
+        continue;
+      }
+      throw err;
+    }
+  }
 }
 
 export async function verifyAndAuthenticateEmail(emailInput: string, referralCode?: string) {
@@ -6282,10 +6310,34 @@ export async function resetDiscordVerification(userId: number) {
   return { reset: wasVerified };
 }
 
+export async function cleanupUserExpiredApiKeys(userId?: number, database?: any) {
+  const db = database ?? await getDb();
+  if (!db) return 0;
+  try {
+    const where = userId
+      ? and(eq(apiKeys.userId, userId), isNotNull(apiKeys.expiresAt), lte(apiKeys.expiresAt, new Date()))
+      : and(isNotNull(apiKeys.expiresAt), lte(apiKeys.expiresAt, new Date()));
+    const result = await db.delete(apiKeys).where(where);
+    const deletedCount = Number(result[0]?.affectedRows ?? 0);
+    if (deletedCount > 0) {
+      API_KEY_CACHE.clear();
+    }
+    return deletedCount;
+  } catch (err) {
+    console.warn("[API Keys] Error cleaning up expired keys:", err);
+    return 0;
+  }
+}
+
 export async function createApiKey(
   userId: number,
   label: string,
-  keyGroup: "payg" | "bundle" | "token_plan" | "tokens" | "coding_plan" = "payg"
+  keyGroup: "payg" | "bundle" | "token_plan" | "tokens" | "coding_plan" = "payg",
+  options?: {
+    expiresAt?: Date | string | null;
+    spendLimitTokens?: number | null;
+    spendLimitNanos?: number | null;
+  }
 ) {
   const db = await getDb();
   if (!db) throw new Error("Qronos AI database is unavailable");
@@ -6298,6 +6350,9 @@ export async function createApiKey(
   // Normalize bundle group to payg
   const normalizedKeyGroup = keyGroup === "bundle" ? "payg" : (keyGroup || "payg");
 
+  // Automatically delete any expired keys first so the user gets accurate active count
+  await cleanupUserExpiredApiKeys(userId, db);
+
   // Enforce max 10 active API keys per account
   const activeKeys = await db
     .select({ id: apiKeys.id })
@@ -6308,10 +6363,23 @@ export async function createApiKey(
     throw new Error("Maximum limit of 10 active API keys reached for this account. Please revoke or delete an existing key before creating a new one.");
   }
 
+  const parsedExpiresAt = options?.expiresAt ? new Date(options.expiresAt) : null;
+  const spendLimitTokens = options?.spendLimitTokens && options.spendLimitTokens > 0 ? options.spendLimitTokens : null;
+  const spendLimitNanos = options?.spendLimitNanos && options.spendLimitNanos > 0 ? options.spendLimitNanos : null;
+
   const secret = newPlaintextKey();
   const keyPrefix = `${secret.slice(0, 15)}…`;
   const keyHash = hashApiKey(secret);
-  await db.insert(apiKeys).values({ userId, label, keyPrefix, keyHash, keyGroup: normalizedKeyGroup });
+  await db.insert(apiKeys).values({
+    userId,
+    label,
+    keyPrefix,
+    keyHash,
+    keyGroup: normalizedKeyGroup,
+    expiresAt: parsedExpiresAt,
+    spendLimitTokens,
+    spendLimitNanos,
+  });
   const created = await db.select().from(apiKeys).where(eq(apiKeys.keyHash, keyHash)).limit(1);
   if (!created[0]) throw new Error("API key creation did not persist");
   return { key: secret, record: publicApiKey(created[0]) };
@@ -6320,6 +6388,8 @@ export async function createApiKey(
 export async function listApiKeys(userId: number) {
   const db = await getDb();
   if (!db) return [];
+  // Automatically purge any expired keys so user never sees expired keys
+  await cleanupUserExpiredApiKeys(userId, db);
   const keys = await db.select().from(apiKeys).where(eq(apiKeys.userId, userId)).orderBy(desc(apiKeys.createdAt));
   return keys.map(publicApiKey);
 }
@@ -6365,16 +6435,29 @@ export async function rotateApiKey(
 ) {
   const db = await getDb();
   let existingGroup: "payg" | "bundle" | "token_plan" | "tokens" | "coding_plan" = keyGroup === "bundle" ? "payg" : (keyGroup ?? "payg");
-  if (db && !keyGroup) {
+  let existingExpiresAt: Date | null = null;
+  let existingSpendLimitTokens: number | null = null;
+  let existingSpendLimitNanos: number | null = null;
+
+  if (db) {
     const existing = (await db.select().from(apiKeys).where(and(eq(apiKeys.id, apiKeyId), eq(apiKeys.userId, userId))).limit(1))[0];
     if (existing) {
-      const raw = (existing as any).keyGroup;
-      existingGroup = raw === "bundle" ? "payg" : (raw || "payg");
+      if (!keyGroup) {
+        const raw = (existing as any).keyGroup;
+        existingGroup = raw === "bundle" ? "payg" : (raw || "payg");
+      }
+      existingExpiresAt = existing.expiresAt ? new Date(existing.expiresAt) : null;
+      existingSpendLimitTokens = (existing as any).spendLimitTokens ?? null;
+      existingSpendLimitNanos = (existing as any).spendLimitNanos ?? null;
     }
   }
   const wasRevoked = await revokeApiKey(userId, apiKeyId);
   if (!wasRevoked) return null;
-  return createApiKey(userId, label, existingGroup);
+  return createApiKey(userId, label, existingGroup, {
+    expiresAt: existingExpiresAt,
+    spendLimitTokens: existingSpendLimitTokens,
+    spendLimitNanos: existingSpendLimitNanos,
+  });
 }
 
 interface ApiKeyCacheEntry {
@@ -6413,6 +6496,17 @@ export async function findActiveApiKey(plainTextKey: string, database?: ApiKeyLo
     .where(and(eq(apiKeys.keyHash, hash), eq(apiKeys.status, "active")))
     .limit(1);
   const found = rows[0]?.apiKey ?? null;
+
+  // If key has expired, automatically delete it from database and reject
+  if (found && (found as any).expiresAt && new Date((found as any).expiresAt).getTime() <= Date.now()) {
+    try {
+      await db.delete(apiKeys).where(eq(apiKeys.id, found.id));
+    } catch {}
+    if (!database) {
+      API_KEY_CACHE.delete(normalizedKey);
+    }
+    return null;
+  }
 
   if (!database) {
     // Keep cache bounded to 5,000 entries max to prevent memory leakage

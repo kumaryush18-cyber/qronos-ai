@@ -20,6 +20,7 @@ import {
   Check,
   CheckCircle2,
   Clipboard,
+  Clock,
   Code2,
   Coins,
   Copy,
@@ -28,6 +29,7 @@ import {
   ExternalLink,
   Flame,
   Gift,
+  Infinity as InfinityIcon,
   KeyRound,
   Loader2,
   LockKeyhole,
@@ -59,6 +61,7 @@ import { DashboardPricingSection } from "@/components/dashboard/DashboardPricing
 import { StarButton } from "@/components/StarButton";
 import { DiscordIcon } from "@/components/LoginWelcomeTour";
 import { openDiscordVerifyModal } from "@/components/DiscordVerifyModal";
+import { CreateApiKeyModal, NewApiKeyResult } from "@/components/CreateApiKeyModal";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { StarBorderCard } from "@/components/StarBorderCard";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
@@ -256,11 +259,6 @@ function KeySecret({ value, onDismiss }: { value: string; onDismiss: () => void 
   );
 }
 
-type NewApiKeyResult = {
-  key: string;
-  record: { id: number; label: string; prefix: string; keyGroup?: "payg" | "bundle" | "token_plan" | "tokens" | "coding_plan"; status: "active" | "revoked"; createdAt: Date };
-};
-
 function ApiKeyCreatedModal({
   data,
   onClose,
@@ -422,23 +420,22 @@ function SdkQuickStart({ apiKey }: { apiKey?: string }) {
 function KeyCreateForm({ onSuccess, activeCount = 0 }: { onSuccess: (value: NewApiKeyResult) => void; activeCount?: number }) {
   const { user } = useAuth();
   const isDiscordVerified = Boolean((user as any)?.discordVerifiedAt || (user as any)?.isAdminSession);
-  const emailLower = (user?.email ?? "").trim().toLowerCase();
-  const isWhitelistedUser = emailLower === "konchoor@gmail.com" || emailLower === "kumaryush18@gmail.com";
-  const creditsEnabled = isWhitelistedUser || Boolean((user as any)?.creditsEnabled);
   const isLimitReached = activeCount >= 10;
+  const [selectedPlan, setSelectedPlan] = useState<"token_plan" | "payg">("token_plan");
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
-  const [label, setLabel] = useState("");
-  const [keyGroup, setKeyGroup] = useState<"token_plan" | "payg">("token_plan");
-
-  const create = trpc.developer.createApiKey.useMutation({
-    onSuccess: (value) => {
-      onSuccess(value as unknown as NewApiKeyResult);
-      setLabel("");
-      const typeLabel = keyGroup === "token_plan" ? "Token Plan" : "PAYG";
-      toast.success(`New ${typeLabel} API key created`);
-    },
-    onError: (error) => toast.error(error.message),
-  });
+  const openCreateModal = (plan: "token_plan" | "payg") => {
+    if (!isDiscordVerified) {
+      openDiscordVerifyModal();
+      return;
+    }
+    if (isLimitReached) {
+      toast.error("Maximum limit of 10 active API keys reached. Please revoke or delete an existing key first.");
+      return;
+    }
+    setSelectedPlan(plan);
+    setIsModalOpen(true);
+  };
 
   if (!isDiscordVerified) {
     return (
@@ -481,155 +478,128 @@ function KeyCreateForm({ onSuccess, activeCount = 0 }: { onSuccess: (value: NewA
     );
   }
 
-  const submit = (event: FormEvent) => {
-    event.preventDefault();
-    if (isLimitReached) {
-      toast.error("Maximum limit of 10 active API keys reached. Please delete or revoke an existing key first.");
-      return;
-    }
-    create.mutate({ label, keyGroup });
-  };
-
   return (
-    <form
-      onSubmit={submit}
-      style={{
-        backgroundColor: "oklch(0.14 0 0)",
-        borderColor: "oklch(0.26 0 0)",
-        boxShadow: "0 25px 60px rgba(0,0,0,0.85), inset 0 1px 0 rgba(255,255,255,0.06)",
-      }}
-      className="rounded-3xl border p-5 sm:p-7 shadow-2xl mb-6 relative overflow-hidden"
-    >
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-5 border-b border-white/[0.08]">
-        <div>
-          <div className="flex items-center gap-2">
-            <KeyRound size={15} className="text-white" />
-            <span className="text-[10px] font-bold uppercase tracking-[.18em] font-mono text-zinc-400">
-              Credential Generator
-            </span>
+    <>
+      <CreateApiKeyModal
+        open={isModalOpen}
+        onOpenChange={setIsModalOpen}
+        initialKeyGroup={selectedPlan}
+        activeCount={activeCount}
+        onSuccess={onSuccess}
+      />
+
+      <section
+        style={{
+          backgroundColor: "oklch(0.14 0 0)",
+          borderColor: "oklch(0.26 0 0)",
+          boxShadow: "0 25px 60px rgba(0,0,0,0.85), inset 0 1px 0 rgba(255,255,255,0.06)",
+        }}
+        className="rounded-3xl border p-5 sm:p-7 shadow-2xl mb-6 relative overflow-hidden"
+      >
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-5 border-b border-white/[0.08]">
+          <div>
+            <div className="flex items-center gap-2">
+              <KeyRound size={15} className="text-white" />
+              <span className="text-[10px] font-bold uppercase tracking-[.18em] font-mono text-zinc-400">
+                Credential Generator
+              </span>
+            </div>
+            <h2 className="mt-1 text-xl sm:text-2xl font-extrabold text-white tracking-tight">
+              Generate New API Key
+            </h2>
+            <p className="mt-1 text-xs text-zinc-400">
+              Configure key name, expiration date with auto-delete, and quota limits.
+            </p>
           </div>
-          <h2 className="mt-1 text-xl sm:text-2xl font-extrabold text-white tracking-tight">
-            Generate New API Key
-          </h2>
+          <div className="flex items-center gap-2">
+            <Badge
+              className={
+                isLimitReached
+                  ? "border border-amber-500/40 bg-amber-500/15 text-amber-300 font-mono text-[10px]"
+                  : "border border-white/10 bg-white/[0.06] text-zinc-300 font-mono text-[10px]"
+              }
+            >
+              {activeCount} / 10 Active Keys
+            </Badge>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          <Badge
-            className={
-              isLimitReached
-                ? "border border-amber-500/40 bg-amber-500/15 text-amber-300 font-mono text-[10px]"
-                : "border border-white/10 bg-white/[0.06] text-zinc-300 font-mono text-[10px]"
-            }
-          >
-            {activeCount} / 10 Active Keys
-          </Badge>
-        </div>
-      </div>
 
-      {isLimitReached && (
-        <div className="mt-4 flex items-center gap-2.5 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3.5 text-xs text-amber-200 font-mono">
-          <AlertTriangle size={16} className="shrink-0 text-amber-400" />
-          <span>Active key limit reached. Revoke or delete an existing key before creating a new one.</span>
-        </div>
-      )}
+        {isLimitReached && (
+          <div className="mt-4 flex items-center gap-2.5 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3.5 text-xs text-amber-200 font-mono">
+            <AlertTriangle size={16} className="shrink-0 text-amber-400" />
+            <span>Active key limit reached. Revoke or delete an existing key before creating a new one.</span>
+          </div>
+        )}
 
-      {/* Plan Selector: Token Plan vs PAYG */}
-      <div className="mt-5">
-        <label className="text-xs font-semibold text-zinc-300 block mb-2 font-mono">
-          Select Key Quota Routing Plan
-        </label>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {/* Token Plan */}
-          <button
-            type="button"
-            onClick={() => setKeyGroup("token_plan")}
-            style={{
-              backgroundColor: keyGroup === "token_plan" ? "oklch(0.18 0 0)" : "oklch(0.14 0 0)",
-              borderColor: keyGroup === "token_plan" ? "oklch(0.5 0 0)" : "oklch(0.26 0 0)",
-            }}
-            className={`flex flex-col items-start rounded-2xl border p-4 text-left transition-all cursor-pointer relative overflow-hidden group ${
-              keyGroup === "token_plan"
-                ? "ring-1 ring-white/30 shadow-[0_0_25px_rgba(255,255,255,0.06)]"
-                : "hover:border-white/20"
-            }`}
-          >
-            <div className="flex w-full items-center justify-between">
-              <span className="text-xs font-bold text-white flex items-center gap-2 font-mono">
-                <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-white/[0.08] border border-white/10">
-                  <Code2 size={13} className="text-white" />
+        {/* Plan Cards to trigger modal */}
+        <div className="mt-5">
+          <label className="text-xs font-semibold text-zinc-300 block mb-2.5 font-mono">
+            Click to configure &amp; create key:
+          </label>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+            {/* Token Plan Card */}
+            <button
+              type="button"
+              onClick={() => openCreateModal("token_plan")}
+              style={{
+                backgroundColor: "oklch(0.18 0 0)",
+                borderColor: "oklch(0.26 0 0)",
+              }}
+              className="flex flex-col items-start rounded-2xl border p-4 sm:p-5 text-left transition-all cursor-pointer relative overflow-hidden group hover:border-emerald-500/50 hover:bg-emerald-500/[0.04] hover:shadow-[0_0_25px_rgba(16,185,129,0.1)]"
+            >
+              <div className="flex w-full items-center justify-between">
+                <span className="text-xs sm:text-sm font-bold text-white flex items-center gap-2 font-mono">
+                  <span className="flex h-7 w-7 items-center justify-center rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400">
+                    <Code2 size={14} />
+                  </span>
+                  <span>Token Plan Key</span>
                 </span>
-                <span>Token Plan Key</span>
-              </span>
-              <Badge className="border-0 bg-white/[0.08] text-white font-mono text-[9px]">
-                10M / $1
-              </Badge>
-            </div>
-            <p className="mt-2 text-[11px] leading-relaxed text-zinc-400">
-              Deducts strictly from Token Plan quota (Claude Opus 5.5, GLM-5.3, DeepSeek).
-            </p>
-          </button>
+                <Badge className="border-0 bg-white/[0.08] text-white font-mono text-[9px]">
+                  10M / $1
+                </Badge>
+              </div>
+              <p className="mt-2.5 text-[11px] leading-relaxed text-zinc-400">
+                Deducts strictly from Token Plan quota (Claude Opus 5.5, GLM-5.3, DeepSeek). Set custom token limit or leave unlimited.
+              </p>
+              <div className="mt-4 flex items-center gap-1.5 text-xs font-mono font-bold text-emerald-400 group-hover:translate-x-1 transition-transform">
+                <Plus size={13} />
+                <span>Configure &amp; Generate Token Key →</span>
+              </div>
+            </button>
 
-          {/* PAYG */}
-          <button
-            type="button"
-            onClick={() => setKeyGroup("payg")}
-            style={{
-              backgroundColor: keyGroup === "payg" ? "oklch(0.18 0 0)" : "oklch(0.14 0 0)",
-              borderColor: keyGroup === "payg" ? "oklch(0.5 0 0)" : "oklch(0.26 0 0)",
-            }}
-            className={`flex flex-col items-start rounded-2xl border p-4 text-left transition-all cursor-pointer relative overflow-hidden group ${
-              keyGroup === "payg"
-                ? "ring-1 ring-white/30 shadow-[0_0_25px_rgba(255,255,255,0.06)]"
-                : "hover:border-white/20"
-            }`}
-          >
-            <div className="flex w-full items-center justify-between">
-              <span className="text-xs font-bold text-white flex items-center gap-2 font-mono">
-                <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-white/[0.08] border border-white/10">
-                  <Zap size={13} className="text-white" />
+            {/* PAYG Card */}
+            <button
+              type="button"
+              onClick={() => openCreateModal("payg")}
+              style={{
+                backgroundColor: "oklch(0.18 0 0)",
+                borderColor: "oklch(0.26 0 0)",
+              }}
+              className="flex flex-col items-start rounded-2xl border p-4 sm:p-5 text-left transition-all cursor-pointer relative overflow-hidden group hover:border-amber-500/50 hover:bg-amber-500/[0.04] hover:shadow-[0_0_25px_rgba(245,158,11,0.1)]"
+            >
+              <div className="flex w-full items-center justify-between">
+                <span className="text-xs sm:text-sm font-bold text-white flex items-center gap-2 font-mono">
+                  <span className="flex h-7 w-7 items-center justify-center rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-400">
+                    <Zap size={14} />
+                  </span>
+                  <span>PAYG Key</span>
                 </span>
-                <span>PAYG Key</span>
-              </span>
-              <Badge className="border-0 bg-white/[0.08] text-white font-mono text-[9px]">
-                +100% Match
-              </Badge>
-            </div>
-            <p className="mt-2 text-[11px] leading-relaxed text-zinc-400">
-              Deducts strictly from Pay-As-You-Go compute balance at official zero-markup rates.
-            </p>
-          </button>
+                <Badge className="border-0 bg-white/[0.08] text-white font-mono text-[9px]">
+                  +100% Match
+                </Badge>
+              </div>
+              <p className="mt-2.5 text-[11px] leading-relaxed text-zinc-400">
+                Deducts strictly from Pay-As-You-Go compute balance at official zero-markup rates. Set dollar spend limit or leave unlimited.
+              </p>
+              <div className="mt-4 flex items-center gap-1.5 text-xs font-mono font-bold text-amber-400 group-hover:translate-x-1 transition-transform">
+                <Plus size={13} />
+                <span>Configure &amp; Generate PAYG Key →</span>
+              </div>
+            </button>
+          </div>
         </div>
-      </div>
-
-      {/* Label and Submit Action */}
-      <div className="mt-5">
-        <Label htmlFor="key-label" className="text-xs font-semibold text-zinc-300 font-mono">
-          Descriptive Key Label
-        </Label>
-        <div className="mt-2 flex flex-col sm:flex-row gap-2.5">
-          <Input
-            id="key-label"
-            value={label}
-            onChange={(event) => setLabel(event.target.value)}
-            placeholder={
-              isLimitReached
-                ? "Revoke or delete an existing key first"
-                : "e.g. cursor-ide-production, claude-code-cli, backend-worker"
-            }
-            maxLength={100}
-            disabled={isLimitReached}
-            className="h-11 border-white/10 bg-black/60 text-white placeholder:text-zinc-500 font-mono text-xs disabled:opacity-50 focus:border-white/30"
-          />
-          <Button
-            type="submit"
-            disabled={!label.trim() || create.isPending || isLimitReached}
-            className="h-11 shrink-0 bg-white text-black hover:bg-zinc-200 font-mono font-bold text-xs px-6 cursor-pointer shadow-lg disabled:opacity-40"
-          >
-            {create.isPending ? <Loader2 className="animate-spin mr-1.5" size={15} /> : <Plus className="mr-1.5" size={15} />}
-            Generate Key
-          </Button>
-        </div>
-      </div>
-    </form>
+      </section>
+    </>
   );
 }
 
@@ -770,6 +740,32 @@ function ApiKeyList() {
                           >
                             {key.status === "active" ? "● Active" : "Revoked"}
                           </Badge>
+
+                          {/* Quota Limit Badge */}
+                          {(key as any).spendLimitTokens ? (
+                            <Badge className="border border-emerald-500/30 bg-emerald-500/10 text-emerald-300 font-mono text-[9px] px-2 py-0.5 flex items-center gap-1">
+                              <Coins size={9} /> Max: {(((key as any).spendLimitTokens) / 1_000_000).toFixed(0)}M tokens
+                            </Badge>
+                          ) : (key as any).spendLimitNanos ? (
+                            <Badge className="border border-amber-500/30 bg-amber-500/10 text-amber-300 font-mono text-[9px] px-2 py-0.5 flex items-center gap-1">
+                              <Coins size={9} /> Max: ${(((key as any).spendLimitNanos) / 1_000_000_000).toFixed(2)}
+                            </Badge>
+                          ) : (
+                            <Badge className="border border-white/10 bg-white/[0.04] text-zinc-400 font-mono text-[9px] px-2 py-0.5 flex items-center gap-1">
+                              <InfinityIcon size={9} /> Unlimited
+                            </Badge>
+                          )}
+
+                          {/* Expiration Date Badge */}
+                          {(key as any).expiresAt ? (
+                            <Badge className="border border-amber-400/30 bg-amber-400/15 text-amber-300 font-mono text-[9px] px-2 py-0.5 flex items-center gap-1">
+                              <Clock size={9} /> Expires: {new Date((key as any).expiresAt).toLocaleDateString()}
+                            </Badge>
+                          ) : (
+                            <Badge className="border border-white/10 bg-white/[0.04] text-zinc-400 font-mono text-[9px] px-2 py-0.5 flex items-center gap-1">
+                              <ShieldCheck size={9} className="text-emerald-400" /> Never expires
+                            </Badge>
+                          )}
                         </div>
 
                         <div className="mt-2 flex items-center gap-2.5 text-xs font-mono text-zinc-400 flex-wrap">
@@ -1237,31 +1233,37 @@ function PlatformUsageMetrics() {
         <div className="pointer-events-none absolute h-40 w-40 rounded-full border border-white/[0.06] animate-ping opacity-25" />
         <div className="pointer-events-none absolute h-48 w-48 rounded-full border border-white/[0.04] animate-pulse opacity-20" />
 
-        <div
-          style={{
-            backgroundColor: "oklch(0.18 0 0)",
-            borderColor: "oklch(0.26 0 0)",
-          }}
-          className="relative z-10 w-full rounded-2xl border p-6 text-center shadow-2xl overflow-hidden"
+        <StarBorderCard
+          lightWidth={180}
+          duration={5}
+          lightColor="rgba(255, 255, 255, 0.95)"
+          className="relative z-10 w-full rounded-2xl shadow-2xl"
         >
-          <div className="absolute inset-x-0 top-0 h-[1px] bg-gradient-to-r from-transparent via-white/30 to-transparent" />
-          <div className="text-[10px] font-mono uppercase tracking-[.2em] text-zinc-400 font-semibold">
-            Total Tokens Processed
+          <div
+            style={{
+              backgroundColor: "oklch(0.18 0 0)",
+            }}
+            className="p-6 text-center overflow-hidden rounded-[15px] relative"
+          >
+            <div className="absolute inset-x-0 top-0 h-[1px] bg-gradient-to-r from-transparent via-white/30 to-transparent" />
+            <div className="text-[10px] font-mono uppercase tracking-[.2em] text-zinc-400 font-semibold">
+              Total Tokens Processed
+            </div>
+            <div className="text-3xl sm:text-4xl font-extrabold font-mono tracking-tight text-white mt-2">
+              {metrics.isLoading ? (
+                <Loader2 className="inline-block animate-spin text-zinc-400" size={28} />
+              ) : (
+                new Intl.NumberFormat().format(totalTokens)
+              )}
+            </div>
+            <div className="text-[11px] text-zinc-400 mt-2.5 font-mono flex items-center justify-center gap-1.5">
+              <RefreshCw size={11} className={metrics.isFetching ? "animate-spin text-white" : "text-zinc-500"} />
+              <span>
+                {metrics.isFetching ? "Synchronizing mesh..." : refreshedAt ? `Updated at ${refreshedAt}` : "Connected"}
+              </span>
+            </div>
           </div>
-          <div className="text-3xl sm:text-4xl font-extrabold font-mono tracking-tight text-white mt-2">
-            {metrics.isLoading ? (
-              <Loader2 className="inline-block animate-spin text-zinc-400" size={28} />
-            ) : (
-              new Intl.NumberFormat().format(totalTokens)
-            )}
-          </div>
-          <div className="text-[11px] text-zinc-400 mt-2.5 font-mono flex items-center justify-center gap-1.5">
-            <RefreshCw size={11} className={metrics.isFetching ? "animate-spin text-white" : "text-zinc-500"} />
-            <span>
-              {metrics.isFetching ? "Synchronizing mesh..." : refreshedAt ? `Updated at ${refreshedAt}` : "Connected"}
-            </span>
-          </div>
-        </div>
+        </StarBorderCard>
       </div>
 
       <div className="pt-4 border-t border-white/[0.08] flex items-center justify-between text-[11px] font-mono text-zinc-400">
@@ -1741,14 +1743,21 @@ function Overview({
                 <span className="text-[10px] text-zinc-500 font-mono">Successful calls</span>
               </div>
 
-              <div
-                style={{ backgroundColor: "oklch(0.18 0 0)", borderColor: "oklch(0.26 0 0)" }}
-                className="rounded-xl border p-3.5"
+              <StarBorderCard
+                lightWidth={130}
+                duration={5}
+                lightColor="rgba(255, 255, 255, 0.95)"
+                className="rounded-xl shadow-lg"
               >
-                <p className="text-[10px] uppercase font-bold text-zinc-400 tracking-wider font-mono">Tokens Processed</p>
-                <p className="mt-1 text-xl font-mono font-bold text-white">{(usage.data?.totalTokens ?? 0).toLocaleString()}</p>
-                <span className="text-[10px] text-zinc-500 font-mono">Input + output</span>
-              </div>
+                <div
+                  style={{ backgroundColor: "oklch(0.18 0 0)" }}
+                  className="rounded-[15px] p-3.5 h-full w-full"
+                >
+                  <p className="text-[10px] uppercase font-bold text-zinc-400 tracking-wider font-mono">Tokens Processed</p>
+                  <p className="mt-1 text-xl font-mono font-bold text-white">{(usage.data?.totalTokens ?? 0).toLocaleString()}</p>
+                  <span className="text-[10px] text-zinc-500 font-mono">Input + output</span>
+                </div>
+              </StarBorderCard>
 
               <div
                 style={{ backgroundColor: "oklch(0.18 0 0)", borderColor: "oklch(0.26 0 0)" }}

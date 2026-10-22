@@ -63,10 +63,16 @@ export function StarButton({
   const btnRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
-    if (btnRef.current) {
-      const el = btnRef.current;
-      el.style.setProperty("--path", `path('M 0 0 H ${el.offsetWidth} V ${el.offsetHeight} H 0 V 0')`);
-    }
+    const updatePath = () => {
+      if (btnRef.current) {
+        const el = btnRef.current;
+        el.style.setProperty("--path", `path('M 0 0 H ${el.offsetWidth} V ${el.offsetHeight} H 0 V 0')`);
+      }
+    };
+    updatePath();
+    const observer = new ResizeObserver(updatePath);
+    if (btnRef.current) observer.observe(btnRef.current);
+    return () => observer.disconnect();
   }, []);
 
   return (
