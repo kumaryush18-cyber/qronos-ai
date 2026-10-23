@@ -10890,6 +10890,102 @@ export async function claimTwitterReward(input: {
   });
 }
 
+export async function verifyAndClaimTwitterRewardViaUrl(userId: number, tweetUrl: string) {
+  if (!tweetUrl || typeof tweetUrl !== "string") {
+    throw new Error("Please provide a valid 𝕏 / Twitter post URL.");
+  }
+
+  const trimmed = tweetUrl.trim();
+  const tweetIdMatch =
+    trimmed.match(/(?:twitter\.com|x\.com)\/(?:#!\/)?(?:i\/web\/status|i\/status|[^/?#]+\/status)\/(\d+)/i) ||
+    trimmed.match(/\bstatus\/(\d+)\b/i) ||
+    (trimmed.match(/^\d{10,25}$/) ? [null, trimmed] : null);
+
+  if (!tweetIdMatch || !tweetIdMatch[1]) {
+    throw new Error("Invalid link format. Please paste a full 𝕏 post link (e.g. https://x.com/username/status/1234567890).");
+  }
+
+  const tweetId = tweetIdMatch[1];
+  const userMatch = trimmed.match(/(?:twitter\.com|x\.com)\/([^/?#]+)\/status\//i);
+  const username = userMatch && !["i", "intent"].includes(userMatch[1].toLowerCase()) ? userMatch[1] : "x_user";
+
+  // Check 12-hour cooldown
+  const status = await getUserTwitterRewardStatus(userId);
+  if (!status.canPost) {
+    const mins = Math.ceil(status.remainingCooldownSeconds / 60);
+    throw new Error(`12-hour reward cooldown active. Next reward available in ${mins} minutes.`);
+  }
+
+  // Prevent duplicate claims
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+
+  const [existing] = await db
+    .select({ id: twitterShareRewards.id, userId: twitterShareRewards.userId })
+    .from(twitterShareRewards)
+    .where(eq(twitterShareRewards.tweetId, tweetId))
+    .limit(1);
+
+  if (existing) {
+    throw new Error("This 𝕏 post has already been claimed for rewards. Each post can only be rewarded once.");
+  }
+
+  // Verify post via public Twitter oEmbed endpoint
+  const canonicalUrl = `https://twitter.com/i/status/${tweetId}`;
+  let tweetTextHtml = "";
+  let authorName = username;
+
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 6000);
+    const oembedRes = await fetch(`https://publish.twitter.com/oembed?url=${encodeURIComponent(canonicalUrl)}`, {
+      signal: controller.signal,
+      headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" },
+    });
+    clearTimeout(timeoutId);
+
+    if (oembedRes.status === 404) {
+      throw new Error("Post not found on 𝕏. Please ensure your post is public and the link is correct.");
+    }
+
+    if (oembedRes.ok) {
+      const oembedData: any = await oembedRes.json();
+      tweetTextHtml = String(oembedData?.html || "");
+      authorName = oembedData?.author_name || authorName;
+
+      const lowerHtml = tweetTextHtml.toLowerCase();
+      const refObj = await getOrCreateReferralCode(userId);
+      const userRefCode = (refObj.code || "").toLowerCase();
+
+      const mentionsQronos =
+        lowerHtml.includes("@qronosai") ||
+        lowerHtml.includes("qronos.me") ||
+        lowerHtml.includes("qronos ai") ||
+        lowerHtml.includes("qronos");
+      const mentionsReferral = Boolean(userRefCode && lowerHtml.includes(userRefCode));
+
+      if (!mentionsQronos && !mentionsReferral) {
+        throw new Error("Your 𝕏 post must mention @QronosAI or include your referral link (qronos.me) to qualify for rewards.");
+      }
+    }
+  } catch (err: any) {
+    if (err.message && (err.message.includes("Post not found") || err.message.includes("must mention @QronosAI"))) {
+      throw err;
+    }
+    console.warn(`[TwitterVerify] oEmbed note for tweetId ${tweetId}:`, err?.message || err);
+  }
+
+  // Claim reward & activate 12-hour balance
+  return await claimTwitterReward({
+    userId,
+    twitterUserId: tweetId,
+    twitterUsername: authorName,
+    tweetId,
+    tweetText: tweetTextHtml || trimmed,
+    slotIndex: 0,
+  });
+}
+
 export async function listTwitterRewardsAdminOverview() {
   const db = await getDb();
   if (!db) {

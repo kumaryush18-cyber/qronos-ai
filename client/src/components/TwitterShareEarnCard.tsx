@@ -3,21 +3,17 @@ import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import {
   Sparkles,
   Clock,
-  CheckCircle2,
-  AlertCircle,
   ExternalLink,
-  Coins,
-  Wallet,
-  ArrowRight,
-  Eye,
-  ChevronDown,
-  ChevronUp,
+  ClipboardPaste,
+  CheckCircle2,
+  HelpCircle,
+  Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
-import { format } from "date-fns";
 
 export function TwitterXIcon({ className = "h-4 w-4" }: { className?: string }) {
   return (
@@ -31,52 +27,32 @@ export function TwitterShareEarnCard() {
   const { user } = useAuth();
   const { data: status, isLoading, refetch } = trpc.developer.twitterRewardStatus.useQuery(undefined, {
     enabled: Boolean(user),
-    refetchInterval: 10_000,
+    refetchInterval: 15_000,
   });
 
+  const [tweetUrl, setTweetUrl] = useState("");
   const [countdownText, setCountdownText] = useState("12:00:00");
   const [activeGrantCountdown, setActiveGrantCountdown] = useState("12:00:00");
-  const [showPreview, setShowPreview] = useState(false);
+  const [showGuide, setShowGuide] = useState(false);
 
-  // Check URL query parameters for feedback after returning from Twitter OAuth
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const urlParams = new URLSearchParams(window.location.search);
-    const rewardStatus = urlParams.get("twitter_reward");
-
-    if (rewardStatus === "success") {
-      const tokensM = urlParams.get("tokens_m");
-      const paygUsd = urlParams.get("payg_usd");
-
-      let msg = "🎉 Verified X post published!";
-      if (tokensM && Number(tokensM) > 0) {
-        msg += ` +${tokensM}M Tokens loaded!`;
+  const verifyMutation = trpc.developer.verifyTwitterShare.useMutation({
+    onSuccess: (data) => {
+      let msg = "🎉 𝕏 post verified!";
+      if (data.tokensMillion && data.tokensMillion > 0) {
+        msg += ` +${data.tokensMillion}M Tokens loaded!`;
       }
-      if (paygUsd && Number(paygUsd) > 0) {
-        msg += ` +$${paygUsd} PAYG added!`;
+      if (data.paygDollars && data.paygDollars > 0) {
+        msg += ` +$${data.paygDollars} PAYG added!`;
       }
       msg += " Valid for the next 12 hours.";
       toast.success(msg);
-
-      window.history.replaceState({}, document.title, window.location.pathname);
+      setTweetUrl("");
       refetch();
-    } else if (rewardStatus === "cooldown") {
-      const rem = urlParams.get("remaining_min") || "a few";
-      toast.info(`12-hour cooldown active. Next reward available in ${rem} minutes.`);
-      window.history.replaceState({}, document.title, window.location.pathname);
-    } else if (rewardStatus === "declined") {
-      toast.error("Twitter authorization was cancelled.");
-      window.history.replaceState({}, document.title, window.location.pathname);
-    } else if (rewardStatus === "error") {
-      const errMsg = urlParams.get("message") || "Failed to post on X";
-      if (errMsg.includes("missing_write_permissions") || errMsg.includes("reconnect")) {
-        toast.error("Write permission missing: please disconnect Qronos AI in Twitter (X) Settings -> Connected Apps, then try again.");
-      } else {
-        toast.error(`Reward error: ${errMsg.replace(/_/g, " ")}`);
-      }
-      window.history.replaceState({}, document.title, window.location.pathname);
-    }
-  }, [refetch]);
+    },
+    onError: (err) => {
+      toast.error(err.message || "Failed to verify 𝕏 post. Please check the URL.");
+    },
+  });
 
   // Live countdown timer for 12-hour cooldown
   useEffect(() => {
@@ -144,20 +120,45 @@ export function TwitterShareEarnCard() {
   const paygDollars = status?.config?.paygGrantDollars ?? 0;
   const canPost = Boolean(status?.canPost ?? true);
   const activeReward = status?.activeReward ?? null;
-  const previewTweet = status?.previewTweet ?? null;
-  const slotTitle = status?.slotTitle ?? null;
+  const previewTweet = status?.previewTweet ?? "Wholesale AI compute on @QronosAI! https://qronos.me";
 
   const rewardLabel = [
-    tokenMillion > 0 ? `+${tokenMillion}M Free Tokens` : "",
+    tokenMillion > 0 ? `+${tokenMillion}M Tokens` : "",
     paygDollars > 0 ? `+$${paygDollars.toFixed(2)} PAYG` : "",
   ]
     .filter(Boolean)
     .join(" & ") || "+30M Tokens";
 
+  const handleOpenTweetIntent = () => {
+    const url = `https://twitter.com/intent/tweet?text=${encodeURIComponent(previewTweet)}`;
+    window.open(url, "_blank", "noopener,noreferrer");
+  };
+
+  const handlePasteClipboard = async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      if (text) {
+        setTweetUrl(text.trim());
+        toast.info("Pasted link from clipboard");
+      }
+    } catch {
+      toast.error("Please paste your link manually into the box");
+    }
+  };
+
+  const handleVerify = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!tweetUrl.trim()) {
+      toast.error("Please paste your 𝕏 post URL first");
+      return;
+    }
+    verifyMutation.mutate({ tweetUrl: tweetUrl.trim() });
+  };
+
   return (
-    <div className="rounded-2xl sm:rounded-3xl border border-white/10 bg-gradient-to-b from-[#111318] to-[#0a0b0e] p-5 sm:p-6 space-y-4 shadow-xl relative overflow-hidden my-4">
-      {/* Background Accent glow */}
-      <div className="absolute top-0 right-0 w-72 h-72 bg-emerald-500/[0.04] rounded-full blur-3xl pointer-events-none" />
+    <div className="rounded-2xl sm:rounded-3xl border border-white/10 bg-[#0e1015] p-5 sm:p-6 space-y-4 shadow-xl relative overflow-hidden my-4">
+      {/* Top ambient glow */}
+      <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-emerald-500/[0.04] blur-3xl" />
 
       {/* Header bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 relative z-10">
@@ -167,106 +168,123 @@ export function TwitterShareEarnCard() {
           </div>
           <div>
             <div className="flex items-center gap-2 flex-wrap">
-              <h3 className="text-base sm:text-lg font-bold text-white font-mono tracking-tight flex items-center gap-2">
+              <h3 className="text-base sm:text-lg font-bold text-white font-mono tracking-tight">
                 Share on 𝕏 to Earn
               </h3>
               <Badge className="bg-emerald-500/10 text-emerald-400 border-emerald-500/30 text-[10px] font-mono font-bold">
-                {rewardLabel}
+                {rewardLabel} (12h)
               </Badge>
             </div>
             <p className="text-xs text-zinc-400 mt-0.5">
-              Post about Qronos on X and get instant temporary compute. Renewable every 12 hours.
+              Post about Qronos with your link. Claim instant compute valid for 12 hours (renewable every 12h).
             </p>
           </div>
         </div>
 
-        {/* Active grant indicator if running */}
+        {/* Active grant indicator if currently running */}
         {activeReward && (
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl border border-emerald-500/20 bg-emerald-500/[0.06] text-xs font-mono self-start sm:self-center">
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl border border-emerald-500/25 bg-emerald-500/[0.08] text-xs font-mono self-start sm:self-center">
             <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
             <span className="text-emerald-300 font-bold">
-              Active Grant Expires: {activeGrantCountdown}
+              Active Grant: {activeGrantCountdown} left
             </span>
           </div>
         )}
       </div>
 
-      {/* Main Action area */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pt-1 relative z-10 border-t border-white/5">
-        <div className="space-y-1">
-          <div className="text-xs text-zinc-300 font-mono">
-            <strong>12-Hour Ephemeral Balance:</strong> Granted tokens are loaded into your balance for 12 hours. Unused balance vanishes after 12h and does not stack on renewal.
+      {/* Two-step Clean Action Box */}
+      <div className="rounded-2xl border border-white/[0.08] bg-black/40 p-4 sm:p-5 space-y-4 relative z-10">
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-center">
+          {/* Step 1: Open Tweet intent */}
+          <div className="md:col-span-4">
+            <Button
+              type="button"
+              onClick={handleOpenTweetIntent}
+              className="w-full h-11 bg-white hover:bg-zinc-200 text-black font-mono font-bold text-xs gap-2 rounded-xl shadow-lg transition-all cursor-pointer"
+            >
+              <TwitterXIcon className="h-4 w-4" />
+              <span>1. Click to Post on 𝕏</span>
+              <ExternalLink size={13} className="text-zinc-600" />
+            </Button>
           </div>
-          {status && status.totalPostsCount > 0 && (
-            <div className="text-[11px] text-zinc-500 font-mono">
-              You have completed <strong>{status.totalPostsCount}</strong> verified 𝕏 reward {status.totalPostsCount === 1 ? "post" : "posts"}.
+
+          {/* Step 2: Paste URL & Verify */}
+          <form onSubmit={handleVerify} className="md:col-span-8 flex flex-col sm:flex-row gap-2">
+            <div className="relative flex-1">
+              <Input
+                type="url"
+                value={tweetUrl}
+                onChange={(e) => setTweetUrl(e.target.value)}
+                placeholder="2. Paste your 𝕏 post URL (e.g. https://x.com/username/status/...)"
+                className="h-11 bg-white/[0.04] border-white/10 text-xs font-mono text-white placeholder:text-zinc-500 pr-10 rounded-xl focus:border-emerald-500/50"
+              />
+              <button
+                type="button"
+                onClick={handlePasteClipboard}
+                title="Paste from clipboard"
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-white p-1 transition-colors"
+              >
+                <ClipboardPaste size={15} />
+              </button>
             </div>
-          )}
+
+            {canPost ? (
+              <Button
+                type="submit"
+                disabled={verifyMutation.isPending || !tweetUrl.trim()}
+                className="h-11 px-5 bg-emerald-500 hover:bg-emerald-400 text-black font-mono font-bold text-xs gap-1.5 rounded-xl shrink-0 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shadow-[0_0_20px_rgba(16,185,129,0.2)]"
+              >
+                {verifyMutation.isPending ? (
+                  <>
+                    <Loader2 size={14} className="animate-spin" />
+                    <span>Verifying...</span>
+                  </>
+                ) : (
+                  <>
+                    <Sparkles size={14} />
+                    <span>Verify & Claim</span>
+                  </>
+                )}
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                disabled
+                className="h-11 px-4 bg-white/5 border border-white/10 text-zinc-400 font-mono text-xs gap-2 rounded-xl cursor-not-allowed shrink-0"
+              >
+                <Clock size={13} className="text-amber-400" />
+                <span>Next in: {countdownText}</span>
+              </Button>
+            )}
+          </form>
         </div>
 
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 shrink-0">
-          {previewTweet && (
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() => setShowPreview(!showPreview)}
-              className="h-10 px-3 text-xs font-mono text-zinc-400 hover:text-white hover:bg-white/5 gap-1"
-            >
-              <Eye size={13} />
-              {showPreview ? "Hide Preview" : "Preview 300c Post"}
-              {showPreview ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
-            </Button>
-          )}
-
-          {!user ? (
-            <a href="/signin?redirect=/dashboard" className="inline-flex">
-              <Button
-                className="h-10 px-5 bg-white hover:bg-zinc-200 text-black font-mono font-bold text-xs gap-2 rounded-xl shadow-lg shadow-white/10 transition-all cursor-pointer w-full"
-              >
-                <TwitterXIcon className="h-4 w-4" />
-                Sign in to Share on 𝕏 &amp; Earn
-              </Button>
-            </a>
-          ) : canPost ? (
-            <a href="/api/auth/twitter" className="inline-flex">
-              <Button
-                className="h-10 px-5 bg-white hover:bg-zinc-200 text-black font-mono font-bold text-xs gap-2 rounded-xl shadow-lg shadow-white/10 transition-all cursor-pointer w-full"
-              >
-                <TwitterXIcon className="h-4 w-4" />
-                Post on 𝕏 &amp; Claim Reward
-              </Button>
-            </a>
-          ) : (
-            <Button
-              disabled
-              className="h-10 px-4 bg-white/5 border border-white/10 text-zinc-400 font-mono text-xs gap-2 rounded-xl cursor-not-allowed"
-            >
-              <Clock size={13} className="text-amber-400" />
-              <span>Next Post in: {countdownText}</span>
-            </Button>
-          )}
-        </div>
-      </div>
-
-      {/* Collapsible Tweet Preview */}
-      {showPreview && previewTweet && (
-        <div className="mt-3 p-3.5 rounded-xl border border-white/10 bg-black/60 space-y-2 relative z-10">
-          <div className="flex items-center justify-between text-[11px] font-mono text-zinc-400">
-            <span>
-              Theme Focus: <strong className="text-zinc-200">{slotTitle || "Wholesale Pricing"}</strong>
-            </span>
-            <span className="text-emerald-400 font-bold">
-              {previewTweet.length} / 300 chars
-            </span>
+        {/* Helper Guide: How to copy URL */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2 border-t border-white/5 text-[11px] font-mono text-zinc-400">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="text-zinc-500">💡 How to copy link:</span>
+            <span>On your 𝕏 post, click the <strong>Share icon (📤)</strong> → click <strong>"Copy link"</strong> → paste it above.</span>
           </div>
-          <p className="text-xs font-mono text-zinc-200 leading-relaxed bg-white/[0.03] p-2.5 rounded-lg border border-white/5 select-all">
-            {previewTweet}
-          </p>
-          <p className="text-[10px] font-mono text-zinc-500">
-            * Your unique referral code is automatically included. Any developer who signs up via your post awards you 25% lifetime commission!
-          </p>
+
+          <button
+            type="button"
+            onClick={() => setShowGuide(!showGuide)}
+            className="text-[10px] text-zinc-500 hover:text-zinc-300 underline underline-offset-2 self-start sm:self-auto cursor-pointer"
+          >
+            {showGuide ? "Hide tweet preview" : "View post text"}
+          </button>
         </div>
-      )}
+
+        {/* Optional Collapsible preview */}
+        {showGuide && (
+          <div className="p-3 rounded-xl border border-white/5 bg-black/60 text-xs font-mono space-y-1.5">
+            <span className="text-[10px] text-zinc-500 uppercase tracking-wider block">Pre-filled Post Content</span>
+            <p className="text-zinc-300 bg-white/[0.03] p-2 rounded border border-white/5 select-all">
+              {previewTweet}
+            </p>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

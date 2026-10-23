@@ -2189,13 +2189,8 @@ export default function DeveloperDashboard({ section = "overview", modelId }: { 
       </>
     ) : section === "profile" ? (
       <Profile />
-    ) : section === "referrals" ? (
+    ) : section === "referrals" || section === "x-rewards" ? (
       <ReferralWorkspace />
-    ) : section === "x-rewards" ? (
-      <div className="space-y-6">
-        <TwitterShareEarnCard />
-        <ReferralWorkspace />
-      </div>
     ) : (
       <Overview user={user} loading={loading} usage={usage} videoReady={videoReady} />
     );

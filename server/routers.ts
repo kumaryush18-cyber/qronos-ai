@@ -173,6 +173,8 @@ import {
   listTwitterRewardsAdminOverview,
   formatTweetExact300,
   DEFAULT_TWITTER_REWARD_SLOTS,
+  verifyAndClaimTwitterRewardViaUrl,
+  getOrCreateReferralCode,
 } from "./db";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { invalidateSessionAuthCache, sdk } from "./_core/sdk";
@@ -750,6 +752,22 @@ export const appRouter = router({
         slotFocus: selectedSlot.focus,
       };
     }),
+    verifyTwitterShare: protectedProcedure
+      .input(
+        z.object({
+          tweetUrl: z.string().min(5, "Please enter a valid link").max(500),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        try {
+          return await verifyAndClaimTwitterRewardViaUrl(ctx.user.id, input.tweetUrl);
+        } catch (error: any) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: error?.message || "Verification failed. Please check your link.",
+          });
+        }
+      }),
     createApiKey: verifiedDeveloperProcedure
       .input(
         z.object({

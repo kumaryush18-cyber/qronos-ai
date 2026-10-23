@@ -45,7 +45,6 @@ const menuItems = [
   { icon: Boxes, label: "Models", path: "/models" },
   { icon: CreditCard, label: "Pricing", path: "/dashboard/pricing" },
   { icon: KeyRound, label: "API keys", path: "/dashboard/keys" },
-  { icon: TwitterXIcon, label: "𝕏 Share to Earn", path: "/dashboard/x-rewards" },
   { icon: Gift, label: "Referrals", path: "/dashboard/referrals" },
   { icon: ChartNoAxesCombined, label: "Usage logs", path: "/dashboard/usage" },
   { icon: ArrowLeftRight, label: "Transactions", path: "/dashboard/transactions" },

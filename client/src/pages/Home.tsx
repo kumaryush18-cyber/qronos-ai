@@ -525,7 +525,7 @@ export default function Home() {
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
                 <span>TOP UP IN USDC OR SOL · SHIP WITH ANY MODEL</span>
               </div>
-              <Link href="/dashboard/x-rewards">
+              <Link href="/dashboard/referrals">
                 <div className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-white/[0.08] hover:bg-white/[0.15] border border-white/15 text-xs font-mono text-white transition-all cursor-pointer backdrop-blur-md shadow-sm hover:scale-105">
                   <TwitterXIcon className="h-3.5 w-3.5" />
                   <span>Share on 𝕏 to Earn +30M Tokens</span>

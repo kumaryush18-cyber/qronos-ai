@@ -99,7 +99,7 @@ function Router() {
         <RouteBoundary><DeveloperDashboard section="overview" /></RouteBoundary>
       </Route>
       <Route path={"/developer"}>
-        <RouteBoundary><DeveloperDashboard section="x-rewards" /></RouteBoundary>
+        <Redirect to="/dashboard/referrals" />
       </Route>
       <Route path={"/developer/:rest*"}>
         <Redirect to="/dashboard" />
@@ -126,10 +126,10 @@ function Router() {
         <RouteBoundary><DeveloperDashboard section="referrals" /></RouteBoundary>
       </Route>
       <Route path={"/dashboard/x-rewards"}>
-        <RouteBoundary><DeveloperDashboard section="x-rewards" /></RouteBoundary>
+        <Redirect to="/dashboard/referrals" />
       </Route>
       <Route path={"/dashboard/twitter"}>
-        <Redirect to="/dashboard/x-rewards" />
+        <Redirect to="/dashboard/referrals" />
       </Route>
       <Route path={"/dashboard/usage"}>
         <RouteBoundary><DeveloperDashboard section="usage" /></RouteBoundary>
