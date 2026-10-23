@@ -4732,7 +4732,7 @@ export async function recordModelFailureLog(
       httpStatus,
       failureKind: input?.failureKind ?? "generic_failure",
       retryable: Boolean(input?.retryable),
-      callerMessage: sanitizeRenderNimProxyFailureMessage(input?.callerMessage ?? ""),
+      callerMessage: sanitizeRenderNimProxyFailureMessage(input?.callerMessage ?? "").slice(0, 10_000),
     });
   } catch (err) {
     console.warn(`[recordModelFailureLog failed for ${modelId}]`, err);
