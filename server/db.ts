@@ -10498,7 +10498,7 @@ export const DEFAULT_TWITTER_REWARD_SLOTS: TwitterRewardSlot[] = [
   { slotIndex: 14, title: "Verified Community Perks", focus: "10M free tokens on Discord verification plus 25% lifetime referral revenue", templateText: "🎁 Join the @QronosAI developer community! Get 10M free tokens upon Discord verification plus earn 25% lifetime commission on every balance recharge your referrals make. Grab your key: {{REFERRAL_LINK}}", enabled: true },
 ];
 
-export function formatTweetExact300(templateText: string, referralCode = "qr01", targetLength = 300): string {
+export function formatTweetExact300(templateText: string, referralCode = "qr01", targetLength = 265): string {
   const link = `https://qronos.me/sign-up?aff=${referralCode}`;
   let text = templateText
     .replace(/\{\{REFERRAL_LINK\}\}/g, link)
@@ -10509,35 +10509,33 @@ export function formatTweetExact300(templateText: string, referralCode = "qr01",
     text = `${text} Start here: ${link}`;
   }
 
+  // Twitter API v2 enforces a strict 280-character limit for standard accounts.
+  // URLs count as 23 chars and emojis count as 2 chars.
+  // We enforce a hard ceiling of 270 to guarantee 100% compliance.
+  const MAX_TWITTER_LIMIT = 270;
+  if (text.length > MAX_TWITTER_LIMIT) {
+    const linkIndex = text.indexOf(link);
+    if (linkIndex > 0) {
+      const prefix = text.slice(0, linkIndex).trim();
+      const allowedPrefixLen = Math.max(30, MAX_TWITTER_LIMIT - link.length - 5);
+      text = `${prefix.slice(0, allowedPrefixLen).trim()}... ${link}`;
+    } else {
+      text = text.slice(0, MAX_TWITTER_LIMIT);
+    }
+  }
+
   const tagPool = [
-    " #AI", " #Dev", " #LLM", " #Code", " #Web3", " #Tech", " #Buidl",
-    " #Solana", " #Cursor", " #Coding", " #OpenAI", " #Claude",
-    " #DeepSeek", " #CryptoPay", " #SolanaPay", " #FrontierAI", " #Developers"
+    " #AI", " #LLM", " #Dev", " #Claude", " #DeepSeek", " #Cursor", " #Tech", " #Coding"
   ];
 
-  if (text.length > targetLength) {
-    text = text.slice(0, targetLength);
-  }
-
-  while (text.length < targetLength) {
-    const diff = targetLength - text.length;
-    const exact = tagPool.find(t => t.length === diff);
-    if (exact) {
-      text += exact;
-      break;
-    }
-    const candidate = tagPool.slice().reverse().find(t => t.length <= diff && (diff - t.length === 0 || diff - t.length >= 4));
-    if (candidate) {
-      text += candidate;
-    } else {
-      if (diff === 1) text += "!";
-      else if (diff === 2) text += " 🚀";
-      else if (diff === 3) text += " ⚡️";
-      else text += "!";
+  // Naturally add relevant tags up to targetLength without repetition
+  for (const tag of tagPool) {
+    if (text.length + tag.length <= targetLength && !text.includes(tag)) {
+      text += tag;
     }
   }
 
-  return text.slice(0, targetLength);
+  return text.trim();
 }
 
 export async function getTwitterRewardConfig(): Promise<TwitterRewardConfig> {

@@ -69,7 +69,11 @@ export function TwitterShareEarnCard() {
       window.history.replaceState({}, document.title, window.location.pathname);
     } else if (rewardStatus === "error") {
       const errMsg = urlParams.get("message") || "Failed to post on X";
-      toast.error(`Reward error: ${errMsg}`);
+      if (errMsg.includes("missing_write_permissions") || errMsg.includes("reconnect")) {
+        toast.error("Write permission missing: please disconnect Qronos AI in Twitter (X) Settings -> Connected Apps, then try again.");
+      } else {
+        toast.error(`Reward error: ${errMsg.replace(/_/g, " ")}`);
+      }
       window.history.replaceState({}, document.title, window.location.pathname);
     }
   }, [refetch]);

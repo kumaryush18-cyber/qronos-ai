@@ -58,9 +58,10 @@ function oauthCookieOptions(req: Request) {
 
 function clearOAuthCookies(req: Request, res: Response) {
   const options = oauthCookieOptions(req);
-  res.clearCookie(TWITTER_STATE_COOKIE, options);
-  res.clearCookie(TWITTER_VERIFIER_COOKIE, options);
-  res.clearCookie(TWITTER_USER_COOKIE, options);
+  const { maxAge, ...clearOptions } = options;
+  res.clearCookie(TWITTER_STATE_COOKIE, clearOptions);
+  res.clearCookie(TWITTER_VERIFIER_COOKIE, clearOptions);
+  res.clearCookie(TWITTER_USER_COOKIE, clearOptions);
 }
 
 function randomUrlToken() {
@@ -213,9 +214,16 @@ export function registerTwitterOAuthRoutes(app: Express) {
 
       const tokenData = await tokenRes.json();
       const accessToken = tokenData.access_token;
+      const grantedScope = String(tokenData.scope || "");
+      console.log(`[TwitterOAuth] Token received for userId ${userId}. Granted scopes: "${grantedScope}"`);
+
       if (!accessToken) {
         clearOAuthCookies(req, res);
         return res.redirect(`/dashboard/x-rewards?twitter_reward=error&message=no_access_token_returned`);
+      }
+
+      if (grantedScope && !grantedScope.includes("tweet.write")) {
+        console.warn(`[TwitterOAuth] WARNING: Granted scopes "${grantedScope}" do not contain "tweet.write". User needs to re-authorize with write permissions.`);
       }
 
       // Fetch Twitter user details
@@ -233,7 +241,7 @@ export function registerTwitterOAuthRoutes(app: Express) {
         twitterUsername = meData?.data?.username || "unknown";
       }
 
-      // Select active slot template and format to exact 300 characters with user's referral code
+      // Select active slot template and format to compliant Twitter length with user's referral code
       const referralCodeObj = await getOrCreateReferralCode(userId);
       const userRefCode = referralCodeObj.code || "qr01";
       const config = await getTwitterRewardConfig();
@@ -258,9 +266,17 @@ export function registerTwitterOAuthRoutes(app: Express) {
 
       if (!tweetRes.ok) {
         const tweetErr = await tweetRes.text();
-        console.error("[TwitterOAuth] Post tweet failed:", tweetRes.status, tweetErr);
+        console.error(`[TwitterOAuth] Post tweet failed (${tweetRes.status}):`, tweetErr, `(Tweet length: ${exact300Tweet.length}, Granted scopes: "${grantedScope}")`);
         clearOAuthCookies(req, res);
-        return res.redirect(`/dashboard/x-rewards?twitter_reward=error&message=tweet_post_failed`);
+        let errorMsg = "tweet_post_failed";
+        if (tweetRes.status === 403) {
+          if (grantedScope && !grantedScope.includes("tweet.write")) {
+            errorMsg = "missing_write_permissions_please_reconnect_app";
+          } else {
+            errorMsg = "twitter_403_forbidden_check_permissions";
+          }
+        }
+        return res.redirect(`/dashboard/x-rewards?twitter_reward=error&message=${encodeURIComponent(errorMsg)}`);
       }
 
       const tweetData = await tweetRes.json();
