@@ -62,12 +62,14 @@ export const QRONOS_MODELS: CatalogueModel[] = [
   model("qwen3.8-max", "Qwen 3.8 Max", "Qwen", "Q", "lime", 2, 6, "Flagship Qwen reasoning", "A flagship Qwen route for advanced reasoning, coding, streamed chat, and inspectable Playground thinking summaries.", ["Reasoning", "Thinking", "Streaming", "Coding"], "OpenRouter Qwen3.8 Max published rate", "https://openrouter.ai/qwen/qwen3.8-max"),
   model("claude-fable-5.1", "Claude Fable 5.1", "Claude", "AI", "violet", 10, 50, "Advanced reasoning", "A capable text model for reasoning, coding, streamed chat, and inspectable Playground thinking summaries.", ["Reasoning", "Thinking", "Streaming", "Coding"], "Qronos AI provisional configured-route pricing", PRICING_URL),
   model("kimi-k3", "Kimi K3", "Moonshot AI", "K", "amber", 3, 15, "Moonshot flagship", "Moonshot AI’s flagship text model for long-horizon coding and knowledge work.", ["Reasoning", "Long context", "Streaming", "Coding"], "Moonshot AI Kimi API pricing", "https://platform.kimi.ai/docs/pricing/chat-k3"),
+  model("mercury-3", "Mercury 3", "Inception", "M", "coral", 0.10, 0.35, "Inception diffusion reasoning", "Inception's breakthrough diffusion-based reasoning LLM (dLLM) featuring parallel token refinement, high agentic speed, and 1M context.", ["Reasoning", "Diffusion", "Fast", "Coding", "1M Context", "Streaming"], "Inception Labs published rates", "https://www.inceptionlabs.ai"),
 ];
 
 export const PLAYGROUND_FEATURED_MODEL_IDS = [
   "claude-opus-5.5",
   "claude-sonnet-5.5",
   "gpt-6-astra",
+  "mercury-3",
   "gpt-6-luna",
   "gemini-4-argon",
   "claude-haiku-5.5",

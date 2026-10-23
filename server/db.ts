@@ -92,6 +92,8 @@ const INTRODUCTORY_CREDIT_REFERENCE = "introductory-credit-v1";
 const EMAIL_ALLOWLIST_SETTING_KEY = "email_allowlist";
 const PLATFORM_MAINTENANCE_EXEMPTIONS_SETTING_KEY = "platform_maintenance_exemptions_v1";
 const ANNOUNCEMENT_TEXT_SETTING_KEY = "announcement_text";
+export const UNOROUTER_BADGE_ENABLED_SETTING_KEY = "unorouter_badge_enabled";
+export const MODEL_TOKEN_MULTIPLIERS_SETTING_KEY = "model_token_multipliers_v1";
 const SESSION_VERSION_SETTING_KEY = "auth_session_version";
 const PLATFORM_MAINTENANCE_SETTING_KEY = "platform_maintenance";
 export const PINNED_USER_ROUTING_POLICY_KEY = "pinned_user_routing_policy_v1";
@@ -1838,6 +1840,8 @@ export async function settleReservedCredit(
     reservedNanos: number;
     finalChargeNanos: number;
     usedTokens?: number;
+    model?: string;
+    modelId?: string;
     keyGroup?: "payg" | "bundle" | "token_plan" | "tokens" | "coding_plan";
     releaseReason?: string;
   },
@@ -1869,7 +1873,10 @@ export async function settleReservedCredit(
         const account = (await tx.select().from(creditAccounts).where(eq(creditAccounts.userId, input.userId)).limit(1))[0];
         const currentCodingTokens = Number((account as any)?.codingPlanTokens ?? 0);
         if (currentCodingTokens > 0 || isTokenPlanKey) {
-          const tokensDeducted = Math.min(currentCodingTokens, usedTokens);
+          const modelName = input.model || input.modelId || "";
+          const multiplier = await getModelTokenMultiplier(modelName);
+          const effectiveTokensToDeduct = Math.round(usedTokens * multiplier);
+          const tokensDeducted = Math.min(currentCodingTokens, effectiveTokensToDeduct);
           await tx
             .update(creditAccounts)
             .set({ codingPlanTokens: sql`GREATEST(0, ${creditAccounts.codingPlanTokens} - ${tokensDeducted})` })
@@ -1878,17 +1885,21 @@ export async function settleReservedCredit(
           const updatedAccount = (await tx.select().from(creditAccounts).where(eq(creditAccounts.userId, input.userId)).limit(1))[0];
           const remainingCodingTokens = Number((updatedAccount as any)?.codingPlanTokens ?? 0);
 
+          const ledgerNote = multiplier > 1
+            ? `Token Plan (${multiplier}x compute weight for ${modelName || "model"}): Deducted ${tokensDeducted.toLocaleString()} tokens (${usedTokens.toLocaleString()} tokens × ${multiplier}x, ${remainingCodingTokens.toLocaleString()} remaining)`
+            : `Token Plan API Key: Deducted ${tokensDeducted.toLocaleString()} tokens (${remainingCodingTokens.toLocaleString()} tokens remaining)`;
+
           queueCreditLedgerEntry({
             userId: input.userId,
             kind: "usage_debit",
             amountNanos: 0,
             balanceAfterNanos: remainingCodingTokens,
             referenceId: `coding_plan_debit:${input.requestId}`,
-            note: `Token Plan API Key: Deducted ${tokensDeducted.toLocaleString()} tokens (${remainingCodingTokens.toLocaleString()} tokens remaining)`,
+            note: ledgerNote,
           });
 
           // If all tokens were covered by coding plan, refund any reserved dollar credits
-          if (tokensDeducted >= usedTokens) {
+          if (tokensDeducted >= effectiveTokensToDeduct) {
             if (reserved > 0) {
               const wasPayg = activeRes
                 ? activeRes.isPayg
@@ -3258,6 +3269,139 @@ export async function setAnnouncementText(text: string, updatedByUserId: number)
     markDatabaseUnhealthy(error?.message ?? String(error));
   }
   return value || null;
+}
+
+/**
+ * Returns whether the 'Powered by UnoRouter.com' partner card should be shown on the landing page.
+ * Defaults to true unless explicitly disabled by an administrator.
+ */
+export async function getUnoRouterBadgeEnabled(): Promise<boolean> {
+  return cached("unorouter_badge_enabled", 15_000, async () => {
+    try {
+      const db = await getDb();
+      if (!db) {
+        const fallback = fallbackPlatformSettings.get(UNOROUTER_BADGE_ENABLED_SETTING_KEY)?.value?.trim();
+        return fallback === undefined ? true : fallback !== "false" && fallback !== "0";
+      }
+      const record = (await db.select({ value: platformSettings.value })
+        .from(platformSettings)
+        .where(eq(platformSettings.settingKey, UNOROUTER_BADGE_ENABLED_SETTING_KEY))
+        .limit(1))[0];
+      if (!record) return true; // Default ON (true)
+      const val = record.value.trim().toLowerCase();
+      return val !== "false" && val !== "0" && val !== "disabled" && val !== "off";
+    } catch (error: any) {
+      markDatabaseUnhealthy(error?.message ?? String(error));
+      const fallback = fallbackPlatformSettings.get(UNOROUTER_BADGE_ENABLED_SETTING_KEY)?.value?.trim();
+      return fallback === undefined ? true : fallback !== "false" && fallback !== "0";
+    }
+  });
+}
+
+/**
+ * Persists an administrator toggle to show/hide the UnoRouter partner card on the frontend landing page.
+ */
+export async function setUnoRouterBadgeEnabled(enabled: boolean, updatedByUserId?: number): Promise<boolean> {
+  const value = enabled ? "true" : "false";
+  fallbackPlatformSettings.set(UNOROUTER_BADGE_ENABLED_SETTING_KEY, { value, updatedAt: new Date(), updatedByUserId: updatedByUserId ?? null });
+  bustCache("unorouter_badge_enabled");
+  try {
+    const db = await getDb();
+    if (db) {
+      await db.insert(platformSettings).values({
+        settingKey: UNOROUTER_BADGE_ENABLED_SETTING_KEY,
+        value,
+        updatedByUserId: updatedByUserId ?? null,
+      }).onDuplicateKeyUpdate({ set: { value, updatedByUserId: updatedByUserId ?? null, updatedAt: new Date() } });
+    }
+  } catch (error: any) {
+    markDatabaseUnhealthy(error?.message ?? String(error));
+  }
+  return enabled;
+}
+
+const DEFAULT_MODEL_TOKEN_MULTIPLIERS: Record<string, number> = {
+  "claude-opus-5.5": 5,
+  "claude-opus-5": 5,
+  "gpt-6-astra": 3,
+  "gpt-6-sol": 3,
+  "gpt-6-luna": 2,
+};
+
+/**
+ * Returns model-specific token multipliers. When a request is settled from a user's Token Plan
+ * (codingPlanTokens), the token deduction is multiplied by this factor (e.g. 5x for Opus).
+ * PAYG balances settle in nanodollars based on USD pricing and are completely untouched.
+ */
+export async function getModelTokenMultipliers(): Promise<Record<string, number>> {
+  return cached("model_token_multipliers", 15_000, async () => {
+    try {
+      const db = await getDb();
+      if (!db) {
+        const fallback = fallbackPlatformSettings.get(MODEL_TOKEN_MULTIPLIERS_SETTING_KEY)?.value?.trim();
+        if (!fallback) return { ...DEFAULT_MODEL_TOKEN_MULTIPLIERS };
+        try { return { ...DEFAULT_MODEL_TOKEN_MULTIPLIERS, ...JSON.parse(fallback) }; } catch { return { ...DEFAULT_MODEL_TOKEN_MULTIPLIERS }; }
+      }
+      const record = (await db.select({ value: platformSettings.value })
+        .from(platformSettings)
+        .where(eq(platformSettings.settingKey, MODEL_TOKEN_MULTIPLIERS_SETTING_KEY))
+        .limit(1))[0];
+      if (!record?.value) return { ...DEFAULT_MODEL_TOKEN_MULTIPLIERS };
+      return { ...DEFAULT_MODEL_TOKEN_MULTIPLIERS, ...JSON.parse(record.value) };
+    } catch (error: any) {
+      markDatabaseUnhealthy(error?.message ?? String(error));
+      return { ...DEFAULT_MODEL_TOKEN_MULTIPLIERS };
+    }
+  });
+}
+
+/**
+ * Returns the effective token multiplier for a model. Defaults to 1x unless configured.
+ */
+export async function getModelTokenMultiplier(modelId: string): Promise<number> {
+  if (!modelId) return 1;
+  const normalized = modelId.trim().toLowerCase();
+  const multipliers = await getModelTokenMultipliers();
+  if (typeof multipliers[normalized] === "number" && multipliers[normalized] > 0) {
+    return multipliers[normalized];
+  }
+  if (normalized.includes("opus-5")) {
+    return multipliers["claude-opus-5.5"] || multipliers["claude-opus-5"] || 5;
+  }
+  return 1;
+}
+
+/**
+ * Sets or updates the token usage multiplier for a specific model (e.g. 5x, 7x).
+ * Applies exclusively to Token Plan quota deductions.
+ */
+export async function setModelTokenMultiplier(
+  modelId: string,
+  multiplier: number,
+  updatedByUserId?: number
+): Promise<Record<string, number>> {
+  const normalized = modelId.trim().toLowerCase();
+  const cleanMultiplier = Math.max(1, Math.min(100, Math.round(Number(multiplier) * 10) / 10));
+  const current = await getModelTokenMultipliers();
+  current[normalized] = cleanMultiplier;
+
+  const value = JSON.stringify(current);
+  fallbackPlatformSettings.set(MODEL_TOKEN_MULTIPLIERS_SETTING_KEY, { value, updatedAt: new Date(), updatedByUserId: updatedByUserId ?? null });
+  bustCache("model_token_multipliers");
+
+  try {
+    const db = await getDb();
+    if (db) {
+      await db.insert(platformSettings).values({
+        settingKey: MODEL_TOKEN_MULTIPLIERS_SETTING_KEY,
+        value,
+        updatedByUserId: updatedByUserId ?? null,
+      }).onDuplicateKeyUpdate({ set: { value, updatedByUserId: updatedByUserId ?? null, updatedAt: new Date() } });
+    }
+  } catch (error: any) {
+    markDatabaseUnhealthy(error?.message ?? String(error));
+  }
+  return current;
 }
 
 export const MODEL_PRICING_OVERRIDES_SETTING_KEY = "model_pricing_overrides";

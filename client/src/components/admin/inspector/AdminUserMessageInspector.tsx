@@ -306,6 +306,7 @@ export function AdminUserMessageInspector() {
               <option value="qwen3.8-max" className="bg-[#141416] text-white">Qwen 3.8 Max</option>
               <option value="gpt-6-astra" className="bg-[#141416] text-white">GPT-6 Astra</option>
               <option value="kimi-k3" className="bg-[#141416] text-white">Kimi K3</option>
+              <option value="mercury-3" className="bg-[#141416] text-white">Mercury 3</option>
             </select>
           </div>
         </div>

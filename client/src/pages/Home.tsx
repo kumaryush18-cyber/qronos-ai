@@ -486,6 +486,12 @@ export default function Home() {
     refetchInterval: 20_000,
   });
 
+  const unorouterBadge = trpc.public.unorouterBadge.useQuery(undefined, {
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
+  });
+  const showUnoRouterBadge = unorouterBadge.data?.enabled ?? true;
+
   const totalTokens = metrics.data?.totalTokens ?? 16_248_910_420;
   const billionsTokens = (totalTokens / 1_000_000_000).toFixed(1);
 
@@ -600,61 +606,63 @@ export default function Home() {
           </div>
 
           {/* Infrastructure Partner - Powered by UnoRouter.com Big Badge */}
-          <div className="mt-8 sm:mt-10 flex justify-center w-full">
-            <a
-              href="https://unorouter.com"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="group block w-full max-w-2xl text-decoration-none"
-            >
-              <StarBorderCard
-                lightWidth={200}
-                duration={7}
-                lightColor="rgba(255, 60, 20, 0.95)"
-                className="rounded-2xl transition-all duration-300 hover:scale-[1.015] shadow-[0_0_30px_rgba(255,42,12,0.14)] hover:shadow-[0_0_45px_rgba(255,42,12,0.25)]"
+          {showUnoRouterBadge && (
+            <div className="mt-8 sm:mt-10 flex justify-center w-full">
+              <a
+                href="https://unorouter.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="group block w-full max-w-2xl text-decoration-none"
               >
-                <div className="py-3 px-5 sm:py-3.5 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-5 text-center sm:text-left">
-                  {/* UnoRouter Logo & Identity */}
-                  <div className="flex flex-col sm:flex-row items-center gap-3 sm:gap-3.5">
-                    <div className="relative shrink-0">
-                      <div className="absolute -inset-1 rounded-xl bg-gradient-to-br from-[#ff2a0c]/40 to-transparent blur-sm group-hover:from-[#ff2a0c]/80 transition-all duration-300" />
-                      <img
-                        src="/unorouter/unorouter-apple-icon.png"
-                        alt="UnoRouter"
-                        className="relative h-10 w-10 sm:h-11 sm:w-11 rounded-lg border border-white/20 object-contain shadow-md shadow-[#ff2a0c]/25 bg-[#1f2022]"
-                      />
-                    </div>
-                    <div>
-                      <div className="flex items-center justify-center sm:justify-start gap-2 mb-0.5">
-                        <span className="text-[9px] sm:text-[10px] font-mono uppercase tracking-[0.2em] font-bold text-zinc-400">
-                          Routing Infrastructure
-                        </span>
-                        <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded-full text-[8.5px] font-mono font-semibold bg-[#ff2a0c]/15 text-[#ff684a] border border-[#ff2a0c]/30">
-                          <span className="w-1.5 h-1.5 rounded-full bg-[#ff2a0c] animate-pulse" />
-                          PARTNER
-                        </span>
+                <StarBorderCard
+                  lightWidth={200}
+                  duration={7}
+                  lightColor="rgba(255, 60, 20, 0.95)"
+                  className="rounded-2xl transition-all duration-300 hover:scale-[1.015] shadow-[0_0_30px_rgba(255,42,12,0.14)] hover:shadow-[0_0_45px_rgba(255,42,12,0.25)]"
+                >
+                  <div className="py-3 px-5 sm:py-3.5 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-5 text-center sm:text-left">
+                    {/* UnoRouter Logo & Identity */}
+                    <div className="flex flex-col sm:flex-row items-center gap-3 sm:gap-3.5">
+                      <div className="relative shrink-0">
+                        <div className="absolute -inset-1 rounded-xl bg-gradient-to-br from-[#ff2a0c]/40 to-transparent blur-sm group-hover:from-[#ff2a0c]/80 transition-all duration-300" />
+                        <img
+                          src="/unorouter/unorouter-apple-icon.png"
+                          alt="UnoRouter"
+                          className="relative h-10 w-10 sm:h-11 sm:w-11 rounded-lg border border-white/20 object-contain shadow-md shadow-[#ff2a0c]/25 bg-[#1f2022]"
+                        />
                       </div>
-                      <h3 className="text-base sm:text-lg font-bold font-display tracking-tight text-white flex items-center justify-center sm:justify-start gap-1.5 leading-snug">
-                        <span>Powered by</span>
-                        <span className="bg-gradient-to-r from-white via-zinc-100 to-zinc-300 bg-clip-text text-transparent group-hover:text-white">
-                          UnoRouter.com
-                        </span>
-                      </h3>
-                      <p className="mt-0.5 text-[11px] sm:text-xs text-zinc-400 max-w-md leading-normal">
-                        Universal multi-provider LLM routing, high-concurrency failover, and zero rate limits.
-                      </p>
+                      <div>
+                        <div className="flex items-center justify-center sm:justify-start gap-2 mb-0.5">
+                          <span className="text-[9px] sm:text-[10px] font-mono uppercase tracking-[0.2em] font-bold text-zinc-400">
+                            Routing Infrastructure
+                          </span>
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded-full text-[8.5px] font-mono font-semibold bg-[#ff2a0c]/15 text-[#ff684a] border border-[#ff2a0c]/30">
+                            <span className="w-1.5 h-1.5 rounded-full bg-[#ff2a0c] animate-pulse" />
+                            PARTNER
+                          </span>
+                        </div>
+                        <h3 className="text-base sm:text-lg font-bold font-display tracking-tight text-white flex items-center justify-center sm:justify-start gap-1.5 leading-snug">
+                          <span>Powered by</span>
+                          <span className="bg-gradient-to-r from-white via-zinc-100 to-zinc-300 bg-clip-text text-transparent group-hover:text-white">
+                            UnoRouter.com
+                          </span>
+                        </h3>
+                        <p className="mt-0.5 text-[11px] sm:text-xs text-zinc-400 max-w-md leading-normal">
+                          Universal multi-provider LLM routing, high-concurrency failover, and zero rate limits.
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Visit Chip */}
+                    <div className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/[0.05] group-hover:bg-[#ff2a0c]/20 border border-white/10 group-hover:border-[#ff2a0c]/40 text-xs font-mono font-medium text-zinc-300 group-hover:text-white transition-all">
+                      <span>unorouter.com</span>
+                      <ExternalLink size={12} className="group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform text-zinc-400 group-hover:text-white" />
                     </div>
                   </div>
-
-                  {/* Visit Chip */}
-                  <div className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/[0.05] group-hover:bg-[#ff2a0c]/20 border border-white/10 group-hover:border-[#ff2a0c]/40 text-xs font-mono font-medium text-zinc-300 group-hover:text-white transition-all">
-                    <span>unorouter.com</span>
-                    <ExternalLink size={12} className="group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform text-zinc-400 group-hover:text-white" />
-                  </div>
-                </div>
-              </StarBorderCard>
-            </a>
-          </div>
+                </StarBorderCard>
+              </a>
+            </div>
+          )}
         </div>
       </section>
 

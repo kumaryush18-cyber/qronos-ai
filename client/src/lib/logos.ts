@@ -8,4 +8,5 @@ export const QRONOS_LOGOS = [
   { src: "/marks/zai.svg", alt: "Z.AI", name: "Z.AI" },
   { src: "/marks/mistralai.svg", alt: "Mistral AI", name: "Mistral AI" },
   { src: "/marks/moonshot.svg", alt: "Moonshot AI", name: "Moonshot AI" },
+  { src: "/marks/inception.png", alt: "Inception", name: "Inception Labs" },
 ];

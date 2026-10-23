@@ -11,6 +11,7 @@ import {
   Sparkles,
   RefreshCw,
   Plus,
+  Zap,
 } from "lucide-react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
@@ -40,6 +41,7 @@ const POPULAR_PRESET_MODELS = [
   { id: "qwen3.8-max", label: "Qwen 3.8 Max" },
   { id: "claude-fable-5.1", label: "Claude Fable 5.1" },
   { id: "kimi-k3", label: "Kimi K3" },
+  { id: "mercury-3", label: "Mercury 3" },
 ];
 
 export function UniversalModelProviderBalancer({
@@ -88,6 +90,30 @@ export function UniversalModelProviderBalancer({
     },
     onError: (err) => toast.error(err.message),
   });
+
+  const multipliersQuery = trpc.admin.modelTokenMultipliers.useQuery(undefined, {
+    staleTime: 10_000,
+  });
+  const currentMultiplier = multipliersQuery.data?.[selectedModelId] ?? (selectedModelId.includes("opus-5") ? 5 : 1);
+  const [customMultiplierInput, setCustomMultiplierInput] = useState<string>("");
+
+  useEffect(() => {
+    setCustomMultiplierInput(String(currentMultiplier));
+  }, [currentMultiplier, selectedModelId]);
+
+  const updateMultiplier = trpc.admin.setModelTokenMultiplier.useMutation({
+    onSuccess: (res) => {
+      utils.admin.modelTokenMultipliers.setData(undefined, res.multipliers);
+      toast.success(
+        `Token usage multiplier for ${selectedModelId} updated to ${res.multiplier}x (Token Plan only)`
+      );
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
+  const handleSetMultiplier = (val: number) => {
+    updateMultiplier.mutate({ modelId: selectedModelId, multiplier: val });
+  };
 
   const settingsQuery = trpc.admin.universalModelProviderSettings.useQuery(
     { modelId: selectedModelId },
@@ -379,6 +405,62 @@ export function UniversalModelProviderBalancer({
             <span className={`w-1.5 h-1.5 rounded-full ${isPaygActive ? "bg-rose-400 animate-pulse" : "bg-neutral-500"}`} />
             <span>{isPaygActive ? "PAYG: ON" : "+ PAYG Tag"}</span>
           </button>
+
+          {/* Token Plan Usage Multiplier Control */}
+          <div className="inline-flex items-center gap-1.5 p-1 px-2.5 rounded-lg bg-black/40 border border-white/10 text-xs">
+            <span className="text-[11px] font-mono font-medium text-amber-300 flex items-center gap-1">
+              <Zap size={11} className="text-amber-400" />
+              <span>Token Multiplier:</span>
+            </span>
+            <div className="flex items-center gap-1">
+              {[1, 2, 3, 5, 7, 10].map((preset) => (
+                <button
+                  key={preset}
+                  type="button"
+                  onClick={() => handleSetMultiplier(preset)}
+                  disabled={updateMultiplier.isPending}
+                  className={`px-1.5 py-0.5 rounded text-[10px] font-mono font-bold transition-all cursor-pointer ${
+                    currentMultiplier === preset
+                      ? "bg-amber-400 text-black shadow-sm"
+                      : "bg-white/5 text-zinc-400 hover:text-white hover:bg-white/10"
+                  }`}
+                >
+                  {preset}x
+                </button>
+              ))}
+              <div className="relative inline-flex items-center">
+                <input
+                  type="number"
+                  min="1"
+                  max="100"
+                  step="0.5"
+                  value={customMultiplierInput}
+                  onChange={(e) => setCustomMultiplierInput(e.target.value)}
+                  onBlur={() => {
+                    const val = parseFloat(customMultiplierInput);
+                    if (!isNaN(val) && val >= 1 && val !== currentMultiplier) {
+                      handleSetMultiplier(val);
+                    }
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      const val = parseFloat(customMultiplierInput);
+                      if (!isNaN(val) && val >= 1 && val !== currentMultiplier) {
+                        handleSetMultiplier(val);
+                      }
+                    }
+                  }}
+                  className="w-12 h-6 text-[10px] font-mono text-center bg-black/60 border border-white/15 rounded text-white focus:border-amber-400"
+                  placeholder="Custom"
+                  title="Enter custom multiplier (e.g. 5, 7, 12) and press Enter"
+                />
+              </div>
+            </div>
+            <span className="text-[9px] font-mono text-zinc-500 hidden xl:inline">
+              (Token Plan only · PAYG unaffected)
+            </span>
+          </div>
         </div>
       </div>
 

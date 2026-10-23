@@ -78,6 +78,10 @@ import {
   deleteDiscordUnverifiedAccounts,
   getAnnouncementText,
   setAnnouncementText,
+  getUnoRouterBadgeEnabled,
+  setUnoRouterBadgeEnabled,
+  getModelTokenMultipliers,
+  setModelTokenMultiplier,
   getModelPricingOverrides,
   setModelPricingOverride,
   resetModelPricingOverride,
@@ -545,6 +549,13 @@ export const appRouter = router({
     modelTokenMetrics: publicProcedure.query(() => getPublicModelTokenMetrics()),
     announcement: publicProcedure.query(() => getAnnouncementText()),
     maintenanceCountdown: publicProcedure.query(() => getMaintenanceCountdown()),
+    unorouterBadge: publicProcedure.query(async () => {
+      const enabled = await getUnoRouterBadgeEnabled();
+      return { enabled };
+    }),
+    modelTokenMultipliers: publicProcedure.query(async () => {
+      return await getModelTokenMultipliers();
+    }),
     modelPricing: publicProcedure
       .input(z.object({ tier: z.enum(["payg", "bundle"]).default("payg").optional() }).optional())
       .query(async ({ input }) => await getAllEffectiveModelPricing(input?.tier ?? "payg")),
@@ -1904,6 +1915,44 @@ ${input.intent ? `Requested Notification Type: ${input.intent}` : ""}`;
       });
       return { text };
     }),
+    unorouterBadge: adminProcedure.query(async () => {
+      const enabled = await getUnoRouterBadgeEnabled();
+      return { enabled };
+    }),
+    setUnoRouterBadge: adminProcedure
+      .input(z.object({ enabled: z.boolean() }))
+      .mutation(async ({ ctx, input }) => {
+        const enabled = await setUnoRouterBadgeEnabled(input.enabled, ctx.user.id);
+        await writeAuditEvent({
+          actorUserId: ctx.user.id,
+          action: "unorouter_badge.updated",
+          entityType: "platform_setting",
+          entityId: "unorouter_badge_enabled",
+          metadata: { enabled },
+        });
+        return { success: true, enabled };
+      }),
+    modelTokenMultipliers: adminProcedure.query(async () => {
+      return await getModelTokenMultipliers();
+    }),
+    setModelTokenMultiplier: adminProcedure
+      .input(
+        z.object({
+          modelId: z.string().trim().min(1),
+          multiplier: z.number().positive().max(100),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const multipliers = await setModelTokenMultiplier(input.modelId, input.multiplier, ctx.user.id);
+        await writeAuditEvent({
+          actorUserId: ctx.user.id,
+          action: "model.token_multiplier.updated",
+          entityType: "model",
+          entityId: input.modelId,
+          metadata: { multiplier: input.multiplier },
+        });
+        return { success: true, multipliers, modelId: input.modelId, multiplier: input.multiplier };
+      }),
     setModelEnabled: adminProcedure.input(z.object({ modelId: tokenForgeModelId, enabled: z.boolean() })).mutation(async ({ ctx, input }) => {
       const updated = await setModelEnabled(input.modelId, input.enabled);
       if (!updated) throw new TRPCError({ code: "NOT_FOUND", message: "Model configuration not found" });

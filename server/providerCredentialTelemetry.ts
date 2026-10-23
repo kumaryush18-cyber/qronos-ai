@@ -14,6 +14,7 @@ export type CredentialTelemetryProvider =
   | "qwen3.8-max"
   | "gpt-6-astra"
   | "kimi-k3"
+  | "mercury-3"
   | `${string}:${string}`
   | (string & {});
 

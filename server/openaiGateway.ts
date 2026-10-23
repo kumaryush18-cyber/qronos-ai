@@ -4922,6 +4922,7 @@ export function registerOpenAiGateway(app: Express) {
         reservedNanos,
         finalChargeNanos: chargeNanos,
         usedTokens: tokens.totalTokens ?? (tokens.inputTokens + tokens.outputTokens),
+        model: input.model,
         keyGroup,
       });
       const reasoningDiagnosticTag = isReasoningOnly
@@ -5109,6 +5110,7 @@ export function registerOpenAiGateway(app: Express) {
         reservedNanos,
         finalChargeNanos: chargeNanos,
         usedTokens: tokens.totalTokens ?? (tokens.inputTokens + tokens.outputTokens),
+        model: input.model,
         keyGroup,
         releaseReason: clientDisconnected
           ? "Client disconnected prematurely; reservation released"

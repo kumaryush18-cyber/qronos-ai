@@ -219,6 +219,18 @@ export const TOKENFORGE_MODEL_CATALOGUE = [
     pricingSource: "Moonshot AI Kimi API pricing",
     pricingUrl: "https://platform.kimi.ai/docs/pricing/chat-k3",
   },
+  {
+    id: "mercury-3",
+    displayName: "Mercury 3",
+    description: "Inception's breakthrough diffusion-based reasoning language model (dLLM) featuring ultra-fast parallel token generation, deep analytical problem solving, and a 1M context window.",
+    providerSlug: TOKENROUTER_PROVIDER_SLUG,
+    providerName: "Inception",
+    capabilities: ["reasoning", "fast", "coding", "long_context", "streaming"],
+    inputUsdPerMillion: 0.10,
+    outputUsdPerMillion: 0.35,
+    pricingSource: "Inception Labs Mercury 3 published pricing",
+    pricingUrl: "https://www.inceptionlabs.ai",
+  },
 ] as const satisfies readonly TokenForgeModelDefinition[];
 
 export type TokenForgeModelId = string;

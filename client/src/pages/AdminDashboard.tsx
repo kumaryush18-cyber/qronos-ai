@@ -49,6 +49,7 @@ import { formatTokens, Metric, SectionHeader } from "@/components/admin/common/A
 import { AdminUsageChart, EmailProviderChart } from "@/components/admin/overview/AdminCharts";
 import { AccountsSection } from "@/components/admin/accounts/AccountsSection";
 import { DiscordBypassSection } from "@/components/admin/overview/DiscordBypassSection";
+import { UnoRouterToggleCard } from "@/components/admin/overview/UnoRouterToggleCard";
 import { SpecialReferralCampaignSection } from "@/components/admin/campaign/SpecialReferralSection";
 import {
   AuditTimeline,
@@ -557,6 +558,9 @@ export default function AdminDashboard({ initialSection }: { initialSection?: Ad
       )}
       {section === "overview" && (
         <div className="grid gap-4 xl:grid-cols-2">
+          <div className="xl:col-span-2">
+            <UnoRouterToggleCard />
+          </div>
           <div className="xl:col-span-2">
             <DiscordBypassSection />
           </div>
