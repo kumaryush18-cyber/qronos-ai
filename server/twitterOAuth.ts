@@ -87,7 +87,7 @@ export function buildTwitterAuthorizationUrl(input: {
   url.searchParams.set("response_type", "code");
   url.searchParams.set("client_id", input.clientId);
   url.searchParams.set("redirect_uri", input.redirectUri);
-  url.searchParams.set("scope", "tweet.write users.read offline.access");
+  url.searchParams.set("scope", "tweet.read tweet.write users.read offline.access");
   url.searchParams.set("state", input.state);
   url.searchParams.set("code_challenge", codeChallenge(input.verifier));
   url.searchParams.set("code_challenge_method", "S256");
@@ -222,8 +222,8 @@ export function registerTwitterOAuthRoutes(app: Express) {
         return res.redirect(`/dashboard/x-rewards?twitter_reward=error&message=no_access_token_returned`);
       }
 
-      if (grantedScope && !grantedScope.includes("tweet.write")) {
-        console.warn(`[TwitterOAuth] WARNING: Granted scopes "${grantedScope}" do not contain "tweet.write". User needs to re-authorize with write permissions.`);
+      if (grantedScope && (!grantedScope.includes("tweet.write") || !grantedScope.includes("tweet.read"))) {
+        console.warn(`[TwitterOAuth] WARNING: Granted scopes "${grantedScope}" do not contain both "tweet.write" and "tweet.read". User needs to re-authorize with full permissions.`);
       }
 
       // Fetch Twitter user details
