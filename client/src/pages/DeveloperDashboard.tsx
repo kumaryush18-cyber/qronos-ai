@@ -171,7 +171,7 @@ export function DashboardVideoLoadingScreen() {
   );
 }
 
-type Section = "overview" | "keys" | "usage" | "playground" | "profile" | "referrals" | "models" | "model" | "transactions" | "payments" | "pricing";
+type Section = "overview" | "keys" | "usage" | "playground" | "profile" | "referrals" | "models" | "model" | "transactions" | "payments" | "pricing" | "x-rewards";
 type UsageData = {
   quota?: { suspended: boolean } | null;
   totalRequests: number;
@@ -2191,6 +2191,11 @@ export default function DeveloperDashboard({ section = "overview", modelId }: { 
       <Profile />
     ) : section === "referrals" ? (
       <ReferralWorkspace />
+    ) : section === "x-rewards" ? (
+      <div className="space-y-6">
+        <TwitterShareEarnCard />
+        <ReferralWorkspace />
+      </div>
     ) : (
       <Overview user={user} loading={loading} usage={usage} videoReady={videoReady} />
     );

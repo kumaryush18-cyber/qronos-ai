@@ -119,6 +119,12 @@ function Router() {
       <Route path={"/dashboard/referrals"}>
         <RouteBoundary><DeveloperDashboard section="referrals" /></RouteBoundary>
       </Route>
+      <Route path={"/dashboard/x-rewards"}>
+        <RouteBoundary><DeveloperDashboard section="x-rewards" /></RouteBoundary>
+      </Route>
+      <Route path={"/dashboard/twitter"}>
+        <Redirect to="/dashboard/x-rewards" />
+      </Route>
       <Route path={"/dashboard/usage"}>
         <RouteBoundary><DeveloperDashboard section="usage" /></RouteBoundary>
       </Route>
