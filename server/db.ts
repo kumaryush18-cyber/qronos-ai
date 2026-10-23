@@ -7046,7 +7046,7 @@ export async function getUsageLogs(input: { userId: number; modelId?: string; so
   if (input.source) conditions.push(eq(usageEvents.source, input.source));
   if (input.from) conditions.push(gte(usageEvents.createdAt, input.from));
   if (input.to) conditions.push(lte(usageEvents.createdAt, input.to));
-  return db
+  const rows = await db
     .select({
       id: usageEvents.id,
       requestId: usageEvents.requestId,
@@ -7066,12 +7066,57 @@ export async function getUsageLogs(input: { userId: number; modelId?: string; so
       outcome: usageEvents.outcome,
       provider: usageEvents.provider,
       apiKeyLabel: apiKeys.label,
+      apiKeyGroup: apiKeys.keyGroup,
+      ledgerNote: creditLedger.note,
     })
     .from(usageEvents)
     .leftJoin(apiKeys, eq(usageEvents.apiKeyId, apiKeys.id))
+    .leftJoin(creditLedger, and(eq(creditLedger.userId, input.userId), eq(creditLedger.referenceId, sql`concat('coding_plan_debit:', ${usageEvents.requestId})`)))
     .where(and(...conditions))
     .orderBy(desc(usageEvents.createdAt))
     .limit(Math.min(100, Math.max(1, input.limit ?? 50)));
+
+  const multipliers = await getModelTokenMultipliers();
+
+  return rows.map(row => {
+    const rawGroup = row.apiKeyGroup;
+    const hasTokenLedger = Boolean(row.ledgerNote);
+    const isTokenPlan = hasTokenLedger || rawGroup === "token_plan" || rawGroup === "tokens" || rawGroup === "coding_plan" || (row.chargeNanos === 0 && row.status === "success" && Number(row.totalTokens ?? 0) > 0);
+    const normalizedModel = (row.modelId || "").trim().toLowerCase();
+
+    // Parse multiplier from ledger note if available, e.g. "5x compute weight"
+    let multiplier = 1;
+    if (row.ledgerNote) {
+      const weightMatch = row.ledgerNote.match(/(\d+(?:\.\d+)?)x\s+compute\s+weight/i);
+      if (weightMatch) {
+        multiplier = Number(weightMatch[1]);
+      } else {
+        multiplier = multipliers[normalizedModel] || 1;
+      }
+    } else if (isTokenPlan) {
+      multiplier = multipliers[normalizedModel] ?? (normalizedModel.includes("opus-5") ? (multipliers["claude-opus-5.5"] || multipliers["claude-opus-5"] || 5) : 1);
+    }
+
+    // Parse tokens deducted from ledger note if available
+    let tokensDeducted = 0;
+    if (row.ledgerNote) {
+      const tokenMatch = row.ledgerNote.match(/Deducted\s+([0-9,]+)\s+tokens/i);
+      if (tokenMatch) {
+        tokensDeducted = parseInt(tokenMatch[1].replace(/,/g, ""), 10);
+      } else {
+        tokensDeducted = Math.round(Number(row.totalTokens ?? 0) * multiplier);
+      }
+    } else if (isTokenPlan) {
+      tokensDeducted = Math.round(Number(row.totalTokens ?? 0) * multiplier);
+    }
+
+    return {
+      ...row,
+      isTokenPlan,
+      multiplier,
+      tokensDeducted,
+    };
+  });
 }
 
 export async function getRecentRequestCounts(userId: number, sourceIpHash: string, since: Date) {

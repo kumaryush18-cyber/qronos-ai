@@ -318,7 +318,8 @@ export function UsageLogs() {
     count: totals.count + 1,
     tokens: totals.tokens + Number(log.totalTokens ?? 0),
     charges: totals.charges + Number(log.chargeNanos ?? 0),
-  }), { count: 0, tokens: 0, charges: 0 }), [logs.data]);
+    tokensDeducted: totals.tokensDeducted + Number((log as any).tokensDeducted ?? 0),
+  }), { count: 0, tokens: 0, charges: 0, tokensDeducted: 0 }), [logs.data]);
   const activeFilters = [modelId, source, from, to].filter(Boolean).length;
   const reset = () => { setModelId(""); setSource(""); setFrom(""); setTo(""); };
 
@@ -362,7 +363,7 @@ export function UsageLogs() {
           </div>
           <div className="mt-4">
             <p className="text-3xl font-extrabold font-mono text-white tracking-tight">{summary.tokens.toLocaleString()}</p>
-            <p className="mt-1 text-[11px] font-mono text-zinc-500">Input + output aggregated</p>
+            <p className="mt-1 text-[11px] font-mono text-zinc-500">Raw input + output tokens</p>
           </div>
         </div>
 
@@ -381,8 +382,18 @@ export function UsageLogs() {
             </div>
           </div>
           <div className="mt-4">
-            <p className="text-3xl font-extrabold font-mono text-white tracking-tight">{formatCreditNanos(summary.charges)}</p>
-            <p className="mt-1 text-[11px] font-mono text-zinc-500">Net compute settled</p>
+            <p className="text-2xl sm:text-3xl font-extrabold font-mono text-white tracking-tight truncate">
+              {summary.tokensDeducted > 0
+                ? `${summary.tokensDeducted.toLocaleString()} Tokens`
+                : formatCreditNanos(summary.charges)}
+            </p>
+            <p className="mt-1 text-[11px] font-mono text-zinc-500">
+              {summary.tokensDeducted > 0 && summary.charges > 0
+                ? `Token Plan + ${formatCreditNanos(summary.charges)} PAYG`
+                : summary.tokensDeducted > 0
+                ? "Token Plan compute settled"
+                : "Net compute settled"}
+            </p>
           </div>
         </div>
 
@@ -618,6 +629,9 @@ export function UsageLogs() {
                             <>
                               <Terminal size={12} className="text-zinc-400" />
                               <span>Playground</span>
+                              {(log as any).isTokenPlan && (
+                                <span className="text-[9px] text-cyan-400 font-mono">· Token Plan</span>
+                              )}
                             </>
                           ) : (
                             <>
@@ -645,14 +659,43 @@ export function UsageLogs() {
 
                       <div>
                         <span className="text-[10px] uppercase text-zinc-500 block mb-1">Total Tokens</span>
-                        <span className="text-white font-bold">{totalTokens.toLocaleString()}</span>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="text-white font-bold">{totalTokens.toLocaleString()}</span>
+                          {(log as any).isTokenPlan && (
+                            <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-mono border ${
+                              ((log as any).multiplier ?? 1) > 1
+                                ? "bg-amber-500/10 text-amber-300 border-amber-500/30 font-semibold"
+                                : "bg-white/[0.06] text-zinc-400 border-white/10"
+                            }`}>
+                              {((log as any).multiplier ?? 1)}x multiplier
+                            </span>
+                          )}
+                        </div>
                       </div>
 
                       <div className="text-left sm:text-right">
                         <span className="text-[10px] uppercase text-zinc-500 block mb-1">Debit Amount</span>
-                        <span className="text-white font-bold text-sm">
-                          {successful ? `−${formatCreditNanos(log.chargeNanos)}` : "$0.00"}
-                        </span>
+                        {(log as any).isTokenPlan ? (
+                          <div className="flex flex-col items-start sm:items-end">
+                            <span className="text-cyan-300 font-bold text-sm">
+                              −{((log as any).tokensDeducted ?? (totalTokens * ((log as any).multiplier ?? 1))).toLocaleString()} Tokens
+                            </span>
+                            <span className="text-[10px] text-zinc-400 font-mono">
+                              {((log as any).multiplier ?? 1) > 1
+                                ? `(${totalTokens.toLocaleString()} × ${((log as any).multiplier)}x · $0.00 USD)`
+                                : "1x standard rate · $0.00 USD"}
+                            </span>
+                          </div>
+                        ) : (
+                          <div className="flex flex-col items-start sm:items-end">
+                            <span className="text-white font-bold text-sm">
+                              {successful ? `−${formatCreditNanos(log.chargeNanos)}` : "$0.00"}
+                            </span>
+                            <span className="text-[10px] text-zinc-500 font-mono">
+                              PAYG USD Balance
+                            </span>
+                          </div>
+                        )}
                       </div>
                     </div>
 
@@ -663,7 +706,41 @@ export function UsageLogs() {
                           <ChevronDown size={12} className="transition-transform group-open:rotate-180" />
                           <span>Inspect Pricing Settlement Protocol</span>
                         </summary>
-                        {pricing ? (
+                        {(log as any).isTokenPlan ? (
+                          <div className="mt-3 rounded-xl bg-black/60 border border-white/10 p-3.5 space-y-2 text-[11px]">
+                            <div className="flex justify-between items-center text-zinc-400">
+                              <span>Settlement Rail:</span>
+                              <Badge className="bg-cyan-500/15 text-cyan-300 border-cyan-500/30 font-mono text-[10px]">
+                                {log.source === "playground" ? "Playground Token Plan" : "Token Plan (Coding Tokens)"}
+                              </Badge>
+                            </div>
+                            <div className="flex justify-between text-zinc-400">
+                              <span>Raw Token Throughput:</span>
+                              <b className="text-zinc-200 font-mono">
+                                {totalTokens.toLocaleString()} tokens ({inTokens.toLocaleString()} in + {outTokens.toLocaleString()} out)
+                              </b>
+                            </div>
+                            <div className="flex justify-between text-zinc-400">
+                              <span>Dynamic Model Multiplier:</span>
+                              <b className="text-amber-300 font-mono flex items-center gap-1">
+                                <span>{((log as any).multiplier ?? 1)}x compute deduction</span>
+                                <span className="text-zinc-400 font-normal">
+                                  {((log as any).multiplier ?? 1) > 1 ? `(${displayModel(log.modelId)} ${((log as any).multiplier)}x weight)` : "(1x standard)"}
+                                </span>
+                              </b>
+                            </div>
+                            <div className="flex justify-between text-white font-bold pt-2 border-t border-white/[0.08]">
+                              <span>Net Tokens Deducted:</span>
+                              <b className="text-cyan-300 font-mono text-xs">
+                                −{((log as any).tokensDeducted ?? (totalTokens * ((log as any).multiplier ?? 1))).toLocaleString()} Tokens ({totalTokens.toLocaleString()} × {((log as any).multiplier ?? 1)}x)
+                              </b>
+                            </div>
+                            <div className="flex justify-between text-zinc-400 text-[10px] pt-1 border-t border-white/[0.04]">
+                              <span>USD Balance Deducted:</span>
+                              <span className="font-mono text-emerald-400">$0.00 USD (Covered 100% by Token Plan)</span>
+                            </div>
+                          </div>
+                        ) : pricing ? (
                           <div className="mt-3 rounded-xl bg-black/60 border border-white/10 p-3.5 space-y-1.5 text-[11px]">
                             <div className="flex justify-between text-zinc-400">
                               <span>Provider Base Cost:</span>
@@ -1047,6 +1124,9 @@ export function Profile() {
                 const amount = Number(entry.amountNanos);
                 const descriptor = ledgerDescriptor(entry.kind);
                 const Icon = descriptor.icon;
+                const isCodingPlanDebit = entry.referenceId?.startsWith("coding_plan_debit:");
+                const codingTokensMatch = entry.note?.match(/Deducted\s+([0-9,]+)\s+tokens/i);
+                const deductedTokensStr = codingTokensMatch ? codingTokensMatch[1] : null;
 
                 return (
                   <div
@@ -1059,20 +1139,28 @@ export function Profile() {
                         <Icon size={16} />
                       </div>
                       <div>
-                        <p className="text-xs font-bold text-white">{descriptor.title}</p>
+                        <p className="text-xs font-bold text-white">
+                          {isCodingPlanDebit ? "Token Plan Usage" : descriptor.title}
+                        </p>
                         <p className="text-[11px] font-mono text-zinc-400 mt-0.5">
                           {entry.note || descriptor.detail} • {new Date(entry.createdAt).toLocaleString()}
                         </p>
                       </div>
                     </div>
                     <div className="self-end sm:self-center">
-                      <span
-                        className={`text-sm font-mono font-bold ${
-                          amount > 0 ? "text-emerald-400" : "text-white"
-                        }`}
-                      >
-                        {amount > 0 ? "+" : "−"}{formatCreditNanos(Math.abs(amount))}
-                      </span>
+                      {isCodingPlanDebit ? (
+                        <span className="text-sm font-mono font-bold text-cyan-300">
+                          −{deductedTokensStr ? `${deductedTokensStr} Tokens` : "Token Plan"}
+                        </span>
+                      ) : (
+                        <span
+                          className={`text-sm font-mono font-bold ${
+                            amount > 0 ? "text-emerald-400" : "text-white"
+                          }`}
+                        >
+                          {amount > 0 ? "+" : "−"}{formatCreditNanos(Math.abs(amount))}
+                        </span>
+                      )}
                     </div>
                   </div>
                 );

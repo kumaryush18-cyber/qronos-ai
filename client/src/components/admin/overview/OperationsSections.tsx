@@ -2,7 +2,7 @@ import React from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Activity, Download, Gauge, Megaphone, Search, ServerCog, UsersRound, WalletCards, Lock, ShieldCheck, Pencil, AlertTriangle, Loader2, Camera, FileText } from "lucide-react";
+import { Activity, Download, Gauge, Megaphone, Search, ServerCog, UsersRound, WalletCards, Lock, ShieldCheck, Pencil, AlertTriangle, Loader2, Camera, FileText, Zap } from "lucide-react";
 import { AdminAuditRecord, SpecialReferralCampaignData, ProviderTelemetryItem, ManagedModelOverviewItem, UserTier } from "../types";
 import { SectionHeader, Metric, Toggle } from "../common/AdminCommon";
 import { Textarea } from "@/components/ui/textarea";
@@ -15,6 +15,8 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { StarBorderCard } from "@/components/StarBorderCard";
+import { trpc } from "@/lib/trpc";
+import { toast } from "sonner";
 
 
 
@@ -397,6 +399,18 @@ export function InferenceControlsSection({
 }) {
   const [tierFilter, setTierFilter] = React.useState<"all" | "free" | "paid" | "token_plan" | "payg">("all");
 
+  const utils = trpc.useUtils();
+  const multipliersQuery = trpc.admin.modelTokenMultipliers.useQuery(undefined, {
+    staleTime: 15_000,
+  });
+  const updateMultiplierMutation = trpc.admin.setModelTokenMultiplier.useMutation({
+    onSuccess: (res) => {
+      utils.admin.modelTokenMultipliers.setData(undefined, res.multipliers);
+      toast.success(`Token multiplier for ${res.modelId} updated to ${res.multiplier}x`);
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
   const telemetryFor = (providerSlug: string) =>
     telemetry.find((provider) => provider.providerSlug === providerSlug);
 
@@ -607,6 +621,33 @@ export function InferenceControlsSection({
                         <span className={`w-1.5 h-1.5 rounded-full ${isTokenPlan ? "bg-cyan-400 animate-pulse" : "bg-neutral-500"}`} />
                         <span>{isTokenPlan ? "Token Plan Active" : "+ Token Plan"}</span>
                       </button>
+
+                      {/* Token Plan Usage Multiplier Selector */}
+                      {isTokenPlan && (
+                        <div
+                          className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded border border-amber-500/40 bg-amber-500/15 text-[10px] font-mono text-amber-300"
+                          title={`Token usage multiplier for ${model.displayName} (currently ${multipliersQuery.data?.[model.modelId] ?? (model.modelId.includes("opus-5") ? 5 : 1)}x)`}
+                        >
+                          <Zap size={10} className="text-amber-400" />
+                          <span className="text-[9px] uppercase font-bold text-amber-400/80">Weight:</span>
+                          <select
+                            aria-label={`Token usage multiplier for ${model.displayName}`}
+                            value={multipliersQuery.data?.[model.modelId] ?? (model.modelId.includes("opus-5") ? 5 : 1)}
+                            onChange={(e) => {
+                              const val = Number(e.target.value);
+                              updateMultiplierMutation.mutate({ modelId: model.modelId, multiplier: val });
+                            }}
+                            disabled={updateMultiplierMutation.isPending}
+                            className="bg-transparent font-bold text-amber-300 focus:outline-none cursor-pointer"
+                          >
+                            {[1, 2, 3, 5, 7, 10].map((preset) => (
+                              <option key={preset} value={preset} className="bg-[#18181b] text-white">
+                                {preset}x
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
 
                       {/* PAYG Toggle Button */}
                       <button

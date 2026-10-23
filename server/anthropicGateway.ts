@@ -1149,6 +1149,8 @@ async function handleNativeTokenRouterMessagesRequest(req: Request, res: Respons
       requestId,
       reservedNanos,
       finalChargeNanos: chargeNanos,
+      usedTokens: tokens.totalTokens ?? (tokens.inputTokens + tokens.outputTokens),
+      model,
       keyGroup,
       ...(clientDisconnected
         ? { releaseReason: "Client disconnected prematurely; reservation released" }

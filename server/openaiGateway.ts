@@ -51,6 +51,7 @@ import {
   recordGpt6AstraFailureLog,
   recordKimiK3FailureLog,
   reserveCredit,
+  ensureCreditAccount,
   isUserCreditsEnabled,
   recordManagedProviderKeyOutcome,
   settleReservedCredit,
@@ -4266,12 +4267,15 @@ export async function runPlaygroundCompletion(input: {
     ...(input.temperature !== undefined ? { temperature: input.temperature } : {}),
     ...(effectiveReasoningEffort ? { reasoning_effort: effectiveReasoningEffort } : {}),
   };
+  const userAccount = await ensureCreditAccount(input.userId);
+  const currentCodingTokens = Number((userAccount as any)?.codingPlanTokens ?? 0);
+  const isTokenPlanPlayground = currentCodingTokens > 0;
   const creditsEnabled = await isUserCreditsEnabled(input.userId);
   const playgroundTier: PricingTier = creditsEnabled ? "bundle" : "payg";
   const estimatedInputTokens = estimateInputTokens(input.messages);
   const reservedNanos = calculateCreditChargeNanos(input.model, estimatedInputTokens, await effectiveReservationMaxOutputTokens(input.model, upstreamInput, { userId: input.userId }), playgroundTier);
-  const reservation = await reserveCredit(input.userId, reservedNanos, requestId, { keyGroup: playgroundTier });
-  if (!reservation.authorized) throw new TokenForgePlaygroundError("insufficient_credits", "Your Qronos AI promotional credit balance cannot cover this request’s maximum estimated cost.");
+  const reservation = await reserveCredit(input.userId, reservedNanos, requestId, { keyGroup: isTokenPlanPlayground ? "token_plan" : playgroundTier });
+  if (!reservation.authorized) throw new TokenForgePlaygroundError("insufficient_credits", isTokenPlanPlayground ? "Your Token Plan (Coding Tokens) balance is exhausted. Top up your tokens to continue." : "Your Qronos AI promotional credit balance cannot cover this request’s maximum estimated cost.");
 
   const aborter = new AbortController();
   const timeout = setTimeout(() => aborter.abort(), PROVIDER_TIMEOUT_MS);
@@ -4303,7 +4307,15 @@ export async function runPlaygroundCompletion(input: {
     const fallbackText = (content || "") + (thinking ? `\n${thinking}` : "");
     const tokens = normalizedTokens(usageFrom(payload), estimatedInputTokens, fallbackText);
     const chargeNanos = calculateCreditChargeNanos(input.model, tokens.inputTokens, tokens.outputTokens, playgroundTier);
-    const settlement = await settleReservedCredit({ userId: input.userId, requestId, reservedNanos, finalChargeNanos: chargeNanos });
+    const settlement = await settleReservedCredit({
+      userId: input.userId,
+      requestId,
+      reservedNanos,
+      finalChargeNanos: chargeNanos,
+      usedTokens: tokens.totalTokens ?? (tokens.inputTokens + tokens.outputTokens),
+      model: input.model,
+      keyGroup: isTokenPlanPlayground ? "token_plan" : undefined,
+    });
     const durationMs = Date.now() - startedAt;
     const stopReason = (publicPayload as any)?.choices?.[0]?.finish_reason || "stop";
     const outcome = (stopReason === "max_tokens" || stopReason === "length") ? "truncated" : "success";
@@ -4433,12 +4445,15 @@ async function streamPlaygroundCompletion(input: {
     ...(input.temperature !== undefined ? { temperature: input.temperature } : {}),
     ...(effectiveReasoningEffort ? { reasoning_effort: effectiveReasoningEffort } : {}),
   };
+  const userAccount = await ensureCreditAccount(input.userId);
+  const currentCodingTokens = Number((userAccount as any)?.codingPlanTokens ?? 0);
+  const isTokenPlanPlayground = currentCodingTokens > 0;
   const creditsEnabled = await isUserCreditsEnabled(input.userId);
   const playgroundTier: PricingTier = creditsEnabled ? "bundle" : "payg";
   const estimatedInputTokens = estimateInputTokens(input.messages);
   const reservedNanos = calculateCreditChargeNanos(input.model, estimatedInputTokens, await effectiveReservationMaxOutputTokens(input.model, upstreamInput, { userId: input.userId }), playgroundTier);
-  const reservation = await reserveCredit(input.userId, reservedNanos, requestId, { keyGroup: playgroundTier });
-  if (!reservation.authorized) throw new TokenForgePlaygroundError("insufficient_credits", "Your Qronos AI promotional credit balance cannot cover this request’s maximum estimated cost.");
+  const reservation = await reserveCredit(input.userId, reservedNanos, requestId, { keyGroup: isTokenPlanPlayground ? "token_plan" : playgroundTier });
+  if (!reservation.authorized) throw new TokenForgePlaygroundError("insufficient_credits", isTokenPlanPlayground ? "Your Token Plan (Coding Tokens) balance is exhausted. Top up your tokens to continue." : "Your Qronos AI promotional credit balance cannot cover this request’s maximum estimated cost.");
 
   const aborter = new AbortController();
   const timeout = setTimeout(() => aborter.abort(), PROVIDER_TIMEOUT_MS);
@@ -4570,6 +4585,9 @@ async function streamPlaygroundCompletion(input: {
         requestId,
         reservedNanos,
         finalChargeNanos: chargeNanos,
+        usedTokens: tokens.totalTokens ?? (tokens.inputTokens + tokens.outputTokens),
+        model: input.model,
+        keyGroup: isTokenPlanPlayground ? "token_plan" : undefined,
         releaseReason: clientDisconnected
           ? "Playground client disconnected; reservation released"
           : (streamFailed ? "Playground streaming request was cancelled" : undefined),
