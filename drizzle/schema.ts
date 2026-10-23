@@ -86,7 +86,10 @@ export const referralAttributions = mysqlTable(
     rewardNanos: bigint("rewardNanos", { mode: "number" }).notNull(),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
   },
-  table => [index("referral_attributions_referrer_time_idx").on(table.referrerUserId, table.createdAt)],
+  table => [
+    index("referral_attributions_referrer_time_idx").on(table.referrerUserId, table.createdAt),
+    index("referral_attributions_time_idx").on(table.createdAt),
+  ],
 );
 
 /** A durable reservation and receipt for the reusable 150-member special referral campaign. */

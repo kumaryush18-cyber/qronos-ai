@@ -162,6 +162,11 @@ import {
   listAdminNotifications,
   createAdminNotification,
   deleteAdminNotification,
+  getInviteTrackerState,
+  startInviteTrackerSession,
+  stopInviteTrackerSession,
+  deleteInviteTrackerHistory,
+  clearAllInviteTrackerHistory,
 } from "./db";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { invalidateSessionAuthCache, sdk } from "./_core/sdk";
@@ -1163,6 +1168,27 @@ ${input.intent ? `Requested Notification Type: ${input.intent}` : ""}`;
         return { success: true };
       }),
     specialReferralCampaign: adminProcedure.query(async () => ({ ...(await getSpecialReferralCampaignAdminOverview()), link: buildSpecialReferralCampaignUrl(), bonusUsd: 150 })),
+    inviteTracker: adminProcedure.query(async () => {
+      return getInviteTrackerState();
+    }),
+    startInviteTracker: adminProcedure
+      .input(z.object({ name: z.string().max(120).optional() }).optional())
+      .mutation(async ({ ctx, input }) => {
+        return startInviteTrackerSession(input?.name, ctx.user?.id);
+      }),
+    stopInviteTracker: adminProcedure.mutation(async ({ ctx }) => {
+      return stopInviteTrackerSession(ctx.user?.id);
+    }),
+    deleteInviteTrackerHistory: adminProcedure
+      .input(z.object({ id: z.string() }))
+      .mutation(async ({ ctx, input }) => {
+        await deleteInviteTrackerHistory(input.id, ctx.user?.id);
+        return { success: true };
+      }),
+    clearInviteTrackerHistory: adminProcedure.mutation(async ({ ctx }) => {
+      await clearAllInviteTrackerHistory(ctx.user?.id);
+      return { success: true };
+    }),
     accounts: adminProcedure.input(adminAccountDirectoryInput).query(({ input }) => listAdminAccounts(input)),
     searchUsersForTier: adminProcedure
       .input(z.object({ query: z.string().default("") }))

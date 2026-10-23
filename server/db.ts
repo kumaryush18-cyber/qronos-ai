@@ -1,4 +1,5 @@
 import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, like, lt, lte, ne, notInArray, or, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/mysql-core";
 import { drizzle } from "drizzle-orm/mysql2";
 import mysql from "mysql2/promise";
 import { createHmac, randomBytes, randomInt } from "node:crypto";
@@ -113,6 +114,7 @@ const KIMI_K3_RUNTIME_SETTING_KEY = "kimi_k3_runtime_v1";
 const RENDER_NIM_PROXY_SWARM_SETTING_KEY = "render_nim_proxy_swarm_v1";
 const BAILU_WEBSHARE_PROXY_POOL_SETTING_KEY = "bailu_webshare_proxy_pool_v1";
 export const COMPACT_SCALING_SETTING_KEY = "model_compact_scaling_configs_v1";
+export const INVITE_TRACKER_SETTING_KEY = "admin_invite_tracker_sessions_v1";
 const BAI_REASONING_CONTINUATION_TTL_MS = 10 * 60 * 1_000;
 const BAI_PROVIDER_CIRCUIT_COOLDOWN_MS = 60_000;
 export const BAI_CREDENTIAL_MAX_ACTIVE_REQUESTS = 10;
@@ -9158,6 +9160,309 @@ export async function getGpt6AstraMonthlyPlaygroundUsage(userId: number): Promis
   } catch {
     return 0;
   }
+}
+
+// ============================================================================
+// Live Invite Tracker & History
+// ============================================================================
+
+export interface InviteTrackerInvitedUser {
+  userId: number;
+  email: string;
+  name: string;
+  joinedAt: string;
+}
+
+export interface InviteTrackerLeaderboardEntry {
+  referrerUserId: number;
+  referrerEmail: string;
+  referrerName: string;
+  inviteCount: number;
+  invitedUsers: InviteTrackerInvitedUser[];
+}
+
+export interface InviteTrackerSessionSummary {
+  id: string;
+  name: string;
+  startedAt: string;
+  endedAt: string | null;
+  isActive: boolean;
+  createdByUserId?: number | null;
+  totalInvites: number;
+  uniqueInviters: number;
+  leaderboard: InviteTrackerLeaderboardEntry[];
+}
+
+interface RawInviteTrackerData {
+  activeSession: {
+    id: string;
+    name: string;
+    startedAt: string;
+    createdByUserId?: number | null;
+  } | null;
+  history: Array<{
+    id: string;
+    name: string;
+    startedAt: string;
+    endedAt: string;
+    createdByUserId?: number | null;
+    totalInvites: number;
+    uniqueInviters: number;
+    leaderboard: InviteTrackerLeaderboardEntry[];
+  }>;
+}
+
+async function getRawInviteTrackerData(): Promise<RawInviteTrackerData> {
+  try {
+    const db = await getDb();
+    if (!db) {
+      const fallback = fallbackPlatformSettings.get(INVITE_TRACKER_SETTING_KEY)?.value;
+      if (fallback) return JSON.parse(fallback);
+      return { activeSession: null, history: [] };
+    }
+    const record = (
+      await db
+        .select({ value: platformSettings.value })
+        .from(platformSettings)
+        .where(eq(platformSettings.settingKey, INVITE_TRACKER_SETTING_KEY))
+        .limit(1)
+    )[0];
+    if (record?.value) {
+      return JSON.parse(record.value);
+    }
+    return { activeSession: null, history: [] };
+  } catch (error: any) {
+    console.error("[InviteTracker] Error reading tracker data:", error);
+    return { activeSession: null, history: [] };
+  }
+}
+
+async function saveInviteTrackerData(data: RawInviteTrackerData, updatedByUserId?: number | null): Promise<void> {
+  const serialized = JSON.stringify(data);
+  fallbackPlatformSettings.set(INVITE_TRACKER_SETTING_KEY, {
+    value: serialized,
+    updatedAt: new Date(),
+    updatedByUserId: updatedByUserId ?? null,
+  });
+  try {
+    const db = await getDb();
+    if (db) {
+      await db
+        .insert(platformSettings)
+        .values({
+          settingKey: INVITE_TRACKER_SETTING_KEY,
+          value: serialized,
+          updatedByUserId: updatedByUserId ?? null,
+        })
+        .onDuplicateKeyUpdate({
+          set: {
+            value: serialized,
+            updatedByUserId: updatedByUserId ?? null,
+            updatedAt: new Date(),
+          },
+        });
+    }
+  } catch (error: any) {
+    console.error("[InviteTracker] Error saving tracker data:", error);
+  }
+}
+
+export async function getReferralStatsBetween(
+  startedAt: Date,
+  endedAt: Date = new Date(),
+): Promise<{
+  totalInvites: number;
+  uniqueInviters: number;
+  leaderboard: InviteTrackerLeaderboardEntry[];
+}> {
+  const db = await getDb();
+  if (!db) return { totalInvites: 0, uniqueInviters: 0, leaderboard: [] };
+
+  const referrerUser = alias(users, "referrer");
+  const referredUser = alias(users, "referred");
+
+  const rows = await db
+    .select({
+      id: referralAttributions.id,
+      createdAt: referralAttributions.createdAt,
+      referrerId: referrerUser.id,
+      referrerEmail: referrerUser.email,
+      referrerName: referrerUser.name,
+      referredId: referredUser.id,
+      referredEmail: referredUser.email,
+      referredName: referredUser.name,
+    })
+    .from(referralAttributions)
+    .leftJoin(referrerUser, eq(referralAttributions.referrerUserId, referrerUser.id))
+    .leftJoin(referredUser, eq(referralAttributions.referredUserId, referredUser.id))
+    .where(
+      and(
+        gte(referralAttributions.createdAt, startedAt),
+        lte(referralAttributions.createdAt, endedAt),
+      ),
+    )
+    .orderBy(desc(referralAttributions.createdAt));
+
+  const inviterMap = new Map<number, InviteTrackerLeaderboardEntry>();
+
+  for (const row of rows) {
+    const refId = row.referrerId ?? 0;
+    const refEmail = row.referrerEmail || `user-${refId}@qronos.local`;
+    const refName = row.referrerName || refEmail;
+
+    if (!inviterMap.has(refId)) {
+      inviterMap.set(refId, {
+        referrerUserId: refId,
+        referrerEmail: refEmail,
+        referrerName: refName,
+        inviteCount: 0,
+        invitedUsers: [],
+      });
+    }
+
+    const item = inviterMap.get(refId)!;
+    item.inviteCount += 1;
+    item.invitedUsers.push({
+      userId: row.referredId ?? 0,
+      email: row.referredEmail || `user-${row.referredId}@qronos.local`,
+      name: row.referredName || (row.referredEmail || `User #${row.referredId}`),
+      joinedAt: row.createdAt ? new Date(row.createdAt).toISOString() : new Date().toISOString(),
+    });
+  }
+
+  const leaderboard = Array.from(inviterMap.values()).sort((a, b) => b.inviteCount - a.inviteCount);
+
+  return {
+    totalInvites: rows.length,
+    uniqueInviters: leaderboard.length,
+    leaderboard,
+  };
+}
+
+export async function getInviteTrackerState(): Promise<{
+  activeSession: InviteTrackerSessionSummary | null;
+  history: InviteTrackerSessionSummary[];
+}> {
+  const data = await getRawInviteTrackerData();
+
+  let activeSessionSummary: InviteTrackerSessionSummary | null = null;
+  if (data.activeSession) {
+    const stats = await getReferralStatsBetween(new Date(data.activeSession.startedAt), new Date());
+    activeSessionSummary = {
+      id: data.activeSession.id,
+      name: data.activeSession.name,
+      startedAt: data.activeSession.startedAt,
+      endedAt: null,
+      isActive: true,
+      createdByUserId: data.activeSession.createdByUserId,
+      totalInvites: stats.totalInvites,
+      uniqueInviters: stats.uniqueInviters,
+      leaderboard: stats.leaderboard,
+    };
+  }
+
+  const historySummaries: InviteTrackerSessionSummary[] = (data.history || []).map((h) => ({
+    ...h,
+    isActive: false,
+  }));
+
+  return {
+    activeSession: activeSessionSummary,
+    history: historySummaries,
+  };
+}
+
+export async function startInviteTrackerSession(
+  name?: string,
+  adminUserId?: number | null,
+): Promise<InviteTrackerSessionSummary> {
+  const data = await getRawInviteTrackerData();
+
+  // If there's an ongoing active session, stop it and archive to history first
+  if (data.activeSession) {
+    const finalStats = await getReferralStatsBetween(new Date(data.activeSession.startedAt), new Date());
+    data.history.unshift({
+      id: data.activeSession.id,
+      name: data.activeSession.name,
+      startedAt: data.activeSession.startedAt,
+      endedAt: new Date().toISOString(),
+      createdByUserId: data.activeSession.createdByUserId,
+      totalInvites: finalStats.totalInvites,
+      uniqueInviters: finalStats.uniqueInviters,
+      leaderboard: finalStats.leaderboard,
+    });
+  }
+
+  const newId = `inv_sess_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+  const sessionName = name?.trim() || `Invite Tracking Session #${data.history.length + 1}`;
+  const startedAt = new Date().toISOString();
+
+  data.activeSession = {
+    id: newId,
+    name: sessionName,
+    startedAt,
+    createdByUserId: adminUserId ?? null,
+  };
+
+  await saveInviteTrackerData(data, adminUserId);
+
+  return {
+    id: newId,
+    name: sessionName,
+    startedAt,
+    endedAt: null,
+    isActive: true,
+    createdByUserId: adminUserId ?? null,
+    totalInvites: 0,
+    uniqueInviters: 0,
+    leaderboard: [],
+  };
+}
+
+export async function stopInviteTrackerSession(
+  adminUserId?: number | null,
+): Promise<InviteTrackerSessionSummary> {
+  const data = await getRawInviteTrackerData();
+  if (!data.activeSession) {
+    throw new Error("No active invite tracking session found to stop.");
+  }
+
+  const finalStats = await getReferralStatsBetween(new Date(data.activeSession.startedAt), new Date());
+  const stoppedSession: InviteTrackerSessionSummary = {
+    id: data.activeSession.id,
+    name: data.activeSession.name,
+    startedAt: data.activeSession.startedAt,
+    endedAt: new Date().toISOString(),
+    isActive: false,
+    createdByUserId: data.activeSession.createdByUserId,
+    totalInvites: finalStats.totalInvites,
+    uniqueInviters: finalStats.uniqueInviters,
+    leaderboard: finalStats.leaderboard,
+  };
+
+  data.history.unshift(stoppedSession);
+  data.activeSession = null;
+
+  await saveInviteTrackerData(data, adminUserId);
+
+  return stoppedSession;
+}
+
+export async function deleteInviteTrackerHistory(
+  sessionId: string,
+  adminUserId?: number | null,
+): Promise<void> {
+  const data = await getRawInviteTrackerData();
+  data.history = data.history.filter((h) => h.id !== sessionId);
+  await saveInviteTrackerData(data, adminUserId);
+}
+
+export async function clearAllInviteTrackerHistory(
+  adminUserId?: number | null,
+): Promise<void> {
+  const data = await getRawInviteTrackerData();
+  data.history = [];
+  await saveInviteTrackerData(data, adminUserId);
 }
 
 export type Gpt6AstraQuotaStatus = {

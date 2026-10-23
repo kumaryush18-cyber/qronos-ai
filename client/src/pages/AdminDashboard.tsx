@@ -71,6 +71,7 @@ import { PaymentsWorkspace } from "@/components/payments/PaymentsWorkspace";
 import { AdminPricingSection } from "@/components/admin/pricing/AdminPricingSection";
 import { CacheDebuggerTab } from "@/components/admin/CacheDebuggerTab";
 import { AdminNotificationsSection } from "@/components/admin/notifications/AdminNotificationsSection";
+import { AdminInviteTrackerSection } from "@/components/admin/invites/AdminInviteTrackerSection";
 
 export type AdminSection =
   | "overview"
@@ -84,6 +85,7 @@ export type AdminSection =
   | "payments"
   | "requests"
   | "campaign"
+  | "invite-tracker"
   | "controls"
   | "providers"
   | "operations"
@@ -120,7 +122,10 @@ export default function AdminDashboard({ initialSection }: { initialSection?: Ad
     if (typeof window !== "undefined") {
       const urlParams = new URLSearchParams(window.location.search);
       const tab = urlParams.get("tab") as AdminSection;
-      if (tab) return tab;
+      if (tab) {
+        if ((tab as string) === "invites" || tab === "invite-tracker") return "invite-tracker";
+        return tab;
+      }
       if (window.location.pathname.includes("/admin/support") || window.location.pathname.includes("/admin/live-chat")) {
         return "live-chat";
       }
@@ -468,6 +473,7 @@ export default function AdminDashboard({ initialSection }: { initialSection?: Ad
             "payments",
             "requests",
             "campaign",
+            "invite-tracker",
             "controls",
             "providers",
             "operations",
@@ -511,6 +517,8 @@ export default function AdminDashboard({ initialSection }: { initialSection?: Ad
               ? "Access requests"
               : item === "campaign"
               ? "Special referral"
+              : item === "invite-tracker"
+              ? "Invite tracker"
               : item === "controls"
               ? "Model controls"
               : item === "providers"
@@ -611,6 +619,9 @@ export default function AdminDashboard({ initialSection }: { initialSection?: Ad
           campaign={specialReferralCampaign.data as SpecialReferralCampaignData | undefined}
           loading={specialReferralCampaign.isLoading}
         />
+      )}
+      {section === "invite-tracker" && (
+        <AdminInviteTrackerSection />
       )}
       {section === "controls" && (
         <InferenceControlsSection

@@ -293,3 +293,31 @@ export type ManagedModelOverviewItem = {
   compactTriggerTokens?: number;
 };
 
+export type InviteTrackerInvitedUser = {
+  userId: number;
+  email: string;
+  name: string;
+  joinedAt: string;
+};
+
+export type InviteTrackerLeaderboardEntry = {
+  referrerUserId: number;
+  referrerEmail: string;
+  referrerName: string;
+  inviteCount: number;
+  invitedUsers: InviteTrackerInvitedUser[];
+};
+
+export type InviteTrackerSessionSummary = {
+  id: string;
+  name: string;
+  startedAt: string;
+  endedAt: string | null;
+  isActive: boolean;
+  createdByUserId?: number | null;
+  totalInvites: number;
+  uniqueInviters: number;
+  leaderboard: InviteTrackerLeaderboardEntry[];
+};
+
+
