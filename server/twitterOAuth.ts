@@ -1,4 +1,5 @@
 import { randomBytes, createHash, timingSafeEqual } from "node:crypto";
+import { parse as parseCookieHeader } from "cookie";
 import type { Express, Request, Response } from "express";
 import { sdk } from "./_core/sdk";
 import { getSessionCookieOptions } from "./_core/cookies";
@@ -99,7 +100,7 @@ export function registerTwitterOAuthRoutes(app: Express) {
       // Must be authenticated with Qronos session to earn rewards
       const user = await sdk.authenticateRequest(req).catch(() => null);
       if (!user) {
-        return res.redirect("/sign-in?redirect=/developer");
+        return res.redirect("/signin?redirect=/dashboard/x-rewards");
       }
 
       // Check 12-hour cooldown before even redirecting to Twitter
@@ -107,7 +108,7 @@ export function registerTwitterOAuthRoutes(app: Express) {
       if (!status.canPost) {
         const remainingMinutes = Math.ceil(status.remainingCooldownSeconds / 60);
         return res.redirect(
-          `/developer?twitter_reward=cooldown&remaining_min=${remainingMinutes}`
+          `/dashboard/x-rewards?twitter_reward=cooldown&remaining_min=${remainingMinutes}`
         );
       }
 
@@ -135,7 +136,7 @@ export function registerTwitterOAuthRoutes(app: Express) {
       return res.redirect(authUrl);
     } catch (error: any) {
       console.error("[TwitterOAuth] Authorize error:", error);
-      return res.redirect(`/developer?twitter_reward=error&message=${encodeURIComponent(error?.message || "Auth error")}`);
+      return res.redirect(`/dashboard/x-rewards?twitter_reward=error&message=${encodeURIComponent(error?.message || "Auth error")}`);
     }
   });
 
@@ -148,27 +149,28 @@ export function registerTwitterOAuthRoutes(app: Express) {
 
       if (errorParam) {
         clearOAuthCookies(req, res);
-        return res.redirect(`/developer?twitter_reward=declined&error=${encodeURIComponent(errorParam)}`);
+        return res.redirect(`/dashboard/x-rewards?twitter_reward=declined&error=${encodeURIComponent(errorParam)}`);
       }
 
-      const storedState = req.cookies[TWITTER_STATE_COOKIE];
-      const storedVerifier = req.cookies[TWITTER_VERIFIER_COOKIE];
-      const storedUserIdStr = req.cookies[TWITTER_USER_COOKIE];
+      const cookies = parseCookieHeader(req.headers.cookie ?? "");
+      const storedState = cookies[TWITTER_STATE_COOKIE];
+      const storedVerifier = cookies[TWITTER_VERIFIER_COOKIE];
+      const storedUserIdStr = cookies[TWITTER_USER_COOKIE];
 
       if (!storedState || !storedVerifier || !constantTimeEquals(stateParam, storedState)) {
         clearOAuthCookies(req, res);
-        return res.redirect("/developer?twitter_reward=error&message=invalid_oauth_state");
+        return res.redirect("/dashboard/x-rewards?twitter_reward=error&message=invalid_oauth_state");
       }
 
       const userId = Number.parseInt(storedUserIdStr || "0", 10);
       if (!userId || userId <= 0) {
         clearOAuthCookies(req, res);
-        return res.redirect("/developer?twitter_reward=error&message=session_expired");
+        return res.redirect("/dashboard/x-rewards?twitter_reward=error&message=session_expired");
       }
 
       if (!codeParam) {
         clearOAuthCookies(req, res);
-        return res.redirect("/developer?twitter_reward=error&message=no_authorization_code");
+        return res.redirect("/dashboard/x-rewards?twitter_reward=error&message=no_authorization_code");
       }
 
       // Check 12-hour cooldown again (prevents race conditions)
@@ -176,7 +178,7 @@ export function registerTwitterOAuthRoutes(app: Express) {
       if (!currentStatus.canPost) {
         clearOAuthCookies(req, res);
         const remMin = Math.ceil(currentStatus.remainingCooldownSeconds / 60);
-        return res.redirect(`/developer?twitter_reward=cooldown&remaining_min=${remMin}`);
+        return res.redirect(`/dashboard/x-rewards?twitter_reward=cooldown&remaining_min=${remMin}`);
       }
 
       const clientId = ENV.twitterClientId || process.env.TWITTER_CLIENT_ID || "";
@@ -206,14 +208,14 @@ export function registerTwitterOAuthRoutes(app: Express) {
         const errorText = await tokenRes.text();
         console.error("[TwitterOAuth] Token exchange failed:", tokenRes.status, errorText);
         clearOAuthCookies(req, res);
-        return res.redirect(`/developer?twitter_reward=error&message=token_exchange_failed`);
+        return res.redirect(`/dashboard/x-rewards?twitter_reward=error&message=token_exchange_failed`);
       }
 
       const tokenData = await tokenRes.json();
       const accessToken = tokenData.access_token;
       if (!accessToken) {
         clearOAuthCookies(req, res);
-        return res.redirect(`/developer?twitter_reward=error&message=no_access_token_returned`);
+        return res.redirect(`/dashboard/x-rewards?twitter_reward=error&message=no_access_token_returned`);
       }
 
       // Fetch Twitter user details
@@ -258,7 +260,7 @@ export function registerTwitterOAuthRoutes(app: Express) {
         const tweetErr = await tweetRes.text();
         console.error("[TwitterOAuth] Post tweet failed:", tweetRes.status, tweetErr);
         clearOAuthCookies(req, res);
-        return res.redirect(`/developer?twitter_reward=error&message=tweet_post_failed`);
+        return res.redirect(`/dashboard/x-rewards?twitter_reward=error&message=tweet_post_failed`);
       }
 
       const tweetData = await tweetRes.json();
@@ -283,11 +285,11 @@ export function registerTwitterOAuthRoutes(app: Express) {
         payg_usd: String(grantResult.paygDollars),
       });
 
-      return res.redirect(`/developer?${successParams.toString()}`);
+      return res.redirect(`/dashboard/x-rewards?${successParams.toString()}`);
     } catch (error: any) {
       console.error("[TwitterOAuth] Callback error:", error);
       clearOAuthCookies(req, res);
-      return res.redirect(`/developer?twitter_reward=error&message=${encodeURIComponent(error?.message || "Unknown error")}`);
+      return res.redirect(`/dashboard/x-rewards?twitter_reward=error&message=${encodeURIComponent(error?.message || "Unknown error")}`);
     }
   });
 }

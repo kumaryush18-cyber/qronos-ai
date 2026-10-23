@@ -98,6 +98,12 @@ function Router() {
       <Route path={"/dashboard"}>
         <RouteBoundary><DeveloperDashboard section="overview" /></RouteBoundary>
       </Route>
+      <Route path={"/developer"}>
+        <RouteBoundary><DeveloperDashboard section="x-rewards" /></RouteBoundary>
+      </Route>
+      <Route path={"/developer/:rest*"}>
+        <Redirect to="/dashboard" />
+      </Route>
       <Route path={"/dashboard/playground"}>
         <RouteBoundary><DeveloperDashboard section="playground" /></RouteBoundary>
       </Route>
