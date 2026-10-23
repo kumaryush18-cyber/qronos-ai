@@ -75,6 +75,7 @@ import VapourAccent from "@/components/ui/vapour-accent";
 import { buildQronosCurl, buildQronosJavaScript, buildQronosPython, QRONOS_API_BASE_URL } from "../../../shared/qronosApi";
 import { clearOneTimeApiKey, getOneTimeApiKey, rememberOneTimeApiKey } from "../../../shared/oneTimeApiKey";
 import { buildReferralInviteUrl } from "../../../shared/referrals";
+import { TwitterShareEarnCard } from "@/components/TwitterShareEarnCard";
 
 export const DASHBOARD_VIDEO_URL = "https://res.cloudinary.com/dhrh8heb5/video/upload/v1792215533/QV_1792214944093_szkkmh.mp4";
 
@@ -1706,6 +1707,9 @@ function Overview({
       {/* 3. Unified Balances & Token Allocation Bento with Traveling Star Beam */}
       <UnifiedBalancesPortfolio />
 
+      {/* 4. 𝕏 Share-to-Earn Rewards Card */}
+      <TwitterShareEarnCard />
+
       {/* 2-Column Command & Performance Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 mb-6">
         {/* Left 7 Columns: Personal Activity & Gateway Status */}
@@ -2277,6 +2281,9 @@ function ReferralWorkspace() {
           </div>
         </div>
       </section>
+
+      {/* 𝕏 Share-to-Earn Rewards Card */}
+      <TwitterShareEarnCard />
 
       {/* 2. Rotating Star Border Invitation Card + Stats Bento */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">

@@ -111,6 +111,34 @@ export const specialReferralClaims = mysqlTable(
   ],
 );
 
+/** Durable record of Twitter (X) Share-to-Earn rewards and 12-hour ephemeral balance tracking. */
+export const twitterShareRewards = mysqlTable(
+  "twitter_share_rewards",
+  {
+    id: bigint("id", { mode: "number" }).autoincrement().primaryKey(),
+    userId: int("userId").notNull().references(() => users.id, { onDelete: "cascade" }),
+    twitterUserId: varchar("twitterUserId", { length: 64 }).notNull(),
+    twitterUsername: varchar("twitterUsername", { length: 128 }).notNull(),
+    tweetId: varchar("tweetId", { length: 64 }).notNull(),
+    tweetText: text("tweetText").notNull(),
+    slotIndex: int("slotIndex").default(0).notNull(),
+    grantedTokens: bigint("grantedTokens", { mode: "number" }).default(0).notNull(),
+    grantedPaygNanos: bigint("grantedPaygNanos", { mode: "number" }).default(0).notNull(),
+    status: mysqlEnum("status", ["active", "expired", "revoked"]).default("active").notNull(),
+    postedAt: timestamp("postedAt").defaultNow().notNull(),
+    expiresAt: timestamp("expiresAt").notNull(),
+    expiredAt: timestamp("expiredAt"),
+  },
+  table => [
+    index("twitter_rewards_user_status_idx").on(table.userId, table.status, table.expiresAt),
+    index("twitter_rewards_expires_idx").on(table.status, table.expiresAt),
+    index("twitter_rewards_posted_at_idx").on(table.postedAt),
+    index("twitter_rewards_twitter_user_idx").on(table.twitterUserId),
+  ],
+);
+
+export type TwitterShareReward = typeof twitterShareRewards.$inferSelect;
+
 /** First-party credentials. Passwords are stored only as salted scrypt derivations. */
 export const passwordCredentials = mysqlTable(
   "password_credentials",

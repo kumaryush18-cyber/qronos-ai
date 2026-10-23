@@ -44,6 +44,7 @@ import {
   imageSemanticDescriptions,
   systemNotifications,
   userNotificationReads,
+  twitterShareRewards,
 } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 import { hashPassword, isPermanentEmailAddress, normalizeEmail, nextFailedLoginState, normalizeEmailAllowlistEntries, retryAfterSeconds, verifyPassword } from "./localAuth";
@@ -115,6 +116,7 @@ const RENDER_NIM_PROXY_SWARM_SETTING_KEY = "render_nim_proxy_swarm_v1";
 const BAILU_WEBSHARE_PROXY_POOL_SETTING_KEY = "bailu_webshare_proxy_pool_v1";
 export const COMPACT_SCALING_SETTING_KEY = "model_compact_scaling_configs_v1";
 export const INVITE_TRACKER_SETTING_KEY = "admin_invite_tracker_sessions_v1";
+export const TWITTER_REWARD_CONFIG_SETTING_KEY = "twitter_reward_config_v1";
 const BAI_REASONING_CONTINUATION_TTL_MS = 10 * 60 * 1_000;
 const BAI_PROVIDER_CIRCUIT_COOLDOWN_MS = 60_000;
 export const BAI_CREDENTIAL_MAX_ACTIVE_REQUESTS = 10;
@@ -10454,6 +10456,511 @@ export async function deleteAdminNotification(notificationId: number) {
   await db.delete(systemNotifications).where(eq(systemNotifications.id, notificationId));
   return { success: true };
 }
+
+// ============================================================================
+// Twitter (X) Share-to-Earn Rewards & 15-Slot Campaign Engine
+// ============================================================================
+
+export interface TwitterRewardSlot {
+  slotIndex: number;
+  title: string;
+  focus: string;
+  templateText: string;
+  enabled: boolean;
+  lastGeneratedAt?: string;
+  lastGeneratedModel?: string;
+}
+
+export interface TwitterRewardConfig {
+  enabled: boolean;
+  tokenGrantMillion: number;
+  paygGrantDollars: number;
+  cooldownHours: number;
+  selectedModel: string;
+  slots: TwitterRewardSlot[];
+}
+
+export const DEFAULT_TWITTER_REWARD_SLOTS: TwitterRewardSlot[] = [
+  { slotIndex: 0, title: "Wholesale Frontier Models", focus: "Cheapest rates for Claude Opus 5.5, DeepSeek V4 & GPT-6 Astra", templateText: "🚀 Wholesale AI compute on @QronosAI! Deploy Claude Opus 5.5 & DeepSeek V4 at unbeatable prices. Massive token plans from $15-$800, crypto-native via Solana Pay & domestic UPI accepted. Free Sonnet 5.5 testing live! Join here: {{REFERRAL_LINK}}", enabled: true },
+  { slotIndex: 1, title: "Free Sonnet 5.5 Access", focus: "Free promotional access to Claude Sonnet 5.5 for limited time", templateText: "⚡ Free Claude Sonnet 5.5 access unlocked on @QronosAI! Experience frontier coding performance with zero setup delays. High-volume token grants start at just $15 with sub-millisecond failover routing. Try it today: {{REFERRAL_LINK}}", enabled: true },
+  { slotIndex: 2, title: "Massive Token Quotas", focus: "Bulk token packages starting from $15 to $800", templateText: "💎 Massive token plan grants now live on @QronosAI! Get hundreds of millions of coding tokens starting at just $15 up to $800. Compatible with Cursor, Cline & Claude Code. Instant UPI & crypto checkout supported. Claim yours: {{REFERRAL_LINK}}", enabled: true },
+  { slotIndex: 3, title: "Solana Pay Native", focus: "Instant crypto checkout on Solana network with USDC", templateText: "🌐 Crypto-native AI gateway @QronosAI! Recharge compute instantly via Solana Pay on mainnet with instant confirmation. Access Claude Opus 5.5 & DeepSeek V4 Pro at wholesale rates. Start building now: {{REFERRAL_LINK}}", enabled: true },
+  { slotIndex: 4, title: "Domestic UPI Checkout", focus: "Zero transaction fee instant UPI QR payments for Indian developers", templateText: "🇮🇳 Indian developers: recharge your AI balance instantly via Domestic UPI QR on @QronosAI! Pay directly from PhonePe, GPay or Paytm. Access Claude Opus 5.5 & Sonnet 5.5 at true wholesale prices: {{REFERRAL_LINK}}", enabled: true },
+  { slotIndex: 5, title: "Sub-ms Router Failover", focus: "High-availability proxy balancer with sub-millisecond failover", templateText: "🛡️ Zero downtime AI routing with @QronosAI! Automatic sub-millisecond failover across distributed upstream providers. Run Claude Opus 5.5, GPT-6 & DeepSeek without rate limits or interruptions. Deploy: {{REFERRAL_LINK}}", enabled: true },
+  { slotIndex: 6, title: "Cursor & Cline Drop-in", focus: "Universal OpenAI & Anthropic base URL for AI coding extensions", templateText: "💻 Supercharge Cursor & Cline with @QronosAI! Use one unified OpenAI/Anthropic API endpoint for all frontier models. Token plans from $15-$800 with instant UPI & Solana Pay. Setup in 30 seconds: {{REFERRAL_LINK}}", enabled: true },
+  { slotIndex: 7, title: "Roo Code & Claude Code", focus: "Full native tool-calling and prompt caching support for CLI agents", templateText: "🤖 Full support for Claude Code CLI and Roo Code on @QronosAI! High-context streaming with prompt cache pass-through and wholesale billing. Get your developer key with free Sonnet 5.5 trial: {{REFERRAL_LINK}}", enabled: true },
+  { slotIndex: 8, title: "Enterprise Concurrency", focus: "High RPM/TPM without restrictive tier gating or per-minute throttling", templateText: "🚀 Scale your AI apps with zero rate-limit anxiety on @QronosAI! Pooled enterprise keys deliver massive concurrency on Claude Opus 5.5 & DeepSeek. Instant UPI & Solana recharge: {{REFERRAL_LINK}}", enabled: true },
+  { slotIndex: 9, title: "Deep Reasoning & Thinking", focus: "Extended reasoning tokens on Claude Opus 5.5 and Kimi K3", templateText: "🧠 Next-gen reasoning models are live on @QronosAI! Run Claude Opus 5.5 and Kimi K3 with full thinking token streaming at wholesale costs. Massive token grants from $15. Unlock deep reasoning: {{REFERRAL_LINK}}", enabled: true },
+  { slotIndex: 10, title: "Cross-Protocol Gateway", focus: "Unified translation between OpenAI completions and Anthropic messages", templateText: "🔄 Universal protocol translator: @QronosAI converts OpenAI requests to Anthropic models seamlessly. One API key unlocks every frontier model at wholesale pricing. Try it free: {{REFERRAL_LINK}}", enabled: true },
+  { slotIndex: 11, title: "Wholesale Developer Rates", focus: "Zero retail markup passed directly to developers and solo founders", templateText: "🔥 Stop overpaying for AI APIs! @QronosAI delivers true wholesale pricing on Claude Opus 5.5, Sonnet 5.5 & DeepSeek V4. Plans starting from just $15 to $800. Domestic UPI & Solana accepted: {{REFERRAL_LINK}}", enabled: true },
+  { slotIndex: 12, title: "Flexible PAYG Compute", focus: "Pay only for what you compute with zero monthly subscriptions", templateText: "⚡ Flexible Pay-As-You-Go compute on @QronosAI! No recurring subscriptions or expired credits. Recharge what you need via UPI or Solana crypto and run top-tier frontier models: {{REFERRAL_LINK}}", enabled: true },
+  { slotIndex: 13, title: "Multimodal Vision & Docs", focus: "High-throughput visual analysis, OCR, diagrams, and PDF document parsing", templateText: "👁️ High-throughput vision and document extraction with @QronosAI! Analyze PDFs, diagrams, and images on Claude Sonnet 5.5 and DeepSeek V4 Pro at wholesale rates. Start now: {{REFERRAL_LINK}}", enabled: true },
+  { slotIndex: 14, title: "Verified Community Perks", focus: "10M free tokens on Discord verification plus 25% lifetime referral revenue", templateText: "🎁 Join the @QronosAI developer community! Get 10M free tokens upon Discord verification plus earn 25% lifetime commission on every balance recharge your referrals make. Grab your key: {{REFERRAL_LINK}}", enabled: true },
+];
+
+export function formatTweetExact300(templateText: string, referralCode = "qr01", targetLength = 300): string {
+  const link = `https://qronos.me/sign-up?aff=${referralCode}`;
+  let text = templateText
+    .replace(/\{\{REFERRAL_LINK\}\}/g, link)
+    .replace(/\{\{AFFILIATE_CODE\}\}/g, referralCode)
+    .trim();
+
+  if (!text.includes(link)) {
+    text = `${text} Start here: ${link}`;
+  }
+
+  const tagPool = [
+    " #AI", " #Dev", " #LLM", " #Code", " #Web3", " #Tech", " #Buidl",
+    " #Solana", " #Cursor", " #Coding", " #OpenAI", " #Claude",
+    " #DeepSeek", " #CryptoPay", " #SolanaPay", " #FrontierAI", " #Developers"
+  ];
+
+  if (text.length > targetLength) {
+    text = text.slice(0, targetLength);
+  }
+
+  while (text.length < targetLength) {
+    const diff = targetLength - text.length;
+    const exact = tagPool.find(t => t.length === diff);
+    if (exact) {
+      text += exact;
+      break;
+    }
+    const candidate = tagPool.slice().reverse().find(t => t.length <= diff && (diff - t.length === 0 || diff - t.length >= 4));
+    if (candidate) {
+      text += candidate;
+    } else {
+      if (diff === 1) text += "!";
+      else if (diff === 2) text += " 🚀";
+      else if (diff === 3) text += " ⚡️";
+      else text += "!";
+    }
+  }
+
+  return text.slice(0, targetLength);
+}
+
+export async function getTwitterRewardConfig(): Promise<TwitterRewardConfig> {
+  return cached("twitter_reward_config", 30_000, async () => {
+    try {
+      const db = await getDb();
+      if (!db) {
+        const fallback = fallbackPlatformSettings.get(TWITTER_REWARD_CONFIG_SETTING_KEY)?.value;
+        if (fallback) return JSON.parse(fallback);
+        return {
+          enabled: true,
+          tokenGrantMillion: 30,
+          paygGrantDollars: 0,
+          cooldownHours: 12,
+          selectedModel: "claude-sonnet-5.5",
+          slots: DEFAULT_TWITTER_REWARD_SLOTS,
+        };
+      }
+
+      const record = (
+        await db
+          .select({ value: platformSettings.value })
+          .from(platformSettings)
+          .where(eq(platformSettings.settingKey, TWITTER_REWARD_CONFIG_SETTING_KEY))
+          .limit(1)
+      )[0];
+
+      if (record?.value) {
+        const parsed = JSON.parse(record.value);
+        if (Array.isArray(parsed.slots)) {
+          const filledSlots = DEFAULT_TWITTER_REWARD_SLOTS.map((def, idx) => {
+            const existing = parsed.slots.find((s: any) => s.slotIndex === idx);
+            return existing ? { ...def, ...existing } : def;
+          });
+          return { ...parsed, slots: filledSlots };
+        }
+        return { ...parsed, slots: DEFAULT_TWITTER_REWARD_SLOTS };
+      }
+
+      return {
+        enabled: true,
+        tokenGrantMillion: 30,
+        paygGrantDollars: 0,
+        cooldownHours: 12,
+        selectedModel: "claude-sonnet-5.5",
+        slots: DEFAULT_TWITTER_REWARD_SLOTS,
+      };
+    } catch (err) {
+      console.error("[TwitterReward] Error loading config:", err);
+      return {
+        enabled: true,
+        tokenGrantMillion: 30,
+        paygGrantDollars: 0,
+        cooldownHours: 12,
+        selectedModel: "claude-sonnet-5.5",
+        slots: DEFAULT_TWITTER_REWARD_SLOTS,
+      };
+    }
+  });
+}
+
+export async function saveTwitterRewardConfig(
+  config: TwitterRewardConfig,
+  adminUserId?: number | null
+): Promise<void> {
+  bustCache("twitter_reward_config");
+  const serialized = JSON.stringify(config);
+  fallbackPlatformSettings.set(TWITTER_REWARD_CONFIG_SETTING_KEY, {
+    value: serialized,
+    updatedAt: new Date(),
+    updatedByUserId: adminUserId ?? null,
+  });
+
+  try {
+    const db = await getDb();
+    if (db) {
+      await db
+        .insert(platformSettings)
+        .values({
+          settingKey: TWITTER_REWARD_CONFIG_SETTING_KEY,
+          value: serialized,
+          updatedByUserId: adminUserId ?? null,
+        })
+        .onDuplicateKeyUpdate({
+          set: {
+            value: serialized,
+            updatedByUserId: adminUserId ?? null,
+            updatedAt: new Date(),
+          },
+        });
+    }
+  } catch (err) {
+    console.error("[TwitterReward] Error saving config:", err);
+  }
+}
+
+export async function syncUserTwitterRewardExpiry(userId: number): Promise<void> {
+  const db = await getDb();
+  if (!db || !userId) return;
+
+  try {
+    const now = new Date();
+    const expiredActive = await db
+      .select()
+      .from(twitterShareRewards)
+      .where(
+        and(
+          eq(twitterShareRewards.userId, userId),
+          eq(twitterShareRewards.status, "active"),
+          lte(twitterShareRewards.expiresAt, now)
+        )
+      );
+
+    if (expiredActive.length === 0) return;
+
+    for (const reward of expiredActive) {
+      await db
+        .update(twitterShareRewards)
+        .set({ status: "expired", expiredAt: now })
+        .where(eq(twitterShareRewards.id, reward.id));
+
+      if (reward.grantedTokens > 0) {
+        await db
+          .update(creditAccounts)
+          .set({
+            codingPlanTokens: sql`GREATEST(0, ${creditAccounts.codingPlanTokens} - ${reward.grantedTokens})`,
+          })
+          .where(eq(creditAccounts.userId, userId));
+      }
+
+      if (reward.grantedPaygNanos > 0) {
+        await db
+          .update(creditAccounts)
+          .set({
+            paygBalanceNanos: sql`GREATEST(0, ${creditAccounts.paygBalanceNanos} - ${reward.grantedPaygNanos})`,
+          })
+          .where(eq(creditAccounts.userId, userId));
+      }
+
+      await db.insert(creditLedger).values({
+        userId,
+        kind: "usage_debit",
+        amountNanos: reward.grantedPaygNanos,
+        balanceAfterNanos: 0,
+        referenceId: `twitter_reward_expired:${reward.id}`,
+        note: `Twitter 12-hour reward grant expired (-${Math.round(reward.grantedTokens / 1_000_000)}M tokens).`,
+      });
+    }
+  } catch (err) {
+    console.error("[TwitterReward] Error syncing reward expiry:", err);
+  }
+}
+
+export async function getUserTwitterRewardStatus(userId: number) {
+  const db = await getDb();
+  if (!db || !userId) {
+    return {
+      canPost: true,
+      lastPostAt: null,
+      nextPostAllowedAt: null,
+      remainingCooldownSeconds: 0,
+      totalPostsCount: 0,
+      activeReward: null,
+    };
+  }
+
+  await syncUserTwitterRewardExpiry(userId);
+
+  const [latestReward] = await db
+    .select()
+    .from(twitterShareRewards)
+    .where(eq(twitterShareRewards.userId, userId))
+    .orderBy(desc(twitterShareRewards.postedAt))
+    .limit(1);
+
+  const [countRes] = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(twitterShareRewards)
+    .where(eq(twitterShareRewards.userId, userId));
+
+  const totalPostsCount = Number(countRes?.count ?? 0);
+
+  if (!latestReward) {
+    return {
+      canPost: true,
+      lastPostAt: null,
+      nextPostAllowedAt: null,
+      remainingCooldownSeconds: 0,
+      totalPostsCount: 0,
+      activeReward: null,
+    };
+  }
+
+  const postedAtMs = new Date(latestReward.postedAt).getTime();
+  const COOLDOWN_MS = 12 * 60 * 60 * 1000;
+  const nextAllowedMs = postedAtMs + COOLDOWN_MS;
+  const nowMs = Date.now();
+  const diffSec = Math.max(0, Math.ceil((nextAllowedMs - nowMs) / 1000));
+  const canPost = diffSec === 0;
+
+  let activeReward = null;
+  if (latestReward.status === "active") {
+    const expiresMs = new Date(latestReward.expiresAt).getTime();
+    if (expiresMs > nowMs) {
+      activeReward = {
+        id: latestReward.id,
+        tweetId: latestReward.tweetId,
+        grantedTokens: latestReward.grantedTokens,
+        grantedPaygNanos: latestReward.grantedPaygNanos,
+        expiresAt: new Date(latestReward.expiresAt).toISOString(),
+        remainingExpiresSeconds: Math.max(0, Math.ceil((expiresMs - nowMs) / 1000)),
+      };
+    }
+  }
+
+  return {
+    canPost,
+    lastPostAt: latestReward.postedAt ? new Date(latestReward.postedAt).toISOString() : null,
+    nextPostAllowedAt: new Date(nextAllowedMs).toISOString(),
+    remainingCooldownSeconds: diffSec,
+    totalPostsCount,
+    activeReward,
+  };
+}
+
+export async function claimTwitterReward(input: {
+  userId: number;
+  twitterUserId: string;
+  twitterUsername: string;
+  tweetId: string;
+  tweetText: string;
+  slotIndex: number;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+
+  await syncUserTwitterRewardExpiry(input.userId);
+
+  const status = await getUserTwitterRewardStatus(input.userId);
+  if (!status.canPost) {
+    throw new Error(`Reward cooldown active. Please wait ${Math.ceil(status.remainingCooldownSeconds / 60)} minutes.`);
+  }
+
+  await ensureCreditAccount(input.userId);
+
+  const config = await getTwitterRewardConfig();
+  const tokensToAdd = Math.max(0, config.tokenGrantMillion) * 1_000_000;
+  const paygToAddNanos = Math.max(0, config.paygGrantDollars) * 1_000_000_000;
+
+  const now = new Date();
+  const expiresAt = new Date(now.getTime() + 12 * 60 * 60 * 1000);
+
+  return db.transaction(async tx => {
+    // 1. NON-STACKING CHECK: If user still has any active prior reward, deduct its remaining unconsumed grant
+    const priorActive = await tx
+      .select()
+      .from(twitterShareRewards)
+      .where(
+        and(
+          eq(twitterShareRewards.userId, input.userId),
+          eq(twitterShareRewards.status, "active")
+        )
+      );
+
+    for (const prior of priorActive) {
+      await tx
+        .update(twitterShareRewards)
+        .set({ status: "expired", expiredAt: now })
+        .where(eq(twitterShareRewards.id, prior.id));
+
+      if (prior.grantedTokens > 0) {
+        await tx
+          .update(creditAccounts)
+          .set({
+            codingPlanTokens: sql`GREATEST(0, ${creditAccounts.codingPlanTokens} - ${prior.grantedTokens})`,
+          })
+          .where(eq(creditAccounts.userId, input.userId));
+      }
+
+      if (prior.grantedPaygNanos > 0) {
+        await tx
+          .update(creditAccounts)
+          .set({
+            paygBalanceNanos: sql`GREATEST(0, ${creditAccounts.paygBalanceNanos} - ${prior.grantedPaygNanos})`,
+          })
+          .where(eq(creditAccounts.userId, input.userId));
+      }
+    }
+
+    // 2. Insert new twitter_share_rewards row
+    const insertRes = await tx.insert(twitterShareRewards).values({
+      userId: input.userId,
+      twitterUserId: input.twitterUserId,
+      twitterUsername: input.twitterUsername,
+      tweetId: input.tweetId,
+      tweetText: input.tweetText,
+      slotIndex: input.slotIndex,
+      grantedTokens: tokensToAdd,
+      grantedPaygNanos: paygToAddNanos,
+      status: "active",
+      postedAt: now,
+      expiresAt,
+    });
+
+    const rewardId = Number(insertRes[0].insertId);
+
+    // 3. Add fresh new grant to user account
+    if (tokensToAdd > 0) {
+      await tx
+        .update(creditAccounts)
+        .set({ codingPlanTokens: sql`${creditAccounts.codingPlanTokens} + ${tokensToAdd}` })
+        .where(eq(creditAccounts.userId, input.userId));
+    }
+
+    if (paygToAddNanos > 0) {
+      await tx
+        .update(creditAccounts)
+        .set({ paygBalanceNanos: sql`${creditAccounts.paygBalanceNanos} + ${paygToAddNanos}` })
+        .where(eq(creditAccounts.userId, input.userId));
+    }
+
+    // 4. Record ledger entry
+    await tx.insert(creditLedger).values({
+      userId: input.userId,
+      kind: "referral_reward",
+      amountNanos: paygToAddNanos,
+      balanceAfterNanos: paygToAddNanos,
+      referenceId: `twitter_reward:${rewardId}`,
+      note: `Twitter Share-to-Earn: +${config.tokenGrantMillion}M Tokens${config.paygGrantDollars > 0 ? ` & $${config.paygGrantDollars.toFixed(2)} PAYG` : ""} (Active for 12 hours).`,
+    });
+
+    // 5. Send system notification
+    const userRow = (await tx.select({ email: users.email }).from(users).where(eq(users.id, input.userId)).limit(1))[0];
+    if (userRow?.email) {
+      await tx.insert(systemNotifications).values({
+        title: "𝕏 Share Reward Activated!",
+        message: `Your X post was verified! +${config.tokenGrantMillion}M Tokens${config.paygGrantDollars > 0 ? ` and $${config.paygGrantDollars.toFixed(2)} PAYG` : ""} have been loaded to your account for the next 12 hours.`,
+        type: "update",
+        targetAudience: "SPECIFIC_EMAILS",
+        targetEmails: normalizeEmail(userRow.email),
+        createdByUserId: input.userId,
+        createdAt: now,
+      });
+    }
+
+    return {
+      rewardId,
+      tokensMillion: config.tokenGrantMillion,
+      paygDollars: config.paygGrantDollars,
+      expiresAt: expiresAt.toISOString(),
+    };
+  });
+}
+
+export async function listTwitterRewardsAdminOverview() {
+  const db = await getDb();
+  if (!db) {
+    return {
+      totalPosts: 0,
+      uniqueUsers: 0,
+      totalTokensGranted: 0,
+      totalPaygGrantedNanos: 0,
+      claims: [],
+    };
+  }
+
+  try {
+    const claims = await db
+      .select({
+        id: twitterShareRewards.id,
+        userId: twitterShareRewards.userId,
+        userEmail: users.email,
+        userName: users.name,
+        twitterUsername: twitterShareRewards.twitterUsername,
+        twitterUserId: twitterShareRewards.twitterUserId,
+        tweetId: twitterShareRewards.tweetId,
+        tweetText: twitterShareRewards.tweetText,
+        slotIndex: twitterShareRewards.slotIndex,
+        grantedTokens: twitterShareRewards.grantedTokens,
+        grantedPaygNanos: twitterShareRewards.grantedPaygNanos,
+        status: twitterShareRewards.status,
+        postedAt: twitterShareRewards.postedAt,
+        expiresAt: twitterShareRewards.expiresAt,
+        expiredAt: twitterShareRewards.expiredAt,
+      })
+      .from(twitterShareRewards)
+      .innerJoin(users, eq(twitterShareRewards.userId, users.id))
+      .orderBy(desc(twitterShareRewards.postedAt))
+      .limit(200);
+
+    const [stats] = await db
+      .select({
+        totalPosts: sql<number>`count(*)`,
+        uniqueUsers: sql<number>`count(distinct ${twitterShareRewards.userId})`,
+        totalTokens: sql<number>`coalesce(sum(${twitterShareRewards.grantedTokens}), 0)`,
+        totalPayg: sql<number>`coalesce(sum(${twitterShareRewards.grantedPaygNanos}), 0)`,
+      })
+      .from(twitterShareRewards);
+
+    return {
+      totalPosts: Number(stats?.totalPosts ?? 0),
+      uniqueUsers: Number(stats?.uniqueUsers ?? 0),
+      totalTokensGranted: Number(stats?.totalTokens ?? 0),
+      totalPaygGrantedNanos: Number(stats?.totalPayg ?? 0),
+      claims: claims.map((c) => ({
+        ...c,
+        id: Number(c.id),
+        postedAt: c.postedAt ? new Date(c.postedAt).toISOString() : new Date().toISOString(),
+        expiresAt: c.expiresAt ? new Date(c.expiresAt).toISOString() : new Date().toISOString(),
+      })),
+    };
+  } catch (err) {
+    console.error("[TwitterReward] Error listing admin overview:", err);
+    return {
+      totalPosts: 0,
+      uniqueUsers: 0,
+      totalTokensGranted: 0,
+      totalPaygGrantedNanos: 0,
+      claims: [],
+    };
+  }
+}
+
 
 
 

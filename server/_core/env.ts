@@ -11,4 +11,7 @@ export const ENV = {
   discordClientSecret: process.env.DISCORD_CLIENT_SECRET ?? "",
   discordBotToken: process.env.DISCORD_BOT_TOKEN ?? "",
   discordGuildId: process.env.DISCORD_GUILD_ID ?? "",
+  twitterClientId: process.env.TWITTER_CLIENT_ID ?? "",
+  twitterClientSecret: process.env.TWITTER_CLIENT_SECRET ?? "",
+  twitterCallbackUrl: process.env.TWITTER_CALLBACK_URL ?? "",
 };
