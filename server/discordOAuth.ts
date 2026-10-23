@@ -5,7 +5,7 @@ import { awardDiscordVerificationTokens, bindDiscordIdentity, markDiscordVerifie
 import { appOrigin } from "./githubOAuth";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { ENV } from "./_core/env";
-import { sdk } from "./_core/sdk";
+import { invalidateSessionAuthCache, sdk } from "./_core/sdk";
 
 const DISCORD_AUTHORIZE_URL = "https://discord.com/oauth2/authorize";
 const DISCORD_TOKEN_URL = "https://discord.com/api/v10/oauth2/token";
@@ -174,6 +174,7 @@ export function registerDiscordOAuthRoutes(app: Express) {
       }
       await markDiscordVerified(user.id);
       await awardDiscordVerificationTokens(user.id);
+      invalidateSessionAuthCache(user.openId);
 
       res.redirect(302, "/dashboard?verified=discord");
     } catch (error) {

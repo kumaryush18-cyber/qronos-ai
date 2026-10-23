@@ -2026,9 +2026,65 @@ function OverviewPricingLink() {
 
 export default function DeveloperDashboard({ section = "overview", modelId }: { section?: Section; modelId?: string }) {
   const { user, loading } = useAuth();
+  const utils = trpc.useUtils();
   const workspaceVerified = Boolean(user);
   const usage = trpc.developer.usage.useQuery(undefined, { enabled: Boolean(user) });
   const videoReady = useDashboardVideoPreloader(DASHBOARD_VIDEO_URL);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const searchParams = new URLSearchParams(window.location.search);
+    const verified = searchParams.get("verified");
+    const discordError = searchParams.get("error");
+
+    if (verified === "discord") {
+      utils.auth.me.invalidate();
+      utils.developer.discordVerificationStatus.invalidate();
+      utils.developer.usage.invalidate();
+
+      toast.success("Discord verification successful!", {
+        description: "10,000,000 free tokens have been added to your balance. API key generation and Playground completions are now active.",
+        duration: 8000,
+      });
+
+      const cleanUrl = window.location.pathname + (window.location.hash || "");
+      window.history.replaceState({}, "", cleanUrl);
+    } else if (discordError) {
+      const errorMap: Record<string, { title: string; desc: string }> = {
+        "not-member": {
+          title: "Discord Verification Incomplete",
+          desc: "You must join the official Qronos AI Discord server before verifying. Click Step 1 to join, then Step 2 to verify.",
+        },
+        "already-linked": {
+          title: "Discord Account Already Linked",
+          desc: "This Discord account is already bound to another Qronos AI account. Each Discord account can only verify one workspace.",
+        },
+        "state-error": {
+          title: "Verification Session Expired",
+          desc: "Your authorization session timed out or cookies were blocked. Please click Verify Discord to try again.",
+        },
+        failed: {
+          title: "Discord Verification Failed",
+          desc: "We could not confirm your server membership due to a network or Discord API timeout. Please retry.",
+        },
+      };
+
+      const info = errorMap[discordError] || {
+        title: "Discord Verification Failed",
+        desc: `Could not verify your Discord membership (code: ${discordError}). Please try again.`,
+      };
+
+      toast.error(info.title, {
+        description: info.desc,
+        duration: 9000,
+      });
+
+      openDiscordVerifyModal(discordError);
+
+      const cleanUrl = window.location.pathname + (window.location.hash || "");
+      window.history.replaceState({}, "", cleanUrl);
+    }
+  }, [utils]);
 
   const isOverview = section === "overview";
   const isWaitingForVideo = isOverview && !videoReady;

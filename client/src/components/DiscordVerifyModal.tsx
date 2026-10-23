@@ -13,11 +13,12 @@ import {
   LockKeyhole,
   ShieldCheck,
   Sparkles,
+  TriangleAlert,
 } from "lucide-react";
 
-export function openDiscordVerifyModal() {
+export function openDiscordVerifyModal(errorCode?: string) {
   if (typeof window !== "undefined") {
-    window.dispatchEvent(new CustomEvent("qronos:open-discord-verify"));
+    window.dispatchEvent(new CustomEvent("qronos:open-discord-verify", { detail: { error: errorCode } }));
   }
 }
 
@@ -30,6 +31,7 @@ export function DiscordVerifyModal({
 } = {}) {
   const [internalOpen, setInternalOpen] = useState(false);
   const [hasJoined, setHasJoined] = useState(false);
+  const [modalError, setModalError] = useState<string | null>(null);
 
   const isControlled = controlledOpen !== undefined;
   const isOpen = isControlled ? controlledOpen : internalOpen;
@@ -37,14 +39,27 @@ export function DiscordVerifyModal({
   const setOpen = (next: boolean) => {
     if (controlledOnOpenChange) controlledOnOpenChange(next);
     if (!isControlled) setInternalOpen(next);
+    if (!next) setModalError(null);
   };
 
   useEffect(() => {
-    const handleOpen = () => {
+    const handleOpen = (e?: any) => {
+      if (e?.detail?.error) {
+        setModalError(e.detail.error);
+      }
       setOpen(true);
     };
     window.addEventListener("qronos:open-discord-verify", handleOpen);
     return () => window.removeEventListener("qronos:open-discord-verify", handleOpen);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const searchError = new URLSearchParams(window.location.search).get("error");
+    if (searchError) {
+      setModalError(searchError);
+      setOpen(true);
+    }
   }, []);
 
   const handleJoinClick = () => {
@@ -93,6 +108,33 @@ export function DiscordVerifyModal({
               <strong className="text-emerald-400 font-bold">10,000,000 free tokens</strong>, and activate API key generation &amp; Playground completions.
             </p>
           </div>
+
+          {/* Error Banner if user failed verification */}
+          {modalError && (
+            <div className="relative z-10 my-3 p-3.5 rounded-xl border border-amber-400/40 bg-gradient-to-r from-amber-500/20 via-amber-500/10 to-transparent flex items-start gap-3 shadow-md">
+              <TriangleAlert className="h-5 w-5 text-amber-400 shrink-0 mt-0.5" />
+              <div>
+                <h4 className="text-xs font-bold text-amber-200">
+                  {modalError === "not-member"
+                    ? "Server Membership Not Found"
+                    : modalError === "already-linked"
+                    ? "Discord Account Already Bound"
+                    : modalError === "state-error"
+                    ? "Verification Session Expired"
+                    : "Verification Incomplete"}
+                </h4>
+                <p className="text-[11px] text-zinc-300 mt-0.5 leading-relaxed">
+                  {modalError === "not-member"
+                    ? "We could not find your Discord account in the Qronos AI server. Please click Step 1 below to join the server first, wait a few seconds, then click Step 2."
+                    : modalError === "already-linked"
+                    ? "This Discord account was already used to verify another Qronos account (1-to-1 binding rule)."
+                    : modalError === "state-error"
+                    ? "Session timed out or cookies were blocked. Please click Step 2 to retry."
+                    : "We could not verify your Discord membership. Please retry."}
+                </p>
+              </div>
+            </div>
+          )}
 
           {/* Two-Step Verification Flow Cards */}
           <div className="relative z-10 space-y-3 mt-4 sm:mt-5">

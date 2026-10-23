@@ -33,6 +33,7 @@ export function clearSessionAuthCache(openIdOrToken?: string) {
     }
   }
 }
+export const invalidateSessionAuthCache = clearSessionAuthCache;
 
 export function revokeSessionToken(token: string | undefined | null) {
   if (!token || typeof token !== "string") return;

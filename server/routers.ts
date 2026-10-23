@@ -160,7 +160,7 @@ import {
   deleteAdminNotification,
 } from "./db";
 import { getSessionCookieOptions } from "./_core/cookies";
-import { sdk } from "./_core/sdk";
+import { invalidateSessionAuthCache, sdk } from "./_core/sdk";
 import { systemRouter } from "./_core/systemRouter";
 import { adminProcedure, protectedProcedure, publicProcedure, router, verifiedDeveloperProcedure } from "./_core/trpc";
 import { configuredEmailAllowlist } from "./localAuth";
@@ -1567,6 +1567,10 @@ ${input.intent ? `Requested Notification Type: ${input.intent}` : ""}`;
             bypassedByAdmin: true,
           },
         });
+        const userObj = await getUserByEmail(input.email);
+        if (userObj?.openId) {
+          invalidateSessionAuthCache(userObj.openId);
+        }
         return result;
       }),
     discordVerifiedAccountsList: adminProcedure
