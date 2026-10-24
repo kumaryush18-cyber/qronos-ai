@@ -20,6 +20,7 @@ import { registerCashfreeGateway } from "../cashfreeGateway";
 import { registerDodoPaymentsGateway } from "../dodoPaymentsGateway";
 import { registerWhopPaymentGateway } from "../whopPaymentGateway";
 import { registerTwitterOAuthRoutes } from "../twitterOAuth";
+import { startDiscordBotService } from "../discordBotService";
 import { isRequestPayloadTooLarge, requestPayloadTooLargeResponse, TOKENFORGE_JSON_BODY_LIMIT } from "../requestPayload";
 import {
   globalIpRateLimit,
@@ -195,6 +196,11 @@ async function startServer() {
 
   Promise.all([ensureCatalogue(), clearLegacyAdministratorRoles(), loadAndCacheModelPricingOverrides()]).catch(error => {
     console.error("[Qronos AI] Startup access and catalogue warmup failed; requests will retry catalogue initialization on demand", error);
+  });
+
+  // Start Discord AI Companion service (runs in background on Azure VM, $0 extra cost)
+  void startDiscordBotService().catch(error => {
+    console.error("[Qronos AI] Discord Bot service start failed:", error);
   });
 }
 

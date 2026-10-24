@@ -175,7 +175,18 @@ import {
   DEFAULT_TWITTER_REWARD_SLOTS,
   verifyAndClaimTwitterRewardViaUrl,
   getOrCreateReferralCode,
+  getDiscordBotConfig,
+  saveDiscordBotConfig,
+  listDiscordMemberProfiles,
+  deleteDiscordMemberProfile,
+  getDiscordChannelSummary,
 } from "./db";
+import {
+  getDiscordBotLiveStatus,
+  startDiscordBotService,
+  stopDiscordBotService,
+  sendDiscordBotTestMessage,
+} from "./discordBotService";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { invalidateSessionAuthCache, sdk } from "./_core/sdk";
 import { systemRouter } from "./_core/systemRouter";
@@ -1280,6 +1291,72 @@ ${input.intent ? `Requested Notification Type: ${input.intent}` : ""}`;
           },
         });
         return { success: true };
+      }),
+    discordBotStatus: adminProcedure.query(async () => {
+      return getDiscordBotLiveStatus();
+    }),
+    saveDiscordBotConfig: adminProcedure
+      .input(
+        z.object({
+          enabled: z.boolean(),
+          systemPrompt: z.string().min(10).max(5000),
+          modelId: z.string().min(1),
+          apiBaseUrl: z.string().min(1),
+          apiKey: z.string().min(1),
+          guildId: z.string().min(1),
+          allowedChannelIds: z.array(z.string()),
+          proactiveEnabled: z.boolean(),
+          proactiveIntervalMinutes: z.number().int().min(5).max(1440),
+          naughtyLevel: z.number().int().min(0).max(100),
+          reactionProbability: z.number().int().min(0).max(100),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const updated = await saveDiscordBotConfig(input, ctx.user.id);
+        await writeAuditEvent({
+          actorUserId: ctx.user.id,
+          action: "discord_bot.config_updated",
+          entityType: "platform_setting",
+          entityId: "discord_bot_config",
+          metadata: {
+            enabled: input.enabled,
+            modelId: input.modelId,
+            naughtyLevel: input.naughtyLevel,
+            proactiveEnabled: input.proactiveEnabled,
+          },
+        });
+        return { success: true, config: updated };
+      }),
+    discordBotMembers: adminProcedure.query(async () => {
+      return listDiscordMemberProfiles();
+    }),
+    deleteDiscordBotMember: adminProcedure
+      .input(z.object({ discordUserId: z.string() }))
+      .mutation(async ({ input }) => {
+        const ok = await deleteDiscordMemberProfile(input.discordUserId);
+        return { success: ok };
+      }),
+    restartDiscordBot: adminProcedure.mutation(async () => {
+      await stopDiscordBotService();
+      const restarted = await startDiscordBotService();
+      return { success: restarted };
+    }),
+    discordBotChannelSummary: adminProcedure
+      .input(z.object({ channelId: z.string().optional() }))
+      .query(async ({ input }) => {
+        const config = await getDiscordBotConfig();
+        const chanId = input.channelId || config.allowedChannelIds[0] || "1562668900565393478";
+        return getDiscordChannelSummary(chanId);
+      }),
+    sendDiscordBotMessage: adminProcedure
+      .input(
+        z.object({
+          channelId: z.string().optional(),
+          content: z.string().min(1).max(2000),
+        })
+      )
+      .mutation(async ({ input }) => {
+        return sendDiscordBotTestMessage(input.channelId, input.content);
       }),
     regenerateTwitterSlot: adminProcedure
       .input(

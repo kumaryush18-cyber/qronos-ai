@@ -73,6 +73,7 @@ import { CacheDebuggerTab } from "@/components/admin/CacheDebuggerTab";
 import { AdminNotificationsSection } from "@/components/admin/notifications/AdminNotificationsSection";
 import { AdminInviteTrackerSection } from "@/components/admin/invites/AdminInviteTrackerSection";
 import { AdminTwitterRewardsSection } from "@/components/admin/twitter/AdminTwitterRewardsSection";
+import { AdminDiscordBotSection } from "@/components/admin/discord/AdminDiscordBotSection";
 
 export type AdminSection =
   | "overview"
@@ -88,6 +89,7 @@ export type AdminSection =
   | "campaign"
   | "invite-tracker"
   | "twitter"
+  | "discord-bot"
   | "controls"
   | "providers"
   | "operations"
@@ -478,6 +480,7 @@ export default function AdminDashboard({ initialSection }: { initialSection?: Ad
             "campaign",
             "invite-tracker",
             "twitter",
+            "discord-bot",
             "controls",
             "providers",
             "operations",
@@ -525,6 +528,8 @@ export default function AdminDashboard({ initialSection }: { initialSection?: Ad
               ? "Invite tracker"
               : item === "twitter"
               ? "𝕏 Rewards"
+              : item === "discord-bot"
+              ? "Discord Bot"
               : item === "controls"
               ? "Model controls"
               : item === "providers"
@@ -631,6 +636,9 @@ export default function AdminDashboard({ initialSection }: { initialSection?: Ad
       )}
       {section === "twitter" && (
         <AdminTwitterRewardsSection />
+      )}
+      {section === "discord-bot" && (
+        <AdminDiscordBotSection />
       )}
       {section === "controls" && (
         <InferenceControlsSection

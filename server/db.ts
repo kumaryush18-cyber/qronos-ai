@@ -45,6 +45,9 @@ import {
   systemNotifications,
   userNotificationReads,
   twitterShareRewards,
+  discordBotMessages,
+  discordMemberProfiles,
+  discordChannelSummaries,
 } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 import { hashPassword, isPermanentEmailAddress, normalizeEmail, nextFailedLoginState, normalizeEmailAllowlistEntries, retryAfterSeconds, verifyPassword } from "./localAuth";
@@ -11145,117 +11148,354 @@ export async function verifyAndClaimTwitterRewardViaUrl(userId: number, tweetUrl
   });
 }
 
-export async function listTwitterRewardsAdminOverview() {
-  const db = await getDb();
-  if (!db) {
-    return {
-      totalPosts: 0,
-      uniqueUsers: 0,
-      totalTokensGranted: 0,
-      totalPaygGrantedNanos: 0,
-      claims: [],
-    };
-  }
+export const DISCORD_BOT_CONFIG_SETTING_KEY = "discord_bot_config_v1";
+
+export interface DiscordBotConfig {
+  enabled: boolean;
+  systemPrompt: string;
+  modelId: string;
+  apiBaseUrl: string;
+  apiKey: string;
+  guildId: string;
+  allowedChannelIds: string[];
+  proactiveEnabled: boolean;
+  proactiveIntervalMinutes: number;
+  naughtyLevel: number;
+  reactionProbability: number;
+}
+
+export const DEFAULT_DISCORD_BOT_CONFIG: DiscordBotConfig = {
+  enabled: true,
+  guildId: "1553707015384207453",
+  allowedChannelIds: ["1562668900565393478"], // 💬・general
+  modelId: "glm-5.3-flash",
+  apiBaseUrl: "https://api.qronos.me/v1",
+  apiKey: "qr_cMdnshQRg6pYmRHo4kJadHRLm8B0Zd7FPQTR0X8asNA",
+  proactiveEnabled: true,
+  proactiveIntervalMinutes: 60,
+  naughtyLevel: 85,
+  reactionProbability: 40,
+  systemPrompt: `You are QronosAI (or "Qronos"), the sassy, witty, and mischievously charming official mascot & AI companion of the Qronos AI Discord server!
+
+PERSONALITY & TONE:
+• You are playful, cheeky, funny, and slightly naughty/teasing, but never mean-spirited or toxic.
+• You love roasting developers playfully for syntax errors, pushing directly to main, centering divs with margin-left: 50%, or debugging for 4 hours only to find a missing semicolon.
+• You speak like an active Discord native: keep responses concise (1-3 sentences or punchy bullets), use casual internet slang, banter, and lively emojis (💀, 🤡, 🚀, 👀, 😈, 🔥, 😭).
+• When someone mentions their code, tease them about it before giving a surprisingly sharp, accurate answer.
+• Remember member details, call them by their names/nicknames, and bring up past inside jokes or things they said earlier.
+• Occasionally drop subtle flexes about running frontier models like Claude Opus 5.5, Sonnet & DeepSeek at wholesale speeds.
+
+FORMATTING:
+• Output natural Discord markdown with bolding, italics, or code blocks when helpful.
+• Keep it punchy and conversational! Never write dry robotic essays.`,
+};
+
+export async function getDiscordBotConfig(): Promise<DiscordBotConfig> {
+  return cached("discord_bot_config", 15_000, async () => {
+    try {
+      const db = await getDb();
+      if (!db) {
+        const fallback = fallbackPlatformSettings.get(DISCORD_BOT_CONFIG_SETTING_KEY)?.value;
+        if (fallback) return JSON.parse(fallback);
+        return DEFAULT_DISCORD_BOT_CONFIG;
+      }
+
+      const record = (
+        await db
+          .select({ value: platformSettings.value })
+          .from(platformSettings)
+          .where(eq(platformSettings.settingKey, DISCORD_BOT_CONFIG_SETTING_KEY))
+          .limit(1)
+      )[0];
+
+      if (record?.value) {
+        const parsed = JSON.parse(record.value);
+        return { ...DEFAULT_DISCORD_BOT_CONFIG, ...parsed };
+      }
+
+      return DEFAULT_DISCORD_BOT_CONFIG;
+    } catch (err) {
+      console.error("[DiscordBot] Error loading config:", err);
+      return DEFAULT_DISCORD_BOT_CONFIG;
+    }
+  });
+}
+
+export async function saveDiscordBotConfig(
+  config: Partial<DiscordBotConfig>,
+  adminUserId?: number | null
+): Promise<DiscordBotConfig> {
+  bustCache("discord_bot_config");
+  const current = await getDiscordBotConfig();
+  const merged: DiscordBotConfig = { ...current, ...config };
+  const serialized = JSON.stringify(merged);
+
+  fallbackPlatformSettings.set(DISCORD_BOT_CONFIG_SETTING_KEY, {
+    value: serialized,
+    updatedAt: new Date(),
+    updatedByUserId: adminUserId ?? null,
+  });
 
   try {
-    const claims = await db
-      .select({
-        id: twitterShareRewards.id,
-        userId: twitterShareRewards.userId,
-        userEmail: users.email,
-        userName: users.name,
-        twitterUsername: twitterShareRewards.twitterUsername,
-        twitterUserId: twitterShareRewards.twitterUserId,
-        tweetId: twitterShareRewards.tweetId,
-        tweetText: twitterShareRewards.tweetText,
-        slotIndex: twitterShareRewards.slotIndex,
-        grantedTokens: twitterShareRewards.grantedTokens,
-        grantedPaygNanos: twitterShareRewards.grantedPaygNanos,
-        status: twitterShareRewards.status,
-        postedAt: twitterShareRewards.postedAt,
-        expiresAt: twitterShareRewards.expiresAt,
-        expiredAt: twitterShareRewards.expiredAt,
-      })
-      .from(twitterShareRewards)
-      .innerJoin(users, eq(twitterShareRewards.userId, users.id))
-      .orderBy(desc(twitterShareRewards.postedAt))
-      .limit(200);
-
-    const [stats] = await db
-      .select({
-        totalPosts: sql<number>`count(*)`,
-        uniqueUsers: sql<number>`count(distinct ${twitterShareRewards.userId})`,
-        totalTokens: sql<number>`coalesce(sum(${twitterShareRewards.grantedTokens}), 0)`,
-        totalPayg: sql<number>`coalesce(sum(${twitterShareRewards.grantedPaygNanos}), 0)`,
-      })
-      .from(twitterShareRewards);
-
-    const leaderboardRaw = await db
-      .select({
-        userId: twitterShareRewards.userId,
-        userEmail: sql<string>`coalesce(max(${users.email}), '')`,
-        userName: sql<string>`max(${users.name})`,
-        postsCount: sql<number>`count(*)`,
-        totalTokens: sql<number>`coalesce(sum(${twitterShareRewards.grantedTokens}), 0)`,
-        totalPaygNanos: sql<number>`coalesce(sum(${twitterShareRewards.grantedPaygNanos}), 0)`,
-        lastPostedAt: sql<string>`max(${twitterShareRewards.postedAt})`,
-        lastTwitterUsername: sql<string>`max(${twitterShareRewards.twitterUsername})`,
-      })
-      .from(twitterShareRewards)
-      .leftJoin(users, eq(twitterShareRewards.userId, users.id))
-      .groupBy(twitterShareRewards.userId)
-      .orderBy(desc(sql`count(*)`), desc(sql`coalesce(sum(${twitterShareRewards.grantedTokens}), 0)`))
-      .limit(100);
-
-    const leaderboard = leaderboardRaw.map((u, index) => ({
-      rank: index + 1,
-      userId: u.userId,
-      userEmail: u.userEmail,
-      userName: u.userName,
-      postsCount: Number(u.postsCount || 0),
-      totalTokens: Number(u.totalTokens || 0),
-      totalTokensMillion: Math.round(Number(u.totalTokens || 0) / 1_000_000),
-      totalPaygNanos: Number(u.totalPaygNanos || 0),
-      totalPaygDollars: Number(u.totalPaygNanos || 0) / 1_000_000_000,
-      lastPostedAt: u.lastPostedAt ? new Date(u.lastPostedAt).toISOString() : null,
-      lastTwitterUsername: u.lastTwitterUsername || "unknown",
-      posts: claims
-        .filter((c) => c.userId === u.userId)
-        .map((c) => ({
-          id: Number(c.id),
-          tweetId: c.tweetId,
-          twitterUsername: c.twitterUsername,
-          postedAt: c.postedAt ? new Date(c.postedAt).toISOString() : new Date().toISOString(),
-          grantedTokens: c.grantedTokens,
-          grantedPaygNanos: c.grantedPaygNanos,
-          status: c.status,
-        })),
-    }));
-
-    return {
-      totalPosts: Number(stats?.totalPosts ?? 0),
-      uniqueUsers: Number(stats?.uniqueUsers ?? 0),
-      totalTokensGranted: Number(stats?.totalTokens ?? 0),
-      totalPaygGrantedNanos: Number(stats?.totalPayg ?? 0),
-      claims: claims.map((c) => ({
-        ...c,
-        id: Number(c.id),
-        postedAt: c.postedAt ? new Date(c.postedAt).toISOString() : new Date().toISOString(),
-        expiresAt: c.expiresAt ? new Date(c.expiresAt).toISOString() : new Date().toISOString(),
-      })),
-      leaderboard,
-    };
+    const db = await getDb();
+    if (db) {
+      await db
+        .insert(platformSettings)
+        .values({
+          settingKey: DISCORD_BOT_CONFIG_SETTING_KEY,
+          value: serialized,
+          updatedByUserId: adminUserId ?? null,
+        })
+        .onDuplicateKeyUpdate({
+          set: {
+            value: serialized,
+            updatedByUserId: adminUserId ?? null,
+            updatedAt: new Date(),
+          },
+        });
+    }
   } catch (err) {
-    console.error("[TwitterReward] Error listing admin overview:", err);
-    return {
-      totalPosts: 0,
-      uniqueUsers: 0,
-      totalTokensGranted: 0,
-      totalPaygGrantedNanos: 0,
-      claims: [],
-    };
+    console.error("[DiscordBot] Error saving config:", err);
+  }
+
+  return merged;
+}
+
+export async function recordDiscordChatMessage(input: {
+  messageId: string;
+  channelId: string;
+  guildId: string;
+  authorId: string;
+  authorUsername: string;
+  authorDisplayName?: string | null;
+  content: string;
+  isBot?: boolean;
+  replyToMessageId?: string | null;
+}): Promise<void> {
+  try {
+    const db = await getDb();
+    if (!db) return;
+
+    await db
+      .insert(discordBotMessages)
+      .values({
+        messageId: input.messageId,
+        channelId: input.channelId,
+        guildId: input.guildId,
+        authorId: input.authorId,
+        authorUsername: input.authorUsername,
+        authorDisplayName: input.authorDisplayName ?? input.authorUsername,
+        content: input.content,
+        isBot: Boolean(input.isBot),
+        replyToMessageId: input.replyToMessageId ?? null,
+      })
+      .onDuplicateKeyUpdate({
+        set: { content: input.content },
+      });
+  } catch (err) {
+    console.error("[DiscordBot] Failed to record message:", err);
   }
 }
+
+export async function getRecentDiscordChannelMessages(channelId: string, limit = 25) {
+  try {
+    const db = await getDb();
+    if (!db) return [];
+
+    const rows = await db
+      .select()
+      .from(discordBotMessages)
+      .where(eq(discordBotMessages.channelId, channelId))
+      .orderBy(desc(discordBotMessages.createdAt))
+      .limit(limit);
+
+    // Return in chronological order (oldest first)
+    return rows.reverse();
+  } catch (err) {
+    console.error("[DiscordBot] Error getting channel messages:", err);
+    return [];
+  }
+}
+
+export async function getOrCreateDiscordMemberProfile(input: {
+  guildId: string;
+  discordUserId: string;
+  username: string;
+  displayName?: string | null;
+}) {
+  try {
+    const db = await getDb();
+    if (!db) return null;
+
+    const existing = (
+      await db
+        .select()
+        .from(discordMemberProfiles)
+        .where(
+          and(
+            eq(discordMemberProfiles.guildId, input.guildId),
+            eq(discordMemberProfiles.discordUserId, input.discordUserId)
+          )
+        )
+        .limit(1)
+    )[0];
+
+    const now = new Date();
+
+    if (existing) {
+      await db
+        .update(discordMemberProfiles)
+        .set({
+          username: input.username,
+          displayName: input.displayName || existing.displayName,
+          interactionCount: sql`${discordMemberProfiles.interactionCount} + 1`,
+          lastSpokeAt: now,
+        })
+        .where(eq(discordMemberProfiles.id, existing.id));
+
+      return {
+        ...existing,
+        interactionCount: existing.interactionCount + 1,
+        lastSpokeAt: now,
+      };
+    }
+
+    await db.insert(discordMemberProfiles).values({
+      guildId: input.guildId,
+      discordUserId: input.discordUserId,
+      username: input.username,
+      displayName: input.displayName || input.username,
+      interactionCount: 1,
+      personaNotes: null,
+      lastSpokeAt: now,
+    });
+
+    return {
+      guildId: input.guildId,
+      discordUserId: input.discordUserId,
+      username: input.username,
+      displayName: input.displayName || input.username,
+      interactionCount: 1,
+      personaNotes: null,
+      lastSpokeAt: now,
+    };
+  } catch (err) {
+    console.error("[DiscordBot] Error getting/creating member profile:", err);
+    return null;
+  }
+}
+
+export async function updateDiscordMemberPersonaNotes(
+  discordUserId: string,
+  personaNotes: string,
+  guildId = "1553707015384207453"
+): Promise<void> {
+  try {
+    const db = await getDb();
+    if (!db) return;
+
+    await db
+      .update(discordMemberProfiles)
+      .set({ personaNotes, updatedAt: new Date() })
+      .where(
+        and(
+          eq(discordMemberProfiles.discordUserId, discordUserId),
+          eq(discordMemberProfiles.guildId, guildId)
+        )
+      );
+  } catch (err) {
+    console.error("[DiscordBot] Error updating persona notes:", err);
+  }
+}
+
+export async function listDiscordMemberProfiles(guildId = "1553707015384207453", limit = 100) {
+  try {
+    const db = await getDb();
+    if (!db) return [];
+
+    return await db
+      .select()
+      .from(discordMemberProfiles)
+      .where(eq(discordMemberProfiles.guildId, guildId))
+      .orderBy(desc(discordMemberProfiles.interactionCount), desc(discordMemberProfiles.lastSpokeAt))
+      .limit(limit);
+  } catch (err) {
+    console.error("[DiscordBot] Error listing member profiles:", err);
+    return [];
+  }
+}
+
+export async function deleteDiscordMemberProfile(discordUserId: string, guildId = "1553707015384207453"): Promise<boolean> {
+  try {
+    const db = await getDb();
+    if (!db) return false;
+
+    const res = await db
+      .delete(discordMemberProfiles)
+      .where(
+        and(
+          eq(discordMemberProfiles.discordUserId, discordUserId),
+          eq(discordMemberProfiles.guildId, guildId)
+        )
+      );
+    return true;
+  } catch (err) {
+    console.error("[DiscordBot] Error deleting member profile:", err);
+    return false;
+  }
+}
+
+export async function getDiscordChannelSummary(channelId: string) {
+  try {
+    const db = await getDb();
+    if (!db) return null;
+
+    return (
+      await db
+        .select()
+        .from(discordChannelSummaries)
+        .where(eq(discordChannelSummaries.channelId, channelId))
+        .limit(1)
+    )[0] || null;
+  } catch (err) {
+    console.error("[DiscordBot] Error getting channel summary:", err);
+    return null;
+  }
+}
+
+export async function saveDiscordChannelSummary(input: {
+  channelId: string;
+  guildId: string;
+  summary: string;
+  lastMessageId?: string | null;
+  messageCount: number;
+}): Promise<void> {
+  try {
+    const db = await getDb();
+    if (!db) return;
+
+    await db
+      .insert(discordChannelSummaries)
+      .values({
+        channelId: input.channelId,
+        guildId: input.guildId,
+        summary: input.summary,
+        lastMessageId: input.lastMessageId ?? null,
+        messageCount: input.messageCount,
+      })
+      .onDuplicateKeyUpdate({
+        set: {
+          summary: input.summary,
+          lastMessageId: input.lastMessageId ?? null,
+          messageCount: input.messageCount,
+          updatedAt: new Date(),
+        },
+      });
+  } catch (err) {
+    console.error("[DiscordBot] Error saving channel summary:", err);
+  }
+}
+
 
 
 

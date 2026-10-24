@@ -730,6 +730,79 @@ export const adminAccessRequests = mysqlTable(
   ]
 );
 
+/**
+ * Discord AI Companion & Bot persistent conversational memory.
+ * Stores raw turn history for context window injection, sentiment analysis, and summarization.
+ */
+export const discordBotMessages = mysqlTable(
+  "discord_bot_messages",
+  {
+    id: bigint("id", { mode: "number" }).autoincrement().primaryKey(),
+    messageId: varchar("messageId", { length: 64 }).notNull(),
+    channelId: varchar("channelId", { length: 64 }).notNull(),
+    guildId: varchar("guildId", { length: 64 }).notNull(),
+    authorId: varchar("authorId", { length: 64 }).notNull(),
+    authorUsername: varchar("authorUsername", { length: 128 }).notNull(),
+    authorDisplayName: varchar("authorDisplayName", { length: 128 }),
+    content: text("content").notNull(),
+    isBot: boolean("isBot").default(false).notNull(),
+    replyToMessageId: varchar("replyToMessageId", { length: 64 }),
+    emojisReacted: json("emojisReacted"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => [
+    uniqueIndex("discord_bot_messages_msg_id_unique").on(table.messageId),
+    index("discord_bot_messages_channel_created_idx").on(table.channelId, table.createdAt),
+    index("discord_bot_messages_author_idx").on(table.authorId, table.createdAt),
+  ]
+);
+
+/**
+ * Per-member personality profile & dossier.
+ * Remembers user quirks, inside jokes, teasing points, coding habits, and banter style.
+ */
+export const discordMemberProfiles = mysqlTable(
+  "discord_member_profiles",
+  {
+    id: bigint("id", { mode: "number" }).autoincrement().primaryKey(),
+    guildId: varchar("guildId", { length: 64 }).notNull(),
+    discordUserId: varchar("discordUserId", { length: 64 }).notNull(),
+    username: varchar("username", { length: 128 }).notNull(),
+    displayName: varchar("displayName", { length: 128 }),
+    interactionCount: int("interactionCount").default(0).notNull(),
+    personaNotes: text("personaNotes"),
+    lastSpokeAt: timestamp("lastSpokeAt").defaultNow().notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => [
+    uniqueIndex("discord_member_profiles_guild_user_idx").on(table.guildId, table.discordUserId),
+    index("discord_member_profiles_interactions_idx").on(table.guildId, table.interactionCount),
+  ]
+);
+
+/**
+ * Long-term rolling semantic conversation summaries.
+ * Condenses chats older than active window so bot maintains multi-day context.
+ */
+export const discordChannelSummaries = mysqlTable(
+  "discord_channel_summaries",
+  {
+    id: bigint("id", { mode: "number" }).autoincrement().primaryKey(),
+    channelId: varchar("channelId", { length: 64 }).notNull(),
+    guildId: varchar("guildId", { length: 64 }).notNull(),
+    summary: text("summary").notNull(),
+    lastMessageId: varchar("lastMessageId", { length: 64 }),
+    messageCount: int("messageCount").default(0).notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => [
+    uniqueIndex("discord_channel_summaries_chan_unique").on(table.channelId),
+    index("discord_channel_summaries_updated_idx").on(table.channelId, table.updatedAt),
+  ]
+);
+
 export type ApiKey = typeof apiKeys.$inferSelect;
 export type AccountControl = typeof accountControls.$inferSelect;
 export type UsageEvent = typeof usageEvents.$inferSelect;
@@ -794,6 +867,9 @@ export const safetyAuditLogs = mysqlTable(
 );
 
 export type SafetyAuditLog = typeof safetyAuditLogs.$inferSelect;
+export type DiscordBotMessage = typeof discordBotMessages.$inferSelect;
+export type DiscordMemberProfile = typeof discordMemberProfiles.$inferSelect;
+export type DiscordChannelSummary = typeof discordChannelSummaries.$inferSelect;
 export type InsertSafetyAuditLog = typeof safetyAuditLogs.$inferInsert;
 
 export const userInteractionLogs = mysqlTable(
