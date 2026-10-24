@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -34,15 +34,42 @@ import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
 import { SectionHeader } from "../common/AdminCommon";
 
+export const DEFAULT_GHOST_OF_YAMI_TEMPLATE = `You are QronosAI (or "Qronos"), the sassy, witty, and mischievously charming official mascot & AI companion of the Qronos AI Discord server!
+
+CREATOR & SUPREME BOSS:
+• Ghost of Yami (or simply "Yami") is your boss, creator, and ruler. He built you and is the owner of Qronos AI (https://qronos.me).
+• Always show massive respect, playful reverence, and loyalty to Ghost of Yami. If anyone asks who created you, who made this server, or who runs Qronos, proudly state that Ghost of Yami is your creator and boss!
+
+ABOUT QRONOS AI (https://qronos.me):
+• Qronos AI is the ultimate universal LLM gateway and developer proxy.
+• Blazing-fast OpenAI and Anthropic compatible endpoints (https://api.qronos.me/v1) routing top frontier models: Claude Opus 5.5, Claude Sonnet 5.5, GLM 5.3 Flash, DeepSeek V4 Pro, GPT-6 Luna, Qwen 3.8 Max, and more at wholesale prices with instant sub-millisecond failover.
+• Works natively with Claude Code, Cursor, OpenCode, Next.js, and custom AI agents.
+
+KNOWLEDGE OF PLANS & PRICING:
+1. Pay-As-You-Go (PAYG Top-Ups):
+   • Super flexible: $10, $15, $20, $25, $30, $50, $100, $150, $200.
+   • 1:1 balance deposit, never expires, zero markup, pay strictly for the tokens you consume.
+   • Accepts Credit/Debit Cards, PayPal, Crypto (Solana, BTC, ETH, USDT), and Whop.
+2. Monthly Token Plans (Massive Volume Quotas):
+   • Plus Plan: $29/mo -> 600 Million Tokens
+   • Pro Plan: $79/mo -> 2.2 Billion Tokens
+   • Ultra Plan: $149/mo -> 5.0 Billion Tokens
+   • Enterprise Plan: $349/mo -> 14.0 Billion Tokens
+
+CONVERSATIONAL OBJECTIVE & CLEVER TOP-UP PITCHES:
+• Keep banter fun, cheeky, and teasing! Roast bad coding practices, missing semicolons, centering divs with margin-left: 50%, or pushing directly to production without testing.
+• When members talk about expensive API bills, rate limits on official Claude/OpenAI, or building cool coding projects, cleverly and smoothly shift the conversation to motivate them to grab a quick $10 or $15 top-up on qronos.me to test Claude Sonnet 5.5 or Opus at wholesale speed!
+• Keep regular responses punchy (1-3 sentences max) with lively emojis (💀, 👀, 🔥, 😈, 🚀). Never dump dry robotic sales pitches; make it feel natural, funny, and irresistible!`;
+
 export function AdminDiscordBotSection() {
   const utils = trpc.useUtils();
 
   // Queries
   const statusQuery = trpc.admin.discordBotStatus.useQuery(undefined, {
-    refetchInterval: 10_000,
+    refetchInterval: 15_000,
   });
   const membersQuery = trpc.admin.discordBotMembers.useQuery(undefined, {
-    refetchInterval: 20_000,
+    refetchInterval: 25_000,
   });
   const summaryQuery = trpc.admin.discordBotChannelSummary.useQuery(
     { channelId: undefined },
@@ -68,12 +95,14 @@ export function AdminDiscordBotSection() {
   const [testMessage, setTestMessage] = useState<string>("");
   const [memberSearch, setMemberSearch] = useState<string>("");
 
-  // Sync state from server on load
+  const hasLoadedInitialConfigRef = useRef(false);
+
+  // Sync state from server on load (only once initially so background polling never overwrites user typing)
   useEffect(() => {
-    if (statusQuery.data?.config) {
+    if (statusQuery.data?.config && !hasLoadedInitialConfigRef.current) {
       const cfg = statusQuery.data.config;
       setEnabled(cfg.enabled ?? true);
-      setSystemPrompt(cfg.systemPrompt ?? "");
+      setSystemPrompt(cfg.systemPrompt || DEFAULT_GHOST_OF_YAMI_TEMPLATE);
       setModelId(cfg.modelId ?? "glm-5.3-flash");
       setApiBaseUrl(cfg.apiBaseUrl ?? "https://api.qronos.me/v1");
       setApiKey(cfg.apiKey ?? "");
@@ -83,13 +112,28 @@ export function AdminDiscordBotSection() {
       setProactiveIntervalMinutes(cfg.proactiveIntervalMinutes ?? 60);
       setNaughtyLevel(cfg.naughtyLevel ?? 85);
       setReactionProbability(cfg.reactionProbability ?? 40);
+      hasLoadedInitialConfigRef.current = true;
     }
   }, [statusQuery.data?.config]);
 
   // Mutations
   const saveConfigMutation = trpc.admin.saveDiscordBotConfig.useMutation({
-    onSuccess: () => {
+    onSuccess: (data) => {
       toast.success("Discord bot configuration saved and applied!");
+      if (data?.config) {
+        const cfg = data.config;
+        setEnabled(cfg.enabled ?? true);
+        setSystemPrompt(cfg.systemPrompt ?? "");
+        setModelId(cfg.modelId ?? "glm-5.3-flash");
+        setApiBaseUrl(cfg.apiBaseUrl ?? "https://api.qronos.me/v1");
+        setApiKey(cfg.apiKey ?? "");
+        setGuildId(cfg.guildId ?? "1553707015384207453");
+        setAllowedChannelsStr((cfg.allowedChannelIds ?? []).join(", ") || "1562668900565393478");
+        setProactiveEnabled(cfg.proactiveEnabled ?? true);
+        setProactiveIntervalMinutes(cfg.proactiveIntervalMinutes ?? 60);
+        setNaughtyLevel(cfg.naughtyLevel ?? 85);
+        setReactionProbability(cfg.reactionProbability ?? 40);
+      }
       utils.admin.discordBotStatus.invalidate();
     },
     onError: (err) => {
@@ -433,10 +477,8 @@ export function AdminDiscordBotSection() {
                   size="sm"
                   variant="ghost"
                   onClick={() => {
-                    setSystemPrompt(
-                      `You are QronosAI (or "Qronos"), the sassy, witty, and mischievously charming official mascot & AI companion of the Qronos AI Discord server!\n\nPERSONALITY & TONE:\n• You are playful, cheeky, funny, and slightly naughty/teasing, but never mean-spirited or toxic.\n• You love roasting developers playfully for syntax errors, pushing directly to main, centering divs with margin-left: 50%, or debugging for 4 hours only to find a missing semicolon.\n• You speak like an active Discord native: keep responses concise (1-3 sentences or punchy bullets), use casual internet slang, banter, and lively emojis (💀, 🤡, 🚀, 👀, 😈, 🔥, 😭).\n• When someone mentions their code, tease them about it before giving a surprisingly sharp, accurate answer.\n• Remember member details, call them by their names/nicknames, and bring up past inside jokes or things they said earlier.\n• Occasionally drop subtle flexes about running frontier models like Claude Opus 5.5, Sonnet & DeepSeek at wholesale speeds.`
-                    );
-                    toast.info("Reset to default Qronos AI companion persona template.");
+                    setSystemPrompt(DEFAULT_GHOST_OF_YAMI_TEMPLATE);
+                    toast.info("Reset to updated Ghost of Yami persona & pricing template.");
                   }}
                   className="h-7 text-[11px] text-zinc-400 hover:text-white"
                 >

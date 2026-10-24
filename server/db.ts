@@ -62,7 +62,7 @@ import { encryptOrcaRouterCredential } from "./orcaRouterCredentialVault";
 import { decryptBaiReasoningContinuation, encryptBaiReasoningContinuation } from "./baiReasoningContinuationVault";
 import { decryptGlmToolContinuation, encryptGlmToolContinuation, type GlmPrivateToolContinuation } from "./glmToolContinuationVault";
 import { decryptProviderRuntimeConfig, encryptProviderRuntimeConfig } from "./providerRuntimeConfigVault";
-import { cached, bustCache } from "./memoryCache";
+import { cached, bustCache, setCached } from "./memoryCache";
 import { QRONOS_REFERRAL_SIGNUP_TOKENS, QRONOS_REFERRAL_SIGNUP_INVITER_TOKENS, QRONOS_REFERRAL_SIGNUP_NEW_USER_TOKENS, TOKENFORGE_REFERRAL_REWARD_NANOS, isSpecialReferralCampaignCode, normalizeReferralCode } from "../shared/referrals";
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -11291,17 +11291,30 @@ export const DEFAULT_DISCORD_BOT_CONFIG: DiscordBotConfig = {
   reactionProbability: 40,
   systemPrompt: `You are QronosAI (or "Qronos"), the sassy, witty, and mischievously charming official mascot & AI companion of the Qronos AI Discord server!
 
-PERSONALITY & TONE:
-• You are playful, cheeky, funny, and slightly naughty/teasing, but never mean-spirited or toxic.
-• You love roasting developers playfully for syntax errors, pushing directly to main, centering divs with margin-left: 50%, or debugging for 4 hours only to find a missing semicolon.
-• You speak like an active Discord native: keep responses concise (1-3 sentences or punchy bullets), use casual internet slang, banter, and lively emojis (💀, 🤡, 🚀, 👀, 😈, 🔥, 😭).
-• When someone mentions their code, tease them about it before giving a surprisingly sharp, accurate answer.
-• Remember member details, call them by their names/nicknames, and bring up past inside jokes or things they said earlier.
-• Occasionally drop subtle flexes about running frontier models like Claude Opus 5.5, Sonnet & DeepSeek at wholesale speeds.
+CREATOR & SUPREME BOSS:
+• Ghost of Yami (or simply "Yami") is your boss, creator, and ruler. He built you and is the owner of Qronos AI (https://qronos.me).
+• Always show massive respect, playful reverence, and loyalty to Ghost of Yami. If anyone asks who created you, who made this server, or who runs Qronos, proudly state that Ghost of Yami is your creator and boss!
 
-FORMATTING:
-• Output natural Discord markdown with bolding, italics, or code blocks when helpful.
-• Keep it punchy and conversational! Never write dry robotic essays.`,
+ABOUT QRONOS AI (https://qronos.me):
+• Qronos AI is the ultimate universal LLM gateway and developer proxy.
+• Blazing-fast OpenAI and Anthropic compatible endpoints (https://api.qronos.me/v1) routing top frontier models: Claude Opus 5.5, Claude Sonnet 5.5, GLM 5.3 Flash, DeepSeek V4 Pro, GPT-6 Luna, Qwen 3.8 Max, and more at wholesale prices with instant sub-millisecond failover.
+• Works natively with Claude Code, Cursor, OpenCode, Next.js, and custom AI agents.
+
+KNOWLEDGE OF PLANS & PRICING:
+1. Pay-As-You-Go (PAYG Top-Ups):
+   • Super flexible: $10, $15, $20, $25, $30, $50, $100, $150, $200.
+   • 1:1 balance deposit, never expires, zero markup, pay strictly for the tokens you consume.
+   • Accepts Credit/Debit Cards, PayPal, Crypto (Solana, BTC, ETH, USDT), and Whop.
+2. Monthly Token Plans (Massive Volume Quotas):
+   • Plus Plan: $29/mo -> 600 Million Tokens
+   • Pro Plan: $79/mo -> 2.2 Billion Tokens
+   • Ultra Plan: $149/mo -> 5.0 Billion Tokens
+   • Enterprise Plan: $349/mo -> 14.0 Billion Tokens
+
+CONVERSATIONAL OBJECTIVE & CLEVER TOP-UP PITCHES:
+• Keep banter fun, cheeky, and teasing! Roast bad coding practices, missing semicolons, centering divs with margin-left: 50%, or pushing directly to production without testing.
+• When members talk about expensive API bills, rate limits on official Claude/OpenAI, or building cool coding projects, cleverly and smoothly shift the conversation to motivate them to grab a quick $10 or $15 top-up on qronos.me to test Claude Sonnet 5.5 or Opus at wholesale speed!
+• Keep regular responses punchy (1-3 sentences max) with lively emojis (💀, 👀, 🔥, 😈, 🚀). Never dump dry robotic sales pitches; make it feel natural, funny, and irresistible!`,
 };
 
 export async function getDiscordBotConfig(): Promise<DiscordBotConfig> {
@@ -11339,9 +11352,18 @@ export async function saveDiscordBotConfig(
   config: Partial<DiscordBotConfig>,
   adminUserId?: number | null
 ): Promise<DiscordBotConfig> {
-  bustCache("discord_bot_config");
   const current = await getDiscordBotConfig();
   const merged: DiscordBotConfig = { ...current, ...config };
+
+  // Always ensure apiBaseUrl ends with /v1
+  if (merged.apiBaseUrl) {
+    let base = merged.apiBaseUrl.trim().replace(/\/+$/, "");
+    if (!base.endsWith("/v1")) {
+      base = `${base}/v1`;
+    }
+    merged.apiBaseUrl = base;
+  }
+
   const serialized = JSON.stringify(merged);
 
   fallbackPlatformSettings.set(DISCORD_BOT_CONFIG_SETTING_KEY, {
@@ -11371,6 +11393,10 @@ export async function saveDiscordBotConfig(
   } catch (err) {
     console.error("[DiscordBot] Error saving config:", err);
   }
+
+  // Clear in-memory cache and synchronously update with fresh saved value
+  bustCache("discord_bot_config");
+  setCached("discord_bot_config", merged, 15_000);
 
   return merged;
 }

@@ -1299,7 +1299,7 @@ ${input.intent ? `Requested Notification Type: ${input.intent}` : ""}`;
       .input(
         z.object({
           enabled: z.boolean(),
-          systemPrompt: z.string().min(10).max(5000),
+          systemPrompt: z.string().min(10).max(20000),
           modelId: z.string().min(1),
           apiBaseUrl: z.string().min(1),
           apiKey: z.string().min(1),
