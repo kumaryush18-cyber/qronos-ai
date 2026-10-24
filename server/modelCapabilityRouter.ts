@@ -106,7 +106,7 @@ export interface PrunedVisualMessagesResult {
   analysis: VisualAnalysisResult;
 }
 
-export const DEFAULT_MAX_IMAGE_TURNS_BACK = 25;
+export const DEFAULT_MAX_IMAGE_TURNS_BACK = 15;
 export const DEFAULT_MAX_IMAGES_TO_KEEP = 8;
 
 /**
@@ -190,7 +190,7 @@ export function stripVisualContentFromMessage(
 /**
  * Inspects conversation messages for visual content:
  * 1. Automatically queues background Semantic Distillation for new images.
- * 2. Strips any image that occurred more than maxImageTurnsBack (default: 25) message turns back,
+ * 2. Strips any image that occurred more than maxImageTurnsBack (default: 15) message turns back,
  *    replacing it with dense technical Semantic Distillation descriptions from cache/DB.
  * 3. Prunes older images beyond maxImagesToKeep (default: 8) so upstream providers don't exceed request/context limits.
  * 4. Calculates the relative recency tag (e.g. '(image: current)' or '(image: 2 msgs back)').

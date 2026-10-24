@@ -142,7 +142,26 @@ export const CRYPTO_TIERS: CryptoTier[] = [
 export const PAYG_TOPUP_AMOUNTS = [10, 15, 20, 25, 30, 50, 100, 150, 200] as const;
 export type PaygTopupAmount = (typeof PAYG_TOPUP_AMOUNTS)[number];
 
-export const WHOP_10_CREDITS_CHECKOUT_URL = "https://whop.com/qronos/10-credits-a922/";
+export const WHOP_PAYG_CHECKOUT_URLS: Record<number, string> = {
+  10: "https://whop.com/qronos/10-credits-a922/",
+  15: "https://whop.com/qronos/15-credit/",
+  20: "https://whop.com/qronos/20-credits-19sf/",
+  25: "https://whop.com/qronos/25-credits-fg45/",
+  30: "https://whop.com/qronos/30-credits-78dg/",
+  50: "https://whop.com/qronos/50-credits-67vb/",
+  100: "https://whop.com/qronos/100-credits-34jk/",
+  150: "https://whop.com/qronos/150-credits-19sk/",
+  200: "https://whop.com/qronos/200-credits-39gh/",
+};
+
+export const WHOP_10_CREDITS_CHECKOUT_URL = WHOP_PAYG_CHECKOUT_URLS[10];
+
+export const WHOP_TOKEN_PLAN_CHECKOUT_URLS = {
+  plus: "https://whop.com/qronos/plus-plan-24sl/",
+  pro: "https://whop.com/qronos/pro-plan-40op/",
+  ultra: "https://whop.com/qronos/ultra-plan-67wm/",
+  enterprise: "https://whop.com/qronos/enterprise-plan-29wm/",
+};
 
 export interface PaygTopupOption {
   amountUsd: number;
@@ -160,7 +179,7 @@ export const PAYG_TOPUP_OPTIONS: PaygTopupOption[] = [
     amountInr: 960,
     scanAmountUsd: 11,
     scanAmountInr: 1056,
-    whopLink: WHOP_10_CREDITS_CHECKOUT_URL,
+    whopLink: WHOP_PAYG_CHECKOUT_URLS[10],
     label: "$10",
   },
   {
@@ -168,6 +187,7 @@ export const PAYG_TOPUP_OPTIONS: PaygTopupOption[] = [
     amountInr: 1440,
     scanAmountUsd: 16,
     scanAmountInr: 1536,
+    whopLink: WHOP_PAYG_CHECKOUT_URLS[15],
     label: "$15",
   },
   {
@@ -175,6 +195,7 @@ export const PAYG_TOPUP_OPTIONS: PaygTopupOption[] = [
     amountInr: 1920,
     scanAmountUsd: 21,
     scanAmountInr: 2016,
+    whopLink: WHOP_PAYG_CHECKOUT_URLS[20],
     label: "$20",
   },
   {
@@ -183,6 +204,7 @@ export const PAYG_TOPUP_OPTIONS: PaygTopupOption[] = [
     scanAmountUsd: 26,
     scanAmountInr: 2496,
     popular: true,
+    whopLink: WHOP_PAYG_CHECKOUT_URLS[25],
     label: "$25",
   },
   {
@@ -190,6 +212,7 @@ export const PAYG_TOPUP_OPTIONS: PaygTopupOption[] = [
     amountInr: 2880,
     scanAmountUsd: 31,
     scanAmountInr: 2976,
+    whopLink: WHOP_PAYG_CHECKOUT_URLS[30],
     label: "$30",
   },
   {
@@ -197,6 +220,7 @@ export const PAYG_TOPUP_OPTIONS: PaygTopupOption[] = [
     amountInr: 4800,
     scanAmountUsd: 51,
     scanAmountInr: 4896,
+    whopLink: WHOP_PAYG_CHECKOUT_URLS[50],
     label: "$50",
   },
   {
@@ -204,6 +228,7 @@ export const PAYG_TOPUP_OPTIONS: PaygTopupOption[] = [
     amountInr: 9600,
     scanAmountUsd: 101,
     scanAmountInr: 9696,
+    whopLink: WHOP_PAYG_CHECKOUT_URLS[100],
     label: "$100",
   },
   {
@@ -211,6 +236,7 @@ export const PAYG_TOPUP_OPTIONS: PaygTopupOption[] = [
     amountInr: 14400,
     scanAmountUsd: 151,
     scanAmountInr: 14496,
+    whopLink: WHOP_PAYG_CHECKOUT_URLS[150],
     label: "$150",
   },
   {
@@ -218,6 +244,7 @@ export const PAYG_TOPUP_OPTIONS: PaygTopupOption[] = [
     amountInr: 19200,
     scanAmountUsd: 201,
     scanAmountInr: 19296,
+    whopLink: WHOP_PAYG_CHECKOUT_URLS[200],
     label: "$200",
   },
 ];
@@ -234,6 +261,7 @@ export interface TokenPlanTier {
   scanAmountUsd: number;
   scanAmountInr: number;
   popular?: boolean;
+  whopLink?: string;
   badge?: string;
   description: string;
   features: string[];
@@ -272,6 +300,7 @@ export const TOKEN_PLAN_TIERS: TokenPlanTier[] = [
     scanAmountUsd: 11,
     scanAmountInr: 1056,
     badge: "POPULAR",
+    whopLink: WHOP_TOKEN_PLAN_CHECKOUT_URLS.plus,
     description: "600 Million tokens · 60M tokens / $1 · Ideal for scripts, tools & prototyping",
     features: [
       "600 Million tokens dedicated quota",
@@ -293,6 +322,7 @@ export const TOKEN_PLAN_TIERS: TokenPlanTier[] = [
     scanAmountInr: 2976,
     popular: true,
     badge: "RECOMMENDED",
+    whopLink: WHOP_TOKEN_PLAN_CHECKOUT_URLS.pro,
     description: "2.2 Billion tokens · 73.3M tokens / $1 · Production engineering and autonomous agents",
     features: [
       "2.2 Billion tokens dedicated quota",
@@ -314,6 +344,7 @@ export const TOKEN_PLAN_TIERS: TokenPlanTier[] = [
     scanAmountInr: 5856,
     popular: false,
     badge: "HIGH COMPUTE",
+    whopLink: WHOP_TOKEN_PLAN_CHECKOUT_URLS.ultra,
     description: "5.0 Billion tokens · 83.3M tokens / $1 · High-throughput teams, multi-agent loops & CI pipelines",
     features: [
       "5.0 Billion tokens dedicated quota",
@@ -335,6 +366,7 @@ export const TOKEN_PLAN_TIERS: TokenPlanTier[] = [
     scanAmountInr: 14496,
     popular: false,
     badge: "ENTERPRISE",
+    whopLink: WHOP_TOKEN_PLAN_CHECKOUT_URLS.enterprise,
     description: "14.0 Billion tokens · 93.3M tokens / $1 · Maximum compute capacity for enterprises",
     features: [
       "14.0 Billion tokens dedicated quota",
@@ -375,4 +407,20 @@ export function getCodingPlanTier(idOrUsd: string | number): TokenPlanTier | und
 }
 
 export const getTokenPlanTier = getCodingPlanTier;
+
+export function getWhopPaygCheckoutUrl(amountUsd: number, email?: string | null): string {
+  const base = WHOP_PAYG_CHECKOUT_URLS[amountUsd] || WHOP_PAYG_CHECKOUT_URLS[10];
+  return email ? `${base}?email=${encodeURIComponent(email)}` : base;
+}
+
+export function getWhopTokenPlanCheckoutUrl(tierId: string, email?: string | null): string | undefined {
+  let url: string | undefined;
+  const clean = tierId.toLowerCase();
+  if (clean.includes("plus") || clean === "token_plus_15") url = WHOP_TOKEN_PLAN_CHECKOUT_URLS.plus;
+  else if (clean.includes("pro") || clean === "coding_starter_30") url = WHOP_TOKEN_PLAN_CHECKOUT_URLS.pro;
+  else if (clean.includes("ultra") || clean === "coding_power_60") url = WHOP_TOKEN_PLAN_CHECKOUT_URLS.ultra;
+  else if (clean.includes("enterprise") || clean === "coding_ultra_150") url = WHOP_TOKEN_PLAN_CHECKOUT_URLS.enterprise;
+  if (!url) return undefined;
+  return email ? `${url}?email=${encodeURIComponent(email)}` : url;
+}
 

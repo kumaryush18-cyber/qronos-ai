@@ -4259,9 +4259,16 @@ export async function runPlaygroundCompletion(input: {
     ? input.reasoningEffort
     : (input.model === "qwen3.8-max" || input.model === "claude-fable-5.1" ? "xhigh" : undefined);
 
+  const visualAnalysis = await pruneOldImagesAndDeriveContent(input.messages);
+  const isVisual = visualAnalysis.analysis.hasVisualData;
+  const isDocument = payloadContainsDocumentData(input);
+  const multimodalTag = isVisual
+    ? visualAnalysis.analysis.tag
+    : (isDocument ? "(document)" : undefined);
+
   const upstreamInput: ChatInput = {
     model: input.model,
-    messages: playgroundMessagesForModel(input.model, input.messages),
+    messages: playgroundMessagesForModel(input.model, visualAnalysis.messages),
     stream: false,
     max_tokens: input.maxOutputTokens ?? 65_536,
     ...(input.temperature !== undefined ? { temperature: input.temperature } : {}),
@@ -4280,7 +4287,12 @@ export async function runPlaygroundCompletion(input: {
   const aborter = new AbortController();
   const timeout = setTimeout(() => aborter.abort(), PROVIDER_TIMEOUT_MS);
   const startedAt = Date.now();
-  const providerContext = { userId: input.userId, providerLabel: undefined as string | undefined };
+  const providerContext: ProviderRequestContext = {
+    userId: input.userId,
+    providerLabel: undefined as string | undefined,
+    isMultimodal: isVisual || isDocument,
+    multimodalTag,
+  };
   try {
     const upstream = await forwardProviderRequest(input.model, upstreamInput, aborter.signal, providerContext);
     // Headers arrived; the remaining body may complete within the managed hosting request ceiling.
@@ -4290,7 +4302,7 @@ export async function runPlaygroundCompletion(input: {
       const message = publicProviderErrorMessage(upstream.status);
       const durationMs = Date.now() - startedAt;
       await settleReservedCredit({ userId: input.userId, requestId, reservedNanos, finalChargeNanos: 0, releaseReason: "Provider request was not completed" });
-      await recordUsage({ requestId, userId: input.userId, modelId: input.model, source: "playground", stream: false, status: "provider_error", outcome: "upstream_error", sourceIpHash: input.sourceIpHash, provider: providerContext.providerLabel, latencyMs: durationMs, durationMs, ttftMs: durationMs, errorMessage: message });
+      await recordUsage({ requestId, userId: input.userId, modelId: input.model, source: "playground", stream: false, status: "provider_error", outcome: "upstream_error", sourceIpHash: input.sourceIpHash, provider: finalizeProviderLabel(providerContext.providerLabel, providerContext), latencyMs: durationMs, durationMs, ttftMs: durationMs, errorMessage: message });
       throw new TokenForgePlaygroundError("provider_unavailable", message);
     }
     const payload = await upstream.json().catch(() => null);
@@ -4300,7 +4312,7 @@ export async function runPlaygroundCompletion(input: {
       const message = publicProviderErrorMessage();
       const durationMs = Date.now() - startedAt;
       await settleReservedCredit({ userId: input.userId, requestId, reservedNanos, finalChargeNanos: 0, releaseReason: "Provider response was invalid" });
-      await recordUsage({ requestId, userId: input.userId, modelId: input.model, source: "playground", stream: false, status: "provider_error", outcome: "upstream_error", sourceIpHash: input.sourceIpHash, provider: providerContext.providerLabel, latencyMs: durationMs, durationMs, ttftMs: durationMs, errorMessage: message });
+      await recordUsage({ requestId, userId: input.userId, modelId: input.model, source: "playground", stream: false, status: "provider_error", outcome: "upstream_error", sourceIpHash: input.sourceIpHash, provider: finalizeProviderLabel(providerContext.providerLabel, providerContext), latencyMs: durationMs, durationMs, ttftMs: durationMs, errorMessage: message });
       throw new TokenForgePlaygroundError("provider_unavailable", message);
     }
     const thinking = input.model === "qwen3.8-max" || input.model === "claude-fable-5.1" ? reasoningContentFrom(publicPayload) : null;
@@ -4330,7 +4342,7 @@ export async function runPlaygroundCompletion(input: {
       ...tokens,
       chargeNanos: settlement.chargedNanos,
       sourceIpHash: input.sourceIpHash,
-      provider: providerContext.providerLabel,
+      provider: finalizeProviderLabel(providerContext.providerLabel, providerContext),
       latencyMs: durationMs,
       durationMs,
       ttftMs: durationMs,

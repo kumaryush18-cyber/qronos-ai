@@ -11193,8 +11193,8 @@ export async function listTwitterRewardsAdminOverview() {
     const leaderboardRaw = await db
       .select({
         userId: twitterShareRewards.userId,
-        userEmail: users.email,
-        userName: users.name,
+        userEmail: sql<string>`coalesce(max(${users.email}), '')`,
+        userName: sql<string>`max(${users.name})`,
         postsCount: sql<number>`count(*)`,
         totalTokens: sql<number>`coalesce(sum(${twitterShareRewards.grantedTokens}), 0)`,
         totalPaygNanos: sql<number>`coalesce(sum(${twitterShareRewards.grantedPaygNanos}), 0)`,
@@ -11202,9 +11202,9 @@ export async function listTwitterRewardsAdminOverview() {
         lastTwitterUsername: sql<string>`max(${twitterShareRewards.twitterUsername})`,
       })
       .from(twitterShareRewards)
-      .innerJoin(users, eq(twitterShareRewards.userId, users.id))
-      .groupBy(twitterShareRewards.userId, users.email, users.name)
-      .orderBy(desc(sql`count(*)`), desc(sql`max(${twitterShareRewards.postedAt})`))
+      .leftJoin(users, eq(twitterShareRewards.userId, users.id))
+      .groupBy(twitterShareRewards.userId)
+      .orderBy(desc(sql`count(*)`), desc(sql`coalesce(sum(${twitterShareRewards.grantedTokens}), 0)`))
       .limit(100);
 
     const leaderboard = leaderboardRaw.map((u, index) => ({
@@ -11213,10 +11213,23 @@ export async function listTwitterRewardsAdminOverview() {
       userEmail: u.userEmail,
       userName: u.userName,
       postsCount: Number(u.postsCount || 0),
+      totalTokens: Number(u.totalTokens || 0),
       totalTokensMillion: Math.round(Number(u.totalTokens || 0) / 1_000_000),
+      totalPaygNanos: Number(u.totalPaygNanos || 0),
       totalPaygDollars: Number(u.totalPaygNanos || 0) / 1_000_000_000,
       lastPostedAt: u.lastPostedAt ? new Date(u.lastPostedAt).toISOString() : null,
       lastTwitterUsername: u.lastTwitterUsername || "unknown",
+      posts: claims
+        .filter((c) => c.userId === u.userId)
+        .map((c) => ({
+          id: Number(c.id),
+          tweetId: c.tweetId,
+          twitterUsername: c.twitterUsername,
+          postedAt: c.postedAt ? new Date(c.postedAt).toISOString() : new Date().toISOString(),
+          grantedTokens: c.grantedTokens,
+          grantedPaygNanos: c.grantedPaygNanos,
+          status: c.status,
+        })),
     }));
 
     return {

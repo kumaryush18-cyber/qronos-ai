@@ -10,6 +10,78 @@ export const WHOP_10_CREDITS_PRODUCT_ID = "prod_rkBc5ZhKDEuoj";
 export const WHOP_10_CREDITS_PLAN_ID = "plan_HyuPDpV4lHx4Q";
 export const WHOP_10_CHECKOUT_URL = "https://whop.com/qronos/10-credits-a922/";
 
+export interface WhopProductSpec {
+  productId: string;
+  name: string;
+  type: "payg" | "token_plan";
+  amountUsd: number;
+  tokens?: number;
+  checkoutUrl: string;
+}
+
+export const WHOP_PRODUCT_CATALOG: Record<string, WhopProductSpec> = {
+  // PAYG products
+  prod_rkBc5ZhKDEuoj: { productId: "prod_rkBc5ZhKDEuoj", name: "Qronos $10 API", type: "payg", amountUsd: 10, checkoutUrl: "https://whop.com/qronos/10-credits-a922/" },
+  prod_i3lKrClSyu980: { productId: "prod_i3lKrClSyu980", name: "Qronos $15 API", type: "payg", amountUsd: 15, checkoutUrl: "https://whop.com/qronos/15-credit/" },
+  prod_Zdm87aTZvrJ1s: { productId: "prod_Zdm87aTZvrJ1s", name: "Qronos $20 API", type: "payg", amountUsd: 20, checkoutUrl: "https://whop.com/qronos/20-credits-19sf/" },
+  prod_eJZIbCcgJTeOA: { productId: "prod_eJZIbCcgJTeOA", name: "Qronos $25 API", type: "payg", amountUsd: 25, checkoutUrl: "https://whop.com/qronos/25-credits-fg45/" },
+  prod_UyoLvuUlzh35D: { productId: "prod_UyoLvuUlzh35D", name: "Qronos $30 API", type: "payg", amountUsd: 30, checkoutUrl: "https://whop.com/qronos/30-credits-78dg/" },
+  prod_sPD4u3nUGMjn2: { productId: "prod_sPD4u3nUGMjn2", name: "Qronos 50 API", type: "payg", amountUsd: 50, checkoutUrl: "https://whop.com/qronos/50-credits-67vb/" },
+  prod_lq2bnZMeggT5d: { productId: "prod_lq2bnZMeggT5d", name: "Qronos $100 API", type: "payg", amountUsd: 100, checkoutUrl: "https://whop.com/qronos/100-credits-34jk/" },
+  prod_NanmzIYeu3uIo: { productId: "prod_NanmzIYeu3uIo", name: "Qronos $150 API", type: "payg", amountUsd: 150, checkoutUrl: "https://whop.com/qronos/150-credits-19sk/" },
+  prod_K0FFsZEoV0fth: { productId: "prod_K0FFsZEoV0fth", name: "Qronos $200 API", type: "payg", amountUsd: 200, checkoutUrl: "https://whop.com/qronos/200-credits-39gh/" },
+
+  // Token plans
+  prod_RunCJULyHjSGZ: { productId: "prod_RunCJULyHjSGZ", name: "Qronos Plus Plan", type: "token_plan", amountUsd: 10, tokens: 600_000_000, checkoutUrl: "https://whop.com/qronos/plus-plan-24sl/" },
+  prod_R6KnsUgI3vA6z: { productId: "prod_R6KnsUgI3vA6z", name: "Qronos Pro Plan", type: "token_plan", amountUsd: 30, tokens: 2_200_000_000, checkoutUrl: "https://whop.com/qronos/pro-plan-40op/" },
+  prod_pNbqUYr7erKsN: { productId: "prod_pNbqUYr7erKsN", name: "Qronos Ultra Plan", type: "token_plan", amountUsd: 60, tokens: 5_000_000_000, checkoutUrl: "https://whop.com/qronos/ultra-plan-67wm/" },
+  prod_4hC8vZztBBGQm: { productId: "prod_4hC8vZztBBGQm", name: "Qronos Enterprise Plan", type: "token_plan", amountUsd: 150, tokens: 14_000_000_000, checkoutUrl: "https://whop.com/qronos/enterprise-plan-29wm/" },
+};
+
+export function resolveWhopProduct(
+  productId: string,
+  planId: string,
+  amountUsd: number,
+  rawData: any
+): {
+  type: "token_plan" | "payg";
+  name: string;
+  tokensToGrant?: number;
+  amountUsd: number;
+} {
+  const byId = WHOP_PRODUCT_CATALOG[productId];
+  if (byId) {
+    return {
+      type: byId.type,
+      name: byId.name,
+      tokensToGrant: byId.tokens,
+      amountUsd: byId.amountUsd,
+    };
+  }
+
+  const nameCandidate = String(rawData?.product?.name || rawData?.plan?.name || rawData?.title || "").toLowerCase();
+
+  if (nameCandidate.includes("plus") || productId === "prod_RunCJULyHjSGZ" || (amountUsd === 10 && nameCandidate.includes("plan"))) {
+    return { type: "token_plan", name: "Qronos Plus Plan", tokensToGrant: 600_000_000, amountUsd: 10 };
+  }
+  if (nameCandidate.includes("pro") || productId === "prod_R6KnsUgI3vA6z" || (amountUsd === 30 && nameCandidate.includes("plan"))) {
+    return { type: "token_plan", name: "Qronos Pro Plan", tokensToGrant: 2_200_000_000, amountUsd: 30 };
+  }
+  if (nameCandidate.includes("ultra") || productId === "prod_pNbqUYr7erKsN" || (amountUsd === 60 && nameCandidate.includes("plan"))) {
+    return { type: "token_plan", name: "Qronos Ultra Plan", tokensToGrant: 5_000_000_000, amountUsd: 60 };
+  }
+  if (nameCandidate.includes("enterprise") || productId === "prod_4hC8vZztBBGQm" || (amountUsd === 150 && nameCandidate.includes("plan"))) {
+    return { type: "token_plan", name: "Qronos Enterprise Plan", tokensToGrant: 14_000_000_000, amountUsd: 150 };
+  }
+
+  // Default to PAYG top-up by amount
+  return {
+    type: "payg",
+    name: `Qronos $${Math.round(amountUsd)} API`,
+    amountUsd,
+  };
+}
+
 /**
  * Constant-time string comparison to prevent timing attacks.
  */
@@ -263,20 +335,10 @@ export function registerWhopPaymentGateway(app: Express): void {
 
         const paymentId = (data.payment_id || data.id || webhookId || "").toString().trim();
 
-        // 8. Verify product matches our $10 Qronos API Credit product
-        const configuredProductId = (process.env.WHOP_10_CREDITS_PRODUCT_ID || WHOP_10_CREDITS_PRODUCT_ID).trim();
-        const configuredPlanId = (process.env.WHOP_10_CREDITS_PLAN_ID || WHOP_10_CREDITS_PLAN_ID).trim();
+        const resolved = resolveWhopProduct(productId, planId, amountUsd, data);
+        const amountNanos = Math.round(amountUsd * 1_000_000_000);
 
-        const is10DollarProduct =
-          productId === configuredProductId ||
-          planId === configuredPlanId ||
-          productId === WHOP_10_CREDITS_PRODUCT_ID ||
-          planId === WHOP_10_CREDITS_PLAN_ID ||
-          Math.round(amountUsd) === 10;
-
-        if (!is10DollarProduct) {
-          console.warn(`[Whop Webhook] Product/Plan (${productId}/${planId}) does not match $10 Qronos API Credit product. Received amount: $${amountUsd}`);
-        }
+        console.log(`[Whop Webhook] Processing ${resolved.type}: "${resolved.name}" for customer ${customerEmail} ($${amountUsd})`);
 
         // 9. Look up user by email
         if (!customerEmail) {
@@ -301,8 +363,6 @@ export function registerWhopPaymentGateway(app: Express): void {
           .where(eq(sql`LOWER(${users.email})`, customerEmail))
           .limit(1);
 
-        const amountNanos = Math.round(amountUsd * 1_000_000_000);
-
         // 10. Execute atomic balance increment & log webhook as processed
         if (user) {
           await db.transaction(async (tx) => {
@@ -314,31 +374,61 @@ export function registerWhopPaymentGateway(app: Express): void {
               codingPlanTokens: 0,
             }).onDuplicateKeyUpdate({ set: { userId: user.id } });
 
-            // Increment PAYG balance by amount paid
-            await tx.update(creditAccounts)
-              .set({ paygBalanceNanos: sql`${creditAccounts.paygBalanceNanos} + ${amountNanos}` })
-              .where(eq(creditAccounts.userId, user.id));
+            if (resolved.type === "token_plan") {
+              const tokensToAdd = resolved.tokensToGrant || 600_000_000;
+              await tx.update(creditAccounts)
+                .set({ codingPlanTokens: sql`${creditAccounts.codingPlanTokens} + ${tokensToAdd}` })
+                .where(eq(creditAccounts.userId, user.id));
 
-            // Fetch updated balance for ledger
-            const [acc] = await tx
-              .select({ paygBalanceNanos: creditAccounts.paygBalanceNanos })
-              .from(creditAccounts)
-              .where(eq(creditAccounts.userId, user.id))
-              .limit(1);
+              // Fetch updated balance for ledger
+              const [acc] = await tx
+                .select({ codingPlanTokens: creditAccounts.codingPlanTokens, paygBalanceNanos: creditAccounts.paygBalanceNanos })
+                .from(creditAccounts)
+                .where(eq(creditAccounts.userId, user.id))
+                .limit(1);
 
-            const newBalanceNanos = Number(acc?.paygBalanceNanos ?? amountNanos);
+              const newBalanceNanos = Number(acc?.paygBalanceNanos ?? 0);
 
-            // Audit ledger entry
-            await tx.insert(creditLedger).values({
-              userId: user.id,
-              kind: "manual_adjustment",
-              amountNanos: amountNanos,
-              balanceAfterNanos: newBalanceNanos,
-              referenceId: `whop_pay:${paymentId}`,
-              note: `Whop Payment Top-Up: $${amountUsd.toFixed(2)} PAYG Balance (Product: ${productId || "Qronos $10 API"}). Webhook: ${webhookId}`,
-            });
+              // Audit ledger entry
+              await tx.insert(creditLedger).values({
+                userId: user.id,
+                kind: "manual_adjustment",
+                amountNanos: 0,
+                balanceAfterNanos: newBalanceNanos,
+                referenceId: `whop_token_plan:${paymentId}`,
+                note: `Whop Token Plan Purchase: ${resolved.name} (+${(tokensToAdd / 1_000_000).toFixed(0)}M Tokens, $${amountUsd}). Webhook: ${webhookId}`,
+              });
 
-            // Trigger referral commission for user's referrer
+              console.log(`[Whop Webhook] Successfully credited +${(tokensToAdd / 1_000_000).toFixed(0)}M Tokens to user #${user.id} (${user.email}).`);
+            } else {
+              // PAYG top-up
+              await tx.update(creditAccounts)
+                .set({ paygBalanceNanos: sql`${creditAccounts.paygBalanceNanos} + ${amountNanos}` })
+                .where(eq(creditAccounts.userId, user.id));
+
+              // Fetch updated balance for ledger
+              const [acc] = await tx
+                .select({ paygBalanceNanos: creditAccounts.paygBalanceNanos })
+                .from(creditAccounts)
+                .where(eq(creditAccounts.userId, user.id))
+                .limit(1);
+
+              const newBalanceNanos = Number(acc?.paygBalanceNanos ?? amountNanos);
+
+              // Audit ledger entry
+              await tx.insert(creditLedger).values({
+                userId: user.id,
+                kind: "manual_adjustment",
+                amountNanos: amountNanos,
+                balanceAfterNanos: newBalanceNanos,
+                referenceId: `whop_pay:${paymentId}`,
+                note: `Whop Payment Top-Up: $${amountUsd.toFixed(2)} PAYG Balance (${resolved.name}). Webhook: ${webhookId}`,
+              });
+
+              console.log(`[Whop Webhook] Successfully credited +$${amountUsd.toFixed(2)} PAYG balance to user #${user.id} (${user.email}).`);
+            }
+
+            // Trigger referral commission for user's referrer (25% of amount paid)
             await applyReferralCommissionForRecharge(
               tx,
               user.id,
@@ -360,13 +450,13 @@ export function registerWhopPaymentGateway(app: Express): void {
                   productId,
                   planId,
                   paymentId,
+                  productName: resolved.name,
+                  productType: resolved.type,
                   status: "credited",
                 }),
               });
             }
           });
-
-          console.log(`[Whop Webhook] Successfully credited +$${amountUsd.toFixed(2)} PAYG balance to user #${user.id} (${user.email}).`);
         } else {
           // Users MUST have an existing registered account in Qronos to receive a top-up.
           console.warn(`[Whop Webhook] Refusing credit top-up: No registered Qronos account found for email: ${customerEmail}.`);

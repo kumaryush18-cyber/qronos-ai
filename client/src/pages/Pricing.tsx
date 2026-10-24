@@ -38,6 +38,7 @@ import {
   type TokenPlanTier,
   PAYG_TOPUP_OPTIONS,
   WHOP_10_CREDITS_CHECKOUT_URL,
+  getWhopPaygCheckoutUrl,
   USD_TO_INR_RATE,
 } from "@shared/paymentTiers";
 
@@ -269,7 +270,7 @@ export default function Pricing() {
                       </div>
 
                       {/* Card Action Button */}
-                      <div className="mt-auto pt-2">
+                      <div className="mt-auto pt-2 space-y-2">
                         {isFree ? (
                           <Link href={user ? "/dashboard" : "/signup"} className="block w-full">
                             <button
@@ -280,17 +281,31 @@ export default function Pricing() {
                             </button>
                           </Link>
                         ) : (
-                          <button
-                            type="button"
-                            onClick={() => openTokenPlanCheckout(tier)}
-                            className={`w-full py-2.5 rounded-xl text-xs font-bold font-mono transition-all cursor-pointer shadow-md ${
-                              isPro
-                                ? "bg-white text-black hover:bg-zinc-200 shadow-white/10"
-                                : "bg-gradient-to-b from-neutral-700 to-neutral-800 hover:from-neutral-600 hover:to-neutral-700 text-white border border-neutral-600"
-                            }`}
-                          >
-                            Choose {tier.name}
-                          </button>
+                          <>
+                            {tier.whopLink && (
+                              <a
+                                href={`${tier.whopLink}${user?.email ? `?email=${encodeURIComponent(user.email)}` : ""}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="w-full py-2 px-3 rounded-xl text-xs font-bold font-mono transition-all cursor-pointer shadow-md flex items-center justify-center gap-2 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white border border-orange-400/30 shadow-orange-950/40"
+                              >
+                                <CreditCard size={14} />
+                                <span>Pay ${tier.amountUsd} with Whop (Card/Crypto)</span>
+                                <ExternalLink size={12} />
+                              </a>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => openTokenPlanCheckout(tier)}
+                              className={`w-full py-2 rounded-xl text-xs font-bold font-mono transition-all cursor-pointer shadow-md ${
+                                isPro
+                                  ? "bg-white text-black hover:bg-zinc-200 shadow-white/10"
+                                  : "bg-gradient-to-b from-neutral-700 to-neutral-800 hover:from-neutral-600 hover:to-neutral-700 text-white border border-neutral-600"
+                              }`}
+                            >
+                              Pay with UPI or Solana (${tier.amountUsd})
+                            </button>
+                          </>
                         )}
                         <span className="block text-[10px] font-mono text-zinc-500 text-center mt-2">
                           10M tokens / $1 rate
@@ -411,38 +426,22 @@ export default function Pricing() {
                     </span>
 
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                      {/* Whop Card / PayPal / Crypto Button */}
-                      {selectedPaygAmount === 10 ? (
-                        <a
-                          href={`${WHOP_10_CREDITS_CHECKOUT_URL}${user?.email ? `?email=${encodeURIComponent(user.email)}` : ""}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="p-3 rounded-xl border border-orange-500/40 bg-gradient-to-r from-orange-950/40 to-amber-950/30 hover:border-orange-500/80 text-white font-mono text-xs font-bold flex items-center justify-between transition-all group shadow-lg shadow-orange-950/30"
-                        >
-                          <div className="flex items-center gap-2">
-                            <CreditCard size={16} className="text-orange-400 shrink-0" />
-                            <div className="text-left">
-                              <div>Card, Apple/Google Pay, PayPal & Crypto</div>
-                              <div className="text-[10px] text-orange-300 font-normal">via Whop 1-Click Checkout</div>
-                            </div>
+                      {/* Whop Card, Apple/Google Pay, PayPal & Crypto Button */}
+                      <a
+                        href={getWhopPaygCheckoutUrl(selectedPaygAmount, user?.email)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="p-3 rounded-xl border border-orange-500/40 bg-gradient-to-r from-orange-950/40 to-amber-950/30 hover:border-orange-500/80 text-white font-mono text-xs font-bold flex items-center justify-between transition-all group shadow-lg shadow-orange-950/30"
+                      >
+                        <div className="flex items-center gap-2">
+                          <CreditCard size={16} className="text-orange-400 shrink-0" />
+                          <div className="text-left">
+                            <div>Card, Apple/Google Pay, PayPal & Crypto</div>
+                            <div className="text-[10px] text-orange-300 font-normal">Pay ${selectedPaygAmount} via Whop 1-Click</div>
                           </div>
-                          <ExternalLink size={13} className="text-orange-400 group-hover:translate-x-0.5 transition-transform" />
-                        </a>
-                      ) : (
-                        <div className="p-3 rounded-xl border border-white/5 bg-white/[0.02] text-zinc-500 font-mono text-xs flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <CreditCard size={15} />
-                            <span>Card/PayPal/Crypto ($10 active)</span>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => setSelectedPaygAmount(10)}
-                            className="text-[10px] text-orange-400 hover:underline"
-                          >
-                            Switch to $10
-                          </button>
                         </div>
-                      )}
+                        <ExternalLink size={13} className="text-orange-400 group-hover:translate-x-0.5 transition-transform" />
+                      </a>
 
                       {/* Domestic UPI */}
                       <button

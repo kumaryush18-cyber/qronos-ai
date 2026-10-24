@@ -430,10 +430,10 @@ describe("Model Capability Router", () => {
     });
   });
 
-  describe("pruneOldImagesAndDeriveContent (25-turn stripping)", () => {
-    it("preserves image when it occurred within 25 message turns back", async () => {
-      // Create 26 turns: index 0 (image) to index 25 (latest user message).
-      // turnsBack = 25 - 0 = 25 turns back.
+  describe("pruneOldImagesAndDeriveContent (15-turn stripping)", () => {
+    it("preserves image when it occurred within 15 message turns back", async () => {
+      // Create 16 turns: index 0 (image) to index 15 (latest user message).
+      // turnsBack = 15 - 0 = 15 turns back.
       const messages: any[] = [
         {
           role: "user",
@@ -443,24 +443,24 @@ describe("Model Capability Router", () => {
           ],
         },
       ];
-      for (let i = 1; i <= 25; i++) {
+      for (let i = 1; i <= 15; i++) {
         messages.push({
           role: i % 2 === 1 ? "assistant" : "user",
           content: `Message turn ${i}`,
         });
       }
 
-      expect(messages.length).toBe(26);
+      expect(messages.length).toBe(16);
       const result = await pruneOldImagesAndDeriveContent(messages);
       expect(result.analysis.hasVisualData).toBe(true);
-      expect(result.analysis.tag).toBe("(image: 25 msgs back)");
+      expect(result.analysis.tag).toBe("(image: 15 msgs back)");
       // Image remains intact
       expect(result.messages[0].content[1].type).toBe("image_url");
     });
 
-    it("strips image when it occurred more than 25 message turns back (e.g. 26 msgs back)", async () => {
-      // Create 27 turns: index 0 (image) to index 26 (latest user message).
-      // turnsBack = 26 - 0 = 26 turns back (> 25).
+    it("strips image when it occurred more than 15 message turns back (e.g. 16 msgs back)", async () => {
+      // Create 17 turns: index 0 (image) to index 16 (latest user message).
+      // turnsBack = 16 - 0 = 16 turns back (> 15).
       const messages: any[] = [
         {
           role: "user",
@@ -470,16 +470,16 @@ describe("Model Capability Router", () => {
           ],
         },
       ];
-      for (let i = 1; i <= 26; i++) {
+      for (let i = 1; i <= 16; i++) {
         messages.push({
           role: i % 2 === 1 ? "assistant" : "user",
           content: `Message turn ${i}`,
         });
       }
 
-      expect(messages.length).toBe(27);
+      expect(messages.length).toBe(17);
       const result = await pruneOldImagesAndDeriveContent(messages);
-      // Image older than 25 turns has been stripped
+      // Image older than 15 turns has been stripped
       expect(result.analysis.hasVisualData).toBe(false);
       expect(result.analysis.tag).toBeUndefined();
       expect(result.messages[0].content[1]).toEqual({
@@ -488,8 +488,8 @@ describe("Model Capability Router", () => {
       });
     });
 
-    it("keeps recent image while stripping image that occurred more than 25 turns back", async () => {
-      // 30 messages total: index 0 (image 1, 29 msgs back) and index 22 (image 2, 7 msgs back)
+    it("keeps recent image while stripping image that occurred more than 15 turns back", async () => {
+      // 20 messages total: index 0 (image 1, 19 msgs back) and index 13 (image 2, 6 msgs back)
       const messages: any[] = [
         {
           role: "user",
@@ -498,8 +498,8 @@ describe("Model Capability Router", () => {
           ],
         },
       ];
-      for (let i = 1; i <= 29; i++) {
-        if (i === 22) {
+      for (let i = 1; i <= 19; i++) {
+        if (i === 13) {
           messages.push({
             role: "user",
             content: [
@@ -521,10 +521,10 @@ describe("Model Capability Router", () => {
         type: "text",
         text: "[Earlier image omitted for context limit]",
       });
-      // Recent image (7 msgs back) preserved
+      // Recent image (6 msgs back) preserved
       expect(result.analysis.hasVisualData).toBe(true);
-      expect(result.analysis.tag).toBe("(image: 7 msgs back)");
-      expect(result.messages[22].content[1].type).toBe("image_url");
+      expect(result.analysis.tag).toBe("(image: 6 msgs back)");
+      expect(result.messages[13].content[1].type).toBe("image_url");
     });
   });
 });

@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { useAuth } from "@/_core/hooks/useAuth";
-import { WHOP_10_CREDITS_CHECKOUT_URL } from "@shared/paymentTiers";
+import { getWhopPaygCheckoutUrl } from "@shared/paymentTiers";
 
 interface PaygPaymentModalProps {
   isOpen: boolean;
@@ -25,14 +25,14 @@ interface PaygPaymentModalProps {
 
 const PRESET_AMOUNTS = [
   { amount: 10, label: "$10", popular: false, hasWhop: true },
-  { amount: 15, label: "$15", popular: false, hasWhop: false },
-  { amount: 20, label: "$20", popular: false, hasWhop: false },
-  { amount: 25, label: "$25", popular: true, hasWhop: false },
-  { amount: 30, label: "$30", popular: false, hasWhop: false },
-  { amount: 50, label: "$50", popular: false, hasWhop: false },
-  { amount: 100, label: "$100", popular: false, hasWhop: false },
-  { amount: 150, label: "$150", popular: false, hasWhop: false },
-  { amount: 200, label: "$200", popular: false, hasWhop: false },
+  { amount: 15, label: "$15", popular: false, hasWhop: true },
+  { amount: 20, label: "$20", popular: false, hasWhop: true },
+  { amount: 25, label: "$25", popular: true, hasWhop: true },
+  { amount: 30, label: "$30", popular: false, hasWhop: true },
+  { amount: 50, label: "$50", popular: false, hasWhop: true },
+  { amount: 100, label: "$100", popular: false, hasWhop: true },
+  { amount: 150, label: "$150", popular: false, hasWhop: true },
+  { amount: 200, label: "$200", popular: false, hasWhop: true },
 ];
 
 export function PaygPaymentModal({
@@ -53,8 +53,8 @@ export function PaygPaymentModal({
   };
 
   const handleOpenWhopCheckout = () => {
-    const emailParam = user?.email ? `?email=${encodeURIComponent(user.email)}` : "";
-    window.open(`${WHOP_10_CREDITS_CHECKOUT_URL}${emailParam}`, "_blank", "noopener,noreferrer");
+    const url = getWhopPaygCheckoutUrl(selectedAmount, user?.email);
+    window.open(url, "_blank", "noopener,noreferrer");
   };
 
   return (
@@ -140,49 +140,33 @@ export function PaygPaymentModal({
             </label>
 
             <div className="space-y-3">
-              {/* Option 1: Whop Card & Apple Pay (Active for $10) */}
-              {selectedAmount === 10 ? (
-                <button
-                  type="button"
-                  onClick={handleOpenWhopCheckout}
-                  className="w-full p-4 rounded-xl text-left border transition-all flex items-center justify-between gap-4 cursor-pointer group bg-gradient-to-r from-orange-950/30 to-amber-950/20 border-orange-500/40 hover:border-orange-500/70 shadow-lg shadow-orange-950/40 ring-1 ring-orange-500/30"
-                >
-                  <div className="flex items-center gap-3.5">
-                    <div className="w-11 h-11 rounded-xl bg-gradient-to-tr from-orange-500 to-amber-500 flex items-center justify-center text-white shrink-0 shadow-md">
-                      <CreditCard className="w-5 h-5" />
+              {/* Option 1: Whop Card, Apple/Google Pay, PayPal & Crypto */}
+              <button
+                type="button"
+                onClick={handleOpenWhopCheckout}
+                className="w-full p-4 rounded-xl text-left border transition-all flex items-center justify-between gap-4 cursor-pointer group bg-gradient-to-r from-orange-950/30 to-amber-950/20 border-orange-500/40 hover:border-orange-500/70 shadow-lg shadow-orange-950/40 ring-1 ring-orange-500/30"
+              >
+                <div className="flex items-center gap-3.5">
+                  <div className="w-11 h-11 rounded-xl bg-gradient-to-tr from-orange-500 to-amber-500 flex items-center justify-center text-white shrink-0 shadow-md">
+                    <CreditCard className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-semibold text-white text-base">Cards, Apple/Google Pay, PayPal & Crypto</span>
+                      <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-orange-500/20 text-orange-300 border border-orange-500/30">
+                        Whop • 1-Click
+                      </span>
                     </div>
-                    <div>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-semibold text-white text-base">Cards, Apple/Google Pay, PayPal & Crypto</span>
-                        <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-orange-500/20 text-orange-300 border border-orange-500/30">
-                          Whop • 1-Click
-                        </span>
-                      </div>
-                      <p className="text-xs text-zinc-400 mt-0.5 leading-snug">
-                        Visa, MasterCard, Amex, Apple Pay, Google Pay, PayPal & Crypto via Whop Checkout.
-                      </p>
-                    </div>
+                    <p className="text-xs text-zinc-400 mt-0.5 leading-snug">
+                      Visa, MasterCard, Amex, Apple Pay, Google Pay, PayPal & Crypto via Whop Checkout.
+                    </p>
                   </div>
-                  <div className="shrink-0 flex items-center gap-1.5 text-xs font-semibold text-orange-400 group-hover:translate-x-0.5 transition-transform">
-                    <span>Pay $10 on Whop</span>
-                    <ExternalLink className="w-4 h-4" />
-                  </div>
-                </button>
-              ) : (
-                <div className="p-3 rounded-xl bg-white/[0.02] border border-white/5 flex items-center justify-between text-xs text-zinc-400">
-                  <div className="flex items-center gap-2">
-                    <CreditCard className="w-4 h-4 text-orange-400" />
-                    <span>Card / PayPal / Crypto via Whop currently active for <strong>$10</strong> top-up.</span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setSelectedAmount(10)}
-                    className="text-[11px] text-orange-400 hover:underline font-mono font-bold cursor-pointer"
-                  >
-                    Switch to $10 box
-                  </button>
                 </div>
-              )}
+                <div className="shrink-0 flex items-center gap-1.5 text-xs font-semibold text-orange-400 group-hover:translate-x-0.5 transition-transform">
+                  <span>Pay ${selectedAmount} on Whop</span>
+                  <ExternalLink className="w-4 h-4" />
+                </div>
+              </button>
 
               {/* Option 2: Solana Pay */}
               <button

@@ -57,6 +57,16 @@ export function AdminTwitterRewardsSection() {
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState<"slots" | "leaderboard" | "feed">("slots");
   const [regeneratingSlotIndex, setRegeneratingSlotIndex] = useState<number | null>(null);
+  const [expandedUserIds, setExpandedUserIds] = useState<Set<number>>(new Set());
+
+  const toggleExpandUser = (userId: number) => {
+    setExpandedUserIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(userId)) next.delete(userId);
+      else next.add(userId);
+      return next;
+    });
+  };
 
   // Sync state when config loads
   useEffect(() => {
@@ -329,53 +339,56 @@ export function AdminTwitterRewardsSection() {
       </div>
 
       {/* Navigation Tabs (Slots vs Analytics) */}
-      <div className="flex items-center justify-between border-b border-white/10 pb-3">
-        <div className="flex items-center gap-2">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/10 pb-3">
+        <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto pb-1 sm:pb-0 scrollbar-none w-full sm:w-auto -mx-1 px-1 sm:mx-0 sm:px-0">
           <Button
             size="sm"
             variant="ghost"
             onClick={() => setActiveTab("slots")}
-            className={`h-8 px-3.5 rounded-xl font-mono text-xs font-bold transition-all cursor-pointer ${
+            className={`h-9 sm:h-8 px-3 sm:px-3.5 rounded-xl font-mono text-xs font-bold transition-all cursor-pointer shrink-0 ${
               activeTab === "slots"
                 ? "bg-white text-black shadow-md"
                 : "text-zinc-400 hover:text-white hover:bg-white/10"
             }`}
           >
-            <Layers size={13} className="mr-1.5" />
-            15 Marketing Content Slots ({slots.length})
+            <Layers size={13} className="mr-1.5 shrink-0" />
+            <span className="sm:hidden">Slots ({slots.length})</span>
+            <span className="hidden sm:inline">15 Content Slots ({slots.length})</span>
           </Button>
 
           <Button
             size="sm"
             variant="ghost"
             onClick={() => setActiveTab("leaderboard")}
-            className={`h-8 px-3.5 rounded-xl font-mono text-xs font-bold transition-all cursor-pointer ${
+            className={`h-9 sm:h-8 px-3 sm:px-3.5 rounded-xl font-mono text-xs font-bold transition-all cursor-pointer shrink-0 ${
               activeTab === "leaderboard"
                 ? "bg-white text-black shadow-md"
                 : "text-zinc-400 hover:text-white hover:bg-white/10"
             }`}
           >
-            <Trophy size={13} className="mr-1.5 text-amber-400" />
-            User Leaderboard ({((overviewQuery.data as any)?.leaderboard || []).length})
+            <Trophy size={13} className="mr-1.5 text-amber-400 shrink-0" />
+            <span className="sm:hidden">Leaderboard ({((overviewQuery.data as any)?.leaderboard || []).length})</span>
+            <span className="hidden sm:inline">User Leaderboard ({((overviewQuery.data as any)?.leaderboard || []).length})</span>
           </Button>
 
           <Button
             size="sm"
             variant="ghost"
             onClick={() => setActiveTab("feed")}
-            className={`h-8 px-3.5 rounded-xl font-mono text-xs font-bold transition-all cursor-pointer ${
+            className={`h-9 sm:h-8 px-3 sm:px-3.5 rounded-xl font-mono text-xs font-bold transition-all cursor-pointer shrink-0 ${
               activeTab === "feed"
                 ? "bg-white text-black shadow-md"
                 : "text-zinc-400 hover:text-white hover:bg-white/10"
             }`}
           >
-            <Users size={13} className="mr-1.5" />
-            Live Posts Feed ({overviewQuery.data?.totalPosts || 0})
+            <Users size={13} className="mr-1.5 shrink-0" />
+            <span className="sm:hidden">Live Feed ({overviewQuery.data?.totalPosts || 0})</span>
+            <span className="hidden sm:inline">Live Posts Feed ({overviewQuery.data?.totalPosts || 0})</span>
           </Button>
         </div>
 
         {activeTab === "slots" && (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap pt-2 sm:pt-0">
             <span className="text-xs font-mono text-zinc-400 hidden sm:inline">
               Generation Model:
             </span>
@@ -399,7 +412,8 @@ export function AdminTwitterRewardsSection() {
               className="h-8 border-white/15 bg-white/[0.04] hover:bg-white/[0.08] text-zinc-200 font-mono text-xs gap-1.5"
             >
               <Wand2 size={13} className={regenerateAllMutation.isPending ? "animate-spin text-emerald-400" : "text-amber-400"} />
-              {regenerateAllMutation.isPending ? "Generating 15 Slots..." : "Regenerate All Slots"}
+              <span className="hidden sm:inline">{regenerateAllMutation.isPending ? "Generating 15 Slots..." : "Regenerate All Slots"}</span>
+              <span className="sm:hidden">{regenerateAllMutation.isPending ? "Generating..." : "Regenerate All"}</span>
             </Button>
           </div>
         )}
@@ -591,94 +605,244 @@ export function AdminTwitterRewardsSection() {
                 No user share activity recorded yet. Once users post on 𝕏 and claim compute, the ranking leaderboard will update here in real-time.
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs font-mono">
-                  <thead>
-                    <tr className="border-b border-white/10 text-[10px] uppercase tracking-wider text-zinc-500">
-                      <th className="pb-2.5 font-bold w-16">Rank</th>
-                      <th className="pb-2.5 font-bold">User Account</th>
-                      <th className="pb-2.5 font-bold">Last 𝕏 Handle</th>
-                      <th className="pb-2.5 font-bold text-center">Total Posts</th>
-                      <th className="pb-2.5 font-bold">Total Tokens Earned</th>
-                      <th className="pb-2.5 font-bold">Total PAYG Earned</th>
-                      <th className="pb-2.5 font-bold text-right">Last Share</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-white/5">
-                    {filteredLeaderboard.map((item: any, idx: number) => {
-                      const rank = idx + 1;
-                      const rankBadge =
-                        rank === 1 ? "🥇 #1" : rank === 2 ? "🥈 #2" : rank === 3 ? "🥉 #3" : `#${rank}`;
-                      const rankColor =
-                        rank === 1
-                          ? "text-amber-400 font-bold"
-                          : rank === 2
-                          ? "text-zinc-300 font-bold"
-                          : rank === 3
-                          ? "text-amber-600 font-bold"
-                          : "text-zinc-500";
+              <>
+                {/* Mobile Cards View (hidden on md and up) */}
+                <div className="block md:hidden space-y-3">
+                  {filteredLeaderboard.map((item: any, idx: number) => {
+                    const rank = idx + 1;
+                    const rankBadge = rank === 1 ? "🥇 #1" : rank === 2 ? "🥈 #2" : rank === 3 ? "🥉 #3" : `#${rank}`;
+                    const isExpanded = expandedUserIds.has(item.userId);
 
-                      return (
-                        <tr key={item.userId} className="hover:bg-white/[0.02] transition-colors">
-                          <td className="py-3">
-                            <span className={`inline-flex items-center text-xs ${rankColor}`}>
-                              {rankBadge}
-                            </span>
-                          </td>
-
-                          <td className="py-3">
-                            <div className="font-bold text-white">
+                    return (
+                      <div key={item.userId} className="p-3.5 rounded-xl border border-white/10 bg-white/[0.02] space-y-2.5">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="text-xs font-bold text-amber-400 shrink-0">{rankBadge}</span>
+                            <div className="truncate font-bold text-white text-xs">
                               {item.userEmail || `User #${item.userId}`}
                             </div>
-                            {item.userName && (
-                              <div className="text-[10px] text-zinc-500">{item.userName}</div>
-                            )}
-                          </td>
+                          </div>
+                          <Badge className="bg-emerald-500/15 text-emerald-300 border-emerald-500/30 text-[11px] font-mono font-bold shrink-0">
+                            {Number(item.postsCount).toLocaleString()} {Number(item.postsCount) === 1 ? "post" : "posts"}
+                          </Badge>
+                        </div>
 
-                          <td className="py-3">
-                            {item.lastTwitterUsername ? (
-                              <span className="font-bold text-zinc-300">@{item.lastTwitterUsername}</span>
-                            ) : (
-                              <span className="text-zinc-600">—</span>
-                            )}
-                          </td>
-
-                          <td className="py-3 text-center">
-                            <Badge className="bg-emerald-500/10 text-emerald-400 border-emerald-500/30 text-[11px] font-mono font-bold">
-                              {Number(item.postsCount).toLocaleString()} {Number(item.postsCount) === 1 ? "post" : "posts"}
-                            </Badge>
-                          </td>
-
-                          <td className="py-3">
-                            <span className="text-cyan-400 font-bold">
-                              {Math.round(Number(item.totalTokens) / 1_000_000).toLocaleString()}M Tokens
+                        <div className="grid grid-cols-2 gap-2 text-[11px] font-mono text-zinc-400 pt-1 border-t border-white/5">
+                          <div>
+                            <span className="text-[9px] uppercase tracking-wider text-zinc-500 block">𝕏 Handle</span>
+                            <span className="text-white font-medium">
+                              {item.lastTwitterUsername ? `@${item.lastTwitterUsername}` : "—"}
                             </span>
-                          </td>
-
-                          <td className="py-3">
+                          </div>
+                          <div>
+                            <span className="text-[9px] uppercase tracking-wider text-zinc-500 block">Tokens Earned</span>
+                            <span className="text-cyan-400 font-bold">
+                              {Math.round(Number(item.totalTokens) / 1_000_000).toLocaleString()}M
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-[9px] uppercase tracking-wider text-zinc-500 block">PAYG Balance</span>
                             <span className="text-emerald-400 font-bold">
                               ${(Number(item.totalPaygNanos) / 1_000_000_000).toFixed(2)}
                             </span>
-                          </td>
+                          </div>
+                          <div>
+                            <span className="text-[9px] uppercase tracking-wider text-zinc-500 block">Last Active</span>
+                            <span className="text-zinc-300">
+                              {item.lastPostedAt ? formatDistanceToNow(new Date(item.lastPostedAt), { addSuffix: true }) : "—"}
+                            </span>
+                          </div>
+                        </div>
 
-                          <td className="py-3 text-right text-zinc-400">
-                            {item.lastPostedAt ? (
-                              <div>
-                                <div>{format(new Date(item.lastPostedAt), "MMM d, h:mm a")}</div>
-                                <div className="text-[10px] text-zinc-600">
-                                  {formatDistanceToNow(new Date(item.lastPostedAt), { addSuffix: true })}
-                                </div>
+                        {/* Expandable Posts on Mobile */}
+                        {item.posts && item.posts.length > 0 && (
+                          <div className="pt-1.5 border-t border-white/5">
+                            <button
+                              type="button"
+                              onClick={() => toggleExpandUser(item.userId)}
+                              className="w-full py-1.5 px-2.5 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] text-zinc-300 flex items-center justify-between text-[11px] font-mono cursor-pointer"
+                            >
+                              <span>View all {item.posts.length} {item.posts.length === 1 ? "post" : "posts"}</span>
+                              {isExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                            </button>
+
+                            {isExpanded && (
+                              <div className="mt-2 space-y-1.5">
+                                {item.posts.map((post: any, pIdx: number) => (
+                                  <div key={post.id || pIdx} className="p-2 rounded-lg bg-black/60 border border-white/8 flex items-center justify-between text-[10px] font-mono">
+                                    <div>
+                                      <div className="flex items-center gap-1.5">
+                                        <span className="font-bold text-white">Post #{pIdx + 1}</span>
+                                        {post.twitterUsername && <span className="text-zinc-400">@{post.twitterUsername}</span>}
+                                      </div>
+                                      <div className="text-zinc-500 text-[9px] mt-0.5">
+                                        {post.postedAt ? format(new Date(post.postedAt), "MMM d, h:mm a") : "Recently"}
+                                      </div>
+                                    </div>
+                                    {post.tweetId && (
+                                      <a
+                                        href={`https://twitter.com/i/status/${post.tweetId}`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-cyan-400 hover:text-cyan-300 flex items-center gap-1 font-bold"
+                                      >
+                                        <span>View</span>
+                                        <ExternalLink size={10} />
+                                      </a>
+                                    )}
+                                  </div>
+                                ))}
                               </div>
-                            ) : (
-                              <span className="text-zinc-600">—</span>
                             )}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Desktop Table View (hidden on mobile) */}
+                <div className="hidden md:block overflow-x-auto">
+                  <table className="w-full text-left text-xs font-mono">
+                    <thead>
+                      <tr className="border-b border-white/10 text-[10px] uppercase tracking-wider text-zinc-500">
+                        <th className="pb-2.5 font-bold w-16">Rank</th>
+                        <th className="pb-2.5 font-bold">User Account</th>
+                        <th className="pb-2.5 font-bold">Last 𝕏 Handle</th>
+                        <th className="pb-2.5 font-bold text-center">Total Posts</th>
+                        <th className="pb-2.5 font-bold">Total Tokens Earned</th>
+                        <th className="pb-2.5 font-bold">Total PAYG Earned</th>
+                        <th className="pb-2.5 font-bold text-right">Last Share</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/5">
+                      {filteredLeaderboard.map((item: any, idx: number) => {
+                        const rank = idx + 1;
+                        const rankBadge =
+                          rank === 1 ? "🥇 #1" : rank === 2 ? "🥈 #2" : rank === 3 ? "🥉 #3" : `#${rank}`;
+                        const rankColor =
+                          rank === 1
+                            ? "text-amber-400 font-bold"
+                            : rank === 2
+                            ? "text-zinc-300 font-bold"
+                            : rank === 3
+                            ? "text-amber-600 font-bold"
+                            : "text-zinc-500";
+                        const isExpanded = expandedUserIds.has(item.userId);
+
+                        return (
+                          <React.Fragment key={item.userId}>
+                            <tr className="hover:bg-white/[0.02] transition-colors">
+                              <td className="py-3">
+                                <span className={`inline-flex items-center text-xs ${rankColor}`}>
+                                  {rankBadge}
+                                </span>
+                              </td>
+
+                              <td className="py-3">
+                                <div className="font-bold text-white">
+                                  {item.userEmail || `User #${item.userId}`}
+                                </div>
+                                {item.userName && (
+                                  <div className="text-[10px] text-zinc-500">{item.userName}</div>
+                                )}
+                              </td>
+
+                              <td className="py-3">
+                                {item.lastTwitterUsername ? (
+                                  <span className="font-bold text-zinc-300">@{item.lastTwitterUsername}</span>
+                                ) : (
+                                  <span className="text-zinc-600">—</span>
+                                )}
+                              </td>
+
+                              <td className="py-3 text-center">
+                                <button
+                                  type="button"
+                                  onClick={() => toggleExpandUser(item.userId)}
+                                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-300 font-mono text-[11px] font-bold transition-all cursor-pointer"
+                                  title="Click to view all verified posts by this user"
+                                >
+                                  <span>{Number(item.postsCount).toLocaleString()} {Number(item.postsCount) === 1 ? "post" : "posts"}</span>
+                                  {isExpanded ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
+                                </button>
+                              </td>
+
+                              <td className="py-3">
+                                <span className="text-cyan-400 font-bold">
+                                  {Math.round(Number(item.totalTokens) / 1_000_000).toLocaleString()}M Tokens
+                                </span>
+                              </td>
+
+                              <td className="py-3">
+                                <span className="text-emerald-400 font-bold">
+                                  ${(Number(item.totalPaygNanos) / 1_000_000_000).toFixed(2)}
+                                </span>
+                              </td>
+
+                              <td className="py-3 text-right text-zinc-400">
+                                {item.lastPostedAt ? (
+                                  <div>
+                                    <div>{format(new Date(item.lastPostedAt), "MMM d, h:mm a")}</div>
+                                    <div className="text-[10px] text-zinc-600">
+                                      {formatDistanceToNow(new Date(item.lastPostedAt), { addSuffix: true })}
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <span className="text-zinc-600">—</span>
+                                )}
+                              </td>
+                            </tr>
+
+                            {/* Expanded individual posts for this user */}
+                            {isExpanded && (
+                              <tr className="bg-white/[0.015]">
+                                <td colSpan={7} className="p-3 pl-8">
+                                  <div className="rounded-xl border border-white/10 bg-black/50 p-3 space-y-2">
+                                    <div className="text-[11px] font-bold text-zinc-300 flex items-center justify-between">
+                                      <span>Verified Posts by {item.userEmail || `User #${item.userId}`} ({item.posts?.length || item.postsCount})</span>
+                                      <span className="text-[10px] text-zinc-500 font-normal">All shares grouped under this single user</span>
+                                    </div>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                                      {(item.posts || []).map((post: any, pIdx: number) => (
+                                        <div key={post.id || pIdx} className="p-2.5 rounded-lg border border-white/8 bg-white/[0.03] flex items-center justify-between text-[11px]">
+                                          <div>
+                                            <div className="flex items-center gap-1.5">
+                                              <span className="font-bold text-white">Post #{pIdx + 1}</span>
+                                              {post.twitterUsername && <span className="text-zinc-400">(@{post.twitterUsername})</span>}
+                                              <Badge variant="outline" className={`text-[9px] py-0 px-1 ${post.status === "active" ? "border-emerald-500/30 text-emerald-400" : "border-zinc-700 text-zinc-500"}`}>
+                                                {post.status}
+                                              </Badge>
+                                            </div>
+                                            <div className="text-[10px] text-zinc-500 mt-0.5">
+                                              {post.postedAt ? format(new Date(post.postedAt), "MMM d, yyyy h:mm a") : "Recently"}
+                                            </div>
+                                          </div>
+                                          {post.tweetId && (
+                                            <a
+                                              href={`https://twitter.com/i/status/${post.tweetId}`}
+                                              target="_blank"
+                                              rel="noopener noreferrer"
+                                              className="text-cyan-400 hover:text-cyan-300 flex items-center gap-1 text-[10px] font-bold"
+                                            >
+                                              <span>Tweet</span>
+                                              <ExternalLink size={10} />
+                                            </a>
+                                          )}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                </td>
+                              </tr>
+                            )}
+                          </React.Fragment>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </>
             )}
           </div>
         </div>
@@ -716,91 +880,163 @@ export function AdminTwitterRewardsSection() {
                 No verified X posts recorded yet. Once users click &quot;Post on X to Earn&quot;, their posts, handles, and 12-hour reward status will appear here live.
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs font-mono">
-                  <thead>
-                    <tr className="border-b border-white/10 text-[10px] uppercase tracking-wider text-zinc-500">
-                      <th className="pb-2.5 font-bold">User Account</th>
-                      <th className="pb-2.5 font-bold">𝕏 Handle</th>
-                      <th className="pb-2.5 font-bold">Slot Theme</th>
-                      <th className="pb-2.5 font-bold">Reward Loaded</th>
-                      <th className="pb-2.5 font-bold">12h Status</th>
-                      <th className="pb-2.5 font-bold">Posted</th>
-                      <th className="pb-2.5 font-bold text-right">View Tweet</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-white/5">
-                    {filteredClaims.map((claim) => {
-                      const isExpired = claim.status === "expired" || new Date(claim.expiresAt).getTime() < Date.now();
+              <>
+                {/* Mobile Feed Cards (hidden on md and up) */}
+                <div className="block md:hidden space-y-3">
+                  {filteredClaims.map((claim) => {
+                    const isExpired = claim.status === "expired" || new Date(claim.expiresAt).getTime() < Date.now();
 
-                      return (
-                        <tr key={claim.id} className="hover:bg-white/[0.02] transition-colors">
-                          <td className="py-3">
-                            <div className="font-bold text-white">{claim.userEmail || `User #${claim.userId}`}</div>
-                            {claim.userName && <div className="text-[10px] text-zinc-500">{claim.userName}</div>}
-                          </td>
+                    return (
+                      <div key={claim.id} className="p-3.5 rounded-xl border border-white/10 bg-white/[0.02] space-y-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="font-bold text-white text-xs truncate">
+                            {claim.userEmail || `User #${claim.userId}`}
+                          </div>
+                          {isExpired ? (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] bg-zinc-800 text-zinc-400 border border-zinc-700 shrink-0">
+                              Expired
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 shrink-0">
+                              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                              Active (12h)
+                            </span>
+                          )}
+                        </div>
 
-                          <td className="py-3">
-                            <span className="font-bold text-zinc-200">@{claim.twitterUsername}</span>
-                          </td>
-
-                          <td className="py-3">
-                            <Badge variant="outline" className="text-[10px] font-mono border-white/15 text-zinc-300">
-                              Slot #{claim.slotIndex + 1}
-                            </Badge>
-                          </td>
-
-                          <td className="py-3">
-                            <div className="text-cyan-400 font-bold">
-                              {claim.grantedTokens > 0 ? `+${Math.round(claim.grantedTokens / 1_000_000)}M Tokens` : ""}
-                            </div>
+                        <div className="grid grid-cols-2 gap-2 text-[11px] font-mono text-zinc-400 pt-1 border-t border-white/5">
+                          <div>
+                            <span className="text-[9px] uppercase tracking-wider text-zinc-500 block">𝕏 Handle</span>
+                            <span className="text-zinc-200 font-bold">@{claim.twitterUsername}</span>
+                          </div>
+                          <div>
+                            <span className="text-[9px] uppercase tracking-wider text-zinc-500 block">Reward</span>
+                            <span className="text-cyan-400 font-bold">
+                              {claim.grantedTokens > 0 ? `+${Math.round(claim.grantedTokens / 1_000_000)}M` : ""}
+                            </span>
                             {claim.grantedPaygNanos > 0 && (
-                              <div className="text-emerald-400 text-[10px]">
-                                +${(claim.grantedPaygNanos / 1_000_000_000).toFixed(2)} PAYG
+                              <span className="text-emerald-400 text-[10px] ml-1">
+                                +${(claim.grantedPaygNanos / 1_000_000_000).toFixed(2)}
+                              </span>
+                            )}
+                          </div>
+                          <div>
+                            <span className="text-[9px] uppercase tracking-wider text-zinc-500 block">Slot</span>
+                            <span className="text-zinc-400">Slot #{claim.slotIndex + 1}</span>
+                          </div>
+                          <div>
+                            <span className="text-[9px] uppercase tracking-wider text-zinc-500 block">Posted</span>
+                            <span className="text-zinc-300">
+                              {claim.postedAt ? formatDistanceToNow(new Date(claim.postedAt), { addSuffix: true }) : "Recently"}
+                            </span>
+                          </div>
+                        </div>
+
+                        {claim.tweetId && claim.tweetId !== "unknown" && (
+                          <div className="pt-1.5 border-t border-white/5 flex justify-end">
+                            <a
+                              href={`https://x.com/i/status/${claim.tweetId}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-cyan-400 hover:text-cyan-300 inline-flex items-center gap-1 font-bold text-xs"
+                            >
+                              <span>View 𝕏</span>
+                              <ArrowUpRight size={12} />
+                            </a>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Desktop Feed Table */}
+                <div className="hidden md:block overflow-x-auto">
+                  <table className="w-full text-left text-xs font-mono">
+                    <thead>
+                      <tr className="border-b border-white/10 text-[10px] uppercase tracking-wider text-zinc-500">
+                        <th className="pb-2.5 font-bold">User Account</th>
+                        <th className="pb-2.5 font-bold">𝕏 Handle</th>
+                        <th className="pb-2.5 font-bold">Slot Theme</th>
+                        <th className="pb-2.5 font-bold">Reward Loaded</th>
+                        <th className="pb-2.5 font-bold">12h Status</th>
+                        <th className="pb-2.5 font-bold">Posted</th>
+                        <th className="pb-2.5 font-bold text-right">View Tweet</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/5">
+                      {filteredClaims.map((claim) => {
+                        const isExpired = claim.status === "expired" || new Date(claim.expiresAt).getTime() < Date.now();
+
+                        return (
+                          <tr key={claim.id} className="hover:bg-white/[0.02] transition-colors">
+                            <td className="py-3">
+                              <div className="font-bold text-white">{claim.userEmail || `User #${claim.userId}`}</div>
+                              {claim.userName && <div className="text-[10px] text-zinc-500">{claim.userName}</div>}
+                            </td>
+
+                            <td className="py-3">
+                              <span className="font-bold text-zinc-200">@{claim.twitterUsername}</span>
+                            </td>
+
+                            <td className="py-3">
+                              <Badge variant="outline" className="text-[10px] font-mono border-white/15 text-zinc-300">
+                                Slot #{claim.slotIndex + 1}
+                              </Badge>
+                            </td>
+
+                            <td className="py-3">
+                              <div className="text-cyan-400 font-bold">
+                                {claim.grantedTokens > 0 ? `+${Math.round(claim.grantedTokens / 1_000_000)}M Tokens` : ""}
                               </div>
-                            )}
-                          </td>
+                              {claim.grantedPaygNanos > 0 && (
+                                <div className="text-emerald-400 text-[10px]">
+                                  +${(claim.grantedPaygNanos / 1_000_000_000).toFixed(2)} PAYG
+                                </div>
+                              )}
+                            </td>
 
-                          <td className="py-3">
-                            {isExpired ? (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] bg-zinc-800 text-zinc-400 border border-zinc-700">
-                                Expired
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
-                                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                                Active (Expires {format(new Date(claim.expiresAt), "h:mm a")})
-                              </span>
-                            )}
-                          </td>
+                            <td className="py-3">
+                              {isExpired ? (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] bg-zinc-800 text-zinc-400 border border-zinc-700">
+                                  Expired
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+                                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                                  Active (Expires {format(new Date(claim.expiresAt), "h:mm a")})
+                                </span>
+                              )}
+                            </td>
 
-                          <td className="py-3 text-zinc-400">
-                            <div>{format(new Date(claim.postedAt), "MMM d, h:mm a")}</div>
-                            <div className="text-[10px] text-zinc-600">
-                              {formatDistanceToNow(new Date(claim.postedAt), { addSuffix: true })}
-                            </div>
-                          </td>
+                            <td className="py-3 text-zinc-400">
+                              <div>{format(new Date(claim.postedAt), "MMM d, h:mm a")}</div>
+                              <div className="text-[10px] text-zinc-600">
+                                {formatDistanceToNow(new Date(claim.postedAt), { addSuffix: true })}
+                              </div>
+                            </td>
 
-                          <td className="py-3 text-right">
-                            {claim.tweetId && claim.tweetId !== "unknown" ? (
-                              <a
-                                href={`https://x.com/i/status/${claim.tweetId}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-flex items-center gap-1 text-xs text-cyan-400 hover:text-cyan-300 hover:underline"
-                              >
-                                View 𝕏 <ArrowUpRight size={12} />
-                              </a>
-                            ) : (
-                              <span className="text-zinc-600">—</span>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+                            <td className="py-3 text-right">
+                              {claim.tweetId && claim.tweetId !== "unknown" ? (
+                                <a
+                                  href={`https://x.com/i/status/${claim.tweetId}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-1 text-xs text-cyan-400 hover:text-cyan-300 hover:underline"
+                                >
+                                  View 𝕏 <ArrowUpRight size={12} />
+                                </a>
+                              ) : (
+                                <span className="text-zinc-600">—</span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </>
             )}
           </div>
         </div>

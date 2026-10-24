@@ -14,6 +14,7 @@ import {
   Check,
   Lock,
   Wallet,
+  CreditCard,
   ArrowRight,
   ArrowUpRight,
   Loader2,
@@ -23,11 +24,14 @@ import { Button } from "@/components/ui/button";
 import { StarButton } from "@/components/StarButton";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
+import { useAuth } from "@/_core/hooks/useAuth";
 import {
   UPI_TIERS,
   CODING_PLAN_TIERS,
   getCodingPlanTier,
   USD_TO_INR_RATE,
+  getWhopPaygCheckoutUrl,
+  getWhopTokenPlanCheckoutUrl,
   type UPITier,
   type CodingPlanTier,
 } from "@shared/paymentTiers";
@@ -87,6 +91,7 @@ export function CheckoutModal({
   planName,
   onSuccess,
 }: CheckoutModalProps) {
+  const { user } = useAuth();
   const [mounted, setMounted] = useState(false);
   const [activeRail, setActiveRail] = useState<"upi" | "crypto">(
     initialRail === "crypto" ? "crypto" : "upi"
@@ -128,7 +133,7 @@ export function CheckoutModal({
 
   useEffect(() => {
     if (initialPackageUsd) setSelectedUsd(initialPackageUsd);
-    if (initialRail) setActiveRail(initialRail === "card" ? "upi" : initialRail);
+    if (initialRail) setActiveRail(initialRail === "crypto" ? "crypto" : "upi");
   }, [initialPackageUsd, initialRail, isOpen]);
 
   const matchedCodingPlan = isCodingPlan
@@ -136,6 +141,10 @@ export function CheckoutModal({
     : undefined;
 
   const totalInr = Math.round(selectedUsd * USD_TO_INR_RATE);
+
+  const whopCheckoutUrl = isCodingPlan
+    ? getWhopTokenPlanCheckoutUrl(codingPlanTierId || (matchedCodingPlan?.id ?? "plus"), user?.email)
+    : getWhopPaygCheckoutUrl(selectedUsd, user?.email);
 
   const copyToClipboard = async (text: string, label: string) => {
     try {
@@ -510,6 +519,39 @@ export function CheckoutModal({
               <span>Solana Pay ($)</span>
             </button>
           </div>
+
+          {/* Whop 1-Click Checkout Option */}
+          {whopCheckoutUrl && (
+            <div className="mt-3">
+              <a
+                href={whopCheckoutUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full p-3 rounded-xl border border-orange-500/40 bg-gradient-to-r from-orange-950/40 via-amber-950/30 to-orange-950/20 hover:border-orange-500/80 text-white font-mono text-xs font-bold flex items-center justify-between transition-all group shadow-md shadow-orange-950/20"
+              >
+                <div className="flex items-center gap-2.5">
+                  <div className="w-7 h-7 rounded-lg bg-gradient-to-tr from-orange-500 to-amber-500 flex items-center justify-center text-white shrink-0">
+                    <CreditCard size={15} />
+                  </div>
+                  <div className="text-left">
+                    <div className="flex items-center gap-2">
+                      <span>Cards, Apple/Google Pay, PayPal & Crypto</span>
+                      <span className="text-[9px] uppercase px-1.5 py-0.2 rounded bg-orange-500/20 text-orange-300 border border-orange-500/30 font-bold">
+                        Whop • 1-Click
+                      </span>
+                    </div>
+                    <div className="text-[10px] text-zinc-400 font-normal">
+                      Instant checkout for {isCodingPlan && matchedCodingPlan ? matchedCodingPlan.name : `$${selectedUsd} PAYG`}
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1 text-orange-400 font-semibold group-hover:translate-x-0.5 transition-transform text-[11px]">
+                  <span>Pay on Whop</span>
+                  <ExternalLink size={12} />
+                </div>
+              </a>
+            </div>
+          )}
         </div>
 
         {/* Modal Scrollable Body */}

@@ -785,31 +785,64 @@ export default function LiveRequestLog() {
                     </td>
 
                     {/* Model with Compaction & Reasoning Badges */}
-                    <td className="max-w-[12rem] truncate px-3 py-2 font-mono text-[#e6e6ee]" title={row.modelId}>
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="font-semibold">{row.modelId}</span>
-                        {row.rawErrorMessage && row.rawErrorMessage.includes("[CompactTrigger") && (
-                          <span
-                            className="inline-flex items-center rounded border border-purple-400/40 bg-purple-500/20 px-1.5 py-0.2 text-[8.5px] font-bold tracking-wide text-purple-200 shadow-sm"
-                            title={row.rawErrorMessage}
-                          >
-                            COMPACTED
-                          </span>
-                        )}
-                        {(row.reasoningReturned || (row.rawErrorMessage && row.rawErrorMessage.includes("[ReasoningFallback"))) && (
-                          <span
-                            className="inline-flex items-center gap-1 rounded border border-amber-400/40 bg-amber-500/20 px-1.5 py-0.2 text-[8.5px] font-bold tracking-wide text-amber-300 shadow-sm"
-                            title="Reasoning fallback: model returned empty content, output reasoning was returned to user"
-                          >
-                            ⚡ REASONING
-                          </span>
-                        )}
-                      </div>
+                    <td className="max-w-[13rem] truncate px-3 py-2 font-mono text-[#e6e6ee]" title={row.modelId}>
+                      {(() => {
+                        const visualTagMatch = row.provider?.match(/\((image:[^)]+|multimodal|document)\)/i);
+                        const visualTag = visualTagMatch ? visualTagMatch[1] : null;
+
+                        return (
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="font-semibold">{row.modelId}</span>
+                            {visualTag && (
+                              <span
+                                className="inline-flex items-center gap-1 rounded border border-cyan-400/40 bg-cyan-500/20 px-1.5 py-0.2 text-[8.5px] font-bold font-mono tracking-wide text-cyan-300 shadow-sm"
+                                title={`Multimodal Image Recency: ${visualTag}`}
+                              >
+                                🖼️ {visualTag}
+                              </span>
+                            )}
+                            {row.rawErrorMessage && row.rawErrorMessage.includes("[CompactTrigger") && (
+                              <span
+                                className="inline-flex items-center rounded border border-purple-400/40 bg-purple-500/20 px-1.5 py-0.2 text-[8.5px] font-bold tracking-wide text-purple-200 shadow-sm"
+                                title={row.rawErrorMessage}
+                              >
+                                COMPACTED
+                              </span>
+                            )}
+                            {(row.reasoningReturned || (row.rawErrorMessage && row.rawErrorMessage.includes("[ReasoningFallback"))) && (
+                              <span
+                                className="inline-flex items-center gap-1 rounded border border-amber-400/40 bg-amber-500/20 px-1.5 py-0.2 text-[8.5px] font-bold tracking-wide text-amber-300 shadow-sm"
+                                title="Reasoning fallback: model returned empty content, output reasoning was returned to user"
+                              >
+                                ⚡ REASONING
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })()}
                     </td>
 
                     {/* Provider */}
-                    <td className="max-w-[11rem] truncate px-3 py-2 font-medium text-[#c9ff73]" title={row.provider ?? "Default"}>
-                      <span className="truncate">{row.provider ? row.provider.split("(")[0].trim() : "Default"}</span>
+                    <td className="max-w-[13rem] px-3 py-2 font-medium text-[#c9ff73]" title={row.provider ?? "Default"}>
+                      {(() => {
+                        const visualTagMatch = row.provider?.match(/\((image:[^)]+|multimodal|document)\)/i);
+                        const visualTag = visualTagMatch ? visualTagMatch[1] : null;
+                        const cleanProvider = row.provider ? row.provider.split("(")[0].trim() : "Default";
+
+                        return (
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="truncate">{cleanProvider}</span>
+                            {visualTag && (
+                              <span
+                                className="inline-flex items-center gap-0.5 rounded border border-cyan-400/30 bg-cyan-500/10 px-1 py-0.2 text-[8px] font-mono text-cyan-300"
+                                title={`Multimodal Tag: ${visualTag}`}
+                              >
+                                ({visualTag})
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })()}
                     </td>
 
                     {/* Source: API vs Playground */}

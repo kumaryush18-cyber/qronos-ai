@@ -121,7 +121,7 @@ describe("Semantic Image Distillation", () => {
       expect(stripped.content[0].text).toBe("[Earlier image omitted for context limit]");
     });
 
-    it("preserves active images within 25 turns while distilling images older than 25 turns", async () => {
+    it("preserves active images within 15 turns while distilling images older than 15 turns", async () => {
       const oldUrl = "https://example.com/old-diagram.png";
       const oldHash = computeImageHash(oldUrl);
 
@@ -140,10 +140,10 @@ describe("Semantic Image Distillation", () => {
         },
       ];
 
-      // Add 26 text turns
-      for (let i = 1; i <= 26; i++) {
-        if (i === 20) {
-          // Add a recent image at turn 21 (6 turns back from end)
+      // Add 16 text turns
+      for (let i = 1; i <= 16; i++) {
+        if (i === 11) {
+          // Add a recent image at turn 12 (5 turns back from end)
           messages.push({
             role: "user",
             content: [
@@ -159,19 +159,19 @@ describe("Semantic Image Distillation", () => {
         }
       }
 
-      // Total messages: 27
-      // Turn 1 (index 0): 26 turns back -> MUST BE STRIPPED & DISTILLED
-      // Turn 21 (index 20): 6 turns back -> MUST BE PRESERVED
+      // Total messages: 17
+      // Turn 1 (index 0): 16 turns back -> MUST BE STRIPPED & DISTILLED
+      // Turn 12 (index 11): 5 turns back -> MUST BE PRESERVED
       const result = await pruneOldImagesAndDeriveContent(messages);
 
       // Turn 1 image is stripped and replaced with text
       expect(result.messages[0].content[1].type).toBe("text");
-      // Turn 21 image is kept as image_url
-      expect(result.messages[20].content[1].type).toBe("image_url");
+      // Turn 12 image is kept as image_url
+      expect(result.messages[11].content[1].type).toBe("image_url");
 
       // Has visual data because recent image still exists
       expect(result.analysis.hasVisualData).toBe(true);
-      expect(result.analysis.tag).toBe("(image: 6 msgs back)");
+      expect(result.analysis.tag).toBe("(image: 5 msgs back)");
     });
   });
 });
