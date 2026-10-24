@@ -28,14 +28,23 @@ import {
   Zap,
   Coins,
   Code2,
+  CreditCard,
+  ExternalLink,
 } from "lucide-react";
 import { Link } from "wouter";
 import { toast } from "sonner";
-import { TOKEN_PLAN_TIERS, type TokenPlanTier } from "@shared/paymentTiers";
+import {
+  TOKEN_PLAN_TIERS,
+  type TokenPlanTier,
+  PAYG_TOPUP_OPTIONS,
+  WHOP_10_CREDITS_CHECKOUT_URL,
+  USD_TO_INR_RATE,
+} from "@shared/paymentTiers";
 
 export default function Pricing() {
   const [activePlanType, setActivePlanType] = useState<"token_plan" | "payg">("token_plan");
   const [activeRail, setActiveRail] = useState<"upi" | "crypto">("upi");
+  const [selectedPaygAmount, setSelectedPaygAmount] = useState<number>(10);
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [isPaygModalOpen, setIsPaygModalOpen] = useState(false);
   const [authAlertOpen, setAuthAlertOpen] = useState(false);
@@ -294,110 +303,182 @@ export default function Pricing() {
             </div>
             </>
           ) : (
-            /* PAYG ON-DEMAND COMPUTE CARDS & DEPOSIT TIERS */
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-stretch max-w-5xl mx-auto">
-              {/* PAYG Starter ($10) */}
-              <StarBorderCard lightWidth={160} duration={8} className="h-full rounded-3xl">
-                <div className="p-7 flex flex-col justify-between h-full bg-[#0c0d12]/95 rounded-[23px]">
-                  <div>
-                    <div className="flex items-center justify-between mb-4">
-                      <span className="text-xs font-mono uppercase font-bold text-white">PAYG Starter</span>
-                      <span className="text-[9px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 font-bold">
-                        60% OFF RATES
+            /* PAYG ON-DEMAND COMPUTE - 9 TOP-UP BOXES */
+            <div className="max-w-5xl mx-auto space-y-6">
+              {/* Feature Highlights Banner */}
+              <div className="rounded-2xl border border-white/10 bg-[#0c0d12]/90 p-5 sm:p-6 backdrop-blur-md">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/10 pb-4">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <Zap className="h-5 w-5 text-amber-400" />
+                      <h2 className="text-base sm:text-lg font-bold font-mono text-white">
+                        On-Demand Compute Top-Up
+                      </h2>
+                      <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 font-bold">
+                        50% OFF RATES
                       </span>
                     </div>
-                    <div className="mb-4">
-                      <span className="text-4xl font-extrabold text-white font-mono">$10</span>
-                      <span className="text-zinc-400 text-xs font-mono ml-2">deposit · ₹960</span>
-                      <p className="text-xs text-emerald-400 font-mono font-bold mt-1">60% Off All Model Rates ($25 Value)</p>
-                      <p className="text-xs text-neutral-400 mt-2">
-                        Official zero-markup provider rates with 60% compute discount. Perfect for dev and testing.
-                      </p>
-                    </div>
-                    <div className="space-y-2.5 mb-6 border-t border-white/[0.08] pt-4 text-xs text-neutral-300">
-                      <div className="flex items-center gap-2"><Check size={14} className="text-white" /> 60% off all frontier model rates</div>
-                      <div className="flex items-center gap-2"><Check size={14} className="text-white" /> Pay strictly for tokens used</div>
-                      <div className="flex items-center gap-2"><Check size={14} className="text-white" /> Balance never expires</div>
-                    </div>
+                    <p className="text-xs text-zinc-400">
+                      Select any box below to top up your balance. No recurring subscriptions, zero monthly expiration, and per-token nanodollar billing.
+                    </p>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => handleSelectPaygMethod(activeRail, 10)}
-                    className="w-full py-2.5 rounded-xl text-xs font-bold font-mono text-white bg-gradient-to-b from-neutral-700 to-neutral-800 hover:from-neutral-600 border border-neutral-600 transition-all cursor-pointer"
-                  >
-                    Deposit $10 (60% Off Rates)
-                  </button>
-                </div>
-              </StarBorderCard>
 
-              {/* PAYG Developer ($25) - Featured */}
-              <StarBorderCard lightWidth={220} duration={6} lightColor="rgba(255, 255, 255, 1.0)" className="h-full rounded-3xl">
-                <div className="p-7 flex flex-col justify-between h-full bg-[#0c0d12]/95 rounded-[23px]">
-                  <div>
-                    <div className="flex items-center justify-between mb-4">
-                      <span className="text-xs font-mono uppercase font-bold text-white">PAYG Pro</span>
-                      <span className="text-[9px] font-mono px-2 py-0.5 rounded-full bg-white text-black font-bold">
-                        FEATURED · 60% OFF
-                      </span>
-                    </div>
-                    <div className="mb-4">
-                      <span className="text-4xl font-extrabold text-white font-mono">$25</span>
-                      <span className="text-zinc-400 text-xs font-mono ml-2">deposit · ₹2,400</span>
-                      <p className="text-xs text-emerald-400 font-mono font-bold mt-1">60% Off All Model Rates ($62.50 Value)</p>
-                      <p className="text-xs text-neutral-400 mt-2">
-                        Heavy engineering, Cursor and Claude Code with continuous key failover.
-                      </p>
-                    </div>
-                    <div className="space-y-2.5 mb-6 border-t border-white/[0.08] pt-4 text-xs text-neutral-300">
-                      <div className="flex items-center gap-2"><Check size={14} className="text-white" /> 60% off all frontier model rates</div>
-                      <div className="flex items-center gap-2"><Check size={14} className="text-white" /> Sub-8ms multi-slot failover</div>
-                      <div className="flex items-center gap-2"><Check size={14} className="text-white" /> Uncapped tokens/sec streaming</div>
-                      <div className="flex items-center gap-2"><Check size={14} className="text-white" /> Balance never expires</div>
-                    </div>
+                  <div className="flex items-center gap-2 text-xs font-mono text-zinc-400 shrink-0">
+                    <ShieldCheck className="h-4 w-4 text-emerald-400" />
+                    <span>Instant Ledger Settlement</span>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => handleSelectPaygMethod(activeRail, 25)}
-                    className="w-full py-2.5 rounded-xl text-xs font-bold font-mono bg-white text-black hover:bg-zinc-200 transition-all cursor-pointer shadow-lg"
-                  >
-                    Deposit $25 (60% Off Rates)
-                  </button>
                 </div>
-              </StarBorderCard>
 
-              {/* PAYG High-Throughput ($50) */}
-              <StarBorderCard lightWidth={160} duration={8} className="h-full rounded-3xl">
-                <div className="p-7 flex flex-col justify-between h-full bg-[#0c0d12]/95 rounded-[23px]">
-                  <div>
-                    <div className="flex items-center justify-between mb-4">
-                      <span className="text-xs font-mono uppercase font-bold text-white">PAYG Max</span>
-                      <span className="text-[9px] font-mono px-2 py-0.5 rounded-full bg-white/[0.08] text-white">
-                        VIP CLUSTER · 60% OFF
-                      </span>
+                {/* 9 TOP-UP BOXES: $10, $15, $20, $25, $30, $50, $100, $150, $200 ONLY */}
+                <div className="pt-5 space-y-3">
+                  <label className="text-xs font-mono uppercase font-bold text-zinc-400 block tracking-wider">
+                    Select Top-Up Amount (9 Available Sizes)
+                  </label>
+
+                  <div className="grid grid-cols-3 sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-9 gap-2.5">
+                    {PAYG_TOPUP_OPTIONS.map((opt) => {
+                      const isSelected = selectedPaygAmount === opt.amountUsd;
+
+                      return (
+                        <button
+                          key={opt.amountUsd}
+                          type="button"
+                          onClick={() => setSelectedPaygAmount(opt.amountUsd)}
+                          className={`relative p-3 rounded-2xl border text-center transition-all cursor-pointer flex flex-col justify-between ${
+                            isSelected
+                              ? "bg-white text-black border-white shadow-xl shadow-white/10 scale-[1.02] ring-2 ring-white/50"
+                              : "bg-white/[0.03] hover:bg-white/[0.08] text-white border-white/10 hover:border-white/25"
+                          }`}
+                        >
+                          {opt.amountUsd === 10 && (
+                            <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 px-1.5 py-0.2 rounded-full text-[8px] font-mono font-bold uppercase bg-orange-500 text-black shadow-sm">
+                              Whop Card
+                            </span>
+                          )}
+                          {opt.popular && (
+                            <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 px-1.5 py-0.2 rounded-full text-[8px] font-mono font-bold uppercase bg-amber-400 text-black shadow-sm">
+                              Popular
+                            </span>
+                          )}
+                          {opt.amountUsd === 100 && (
+                            <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 px-1.5 py-0.2 rounded-full text-[8px] font-mono font-bold uppercase bg-cyan-400 text-black shadow-sm">
+                              Best Value
+                            </span>
+                          )}
+
+                          <div className="pt-1">
+                            <span className="text-lg sm:text-xl font-black font-mono tracking-tight block">
+                              ${opt.amountUsd}
+                            </span>
+                            <span className={`text-[10px] font-mono block mt-0.5 ${isSelected ? "text-zinc-600" : "text-zinc-400"}`}>
+                              ₹{opt.amountInr.toLocaleString()}
+                            </span>
+                          </div>
+
+                          <div className={`mt-2 pt-1.5 border-t text-[10px] font-mono font-bold ${
+                            isSelected ? "border-black/10 text-emerald-700" : "border-white/10 text-emerald-400"
+                          }`}>
+                            +${opt.amountUsd}.00
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Selected Checkout Actions Panel */}
+                <div className="mt-6 p-4 rounded-xl border border-white/10 bg-black/40 space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-white/5 pb-3">
+                    <div>
+                      <span className="text-xs text-zinc-400 font-mono">Selected Top-Up:</span>
+                      <div className="text-xl font-bold font-mono text-white flex items-center gap-2">
+                        <span>${selectedPaygAmount}.00 USD</span>
+                        <span className="text-sm text-zinc-400 font-normal">
+                          (₹{(selectedPaygAmount * USD_TO_INR_RATE).toLocaleString()})
+                        </span>
+                      </div>
                     </div>
-                    <div className="mb-4">
-                      <span className="text-4xl font-extrabold text-white font-mono">$50</span>
-                      <span className="text-zinc-400 text-xs font-mono ml-2">deposit · ₹4,800</span>
-                      <p className="text-xs text-emerald-400 font-mono font-bold mt-1">60% Off All Model Rates ($125 Value)</p>
-                      <p className="text-xs text-neutral-400 mt-2">
-                        Production multi-agent swarms and continuous autonomous pipelines.
-                      </p>
-                    </div>
-                    <div className="space-y-2.5 mb-6 border-t border-white/[0.08] pt-4 text-xs text-neutral-300">
-                      <div className="flex items-center gap-2"><Check size={14} className="text-white" /> 60% off all frontier model rates</div>
-                      <div className="flex items-center gap-2"><Check size={14} className="text-white" /> Dedicated standby VIP capacity</div>
-                      <div className="flex items-center gap-2"><Check size={14} className="text-white" /> Team API key sharing</div>
+                    <div className="text-xs font-mono text-emerald-400 flex items-center gap-1.5 self-start sm:self-auto">
+                      <Check size={14} />
+                      <span>Adds +${selectedPaygAmount}.00 PAYG developer compute</span>
                     </div>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => handleSelectPaygMethod(activeRail, 50)}
-                    className="w-full py-2.5 rounded-xl text-xs font-bold font-mono text-white bg-gradient-to-b from-neutral-700 to-neutral-800 hover:from-neutral-600 border border-neutral-600 transition-all cursor-pointer"
-                  >
-                    Deposit $50 (60% Off Rates)
-                  </button>
+
+                  {/* Payment Methods for selected box */}
+                  <div className="space-y-2">
+                    <span className="text-xs font-mono text-zinc-400 block">
+                      Choose Payment Method:
+                    </span>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      {/* Whop Card Button */}
+                      {selectedPaygAmount === 10 ? (
+                        <a
+                          href={`${WHOP_10_CREDITS_CHECKOUT_URL}${user?.email ? `?email=${encodeURIComponent(user.email)}` : ""}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="p-3 rounded-xl border border-orange-500/40 bg-gradient-to-r from-orange-950/40 to-amber-950/30 hover:border-orange-500/80 text-white font-mono text-xs font-bold flex items-center justify-between transition-all group shadow-lg shadow-orange-950/30"
+                        >
+                          <div className="flex items-center gap-2">
+                            <CreditCard size={16} className="text-orange-400 shrink-0" />
+                            <div className="text-left">
+                              <div>Card & Apple Pay</div>
+                              <div className="text-[10px] text-orange-300 font-normal">via Whop Checkout</div>
+                            </div>
+                          </div>
+                          <ExternalLink size={13} className="text-orange-400 group-hover:translate-x-0.5 transition-transform" />
+                        </a>
+                      ) : (
+                        <div className="p-3 rounded-xl border border-white/5 bg-white/[0.02] text-zinc-500 font-mono text-xs flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <CreditCard size={15} />
+                            <span>Whop Card ($10 only)</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setSelectedPaygAmount(10)}
+                            className="text-[10px] text-orange-400 hover:underline"
+                          >
+                            Switch to $10
+                          </button>
+                        </div>
+                      )}
+
+                      {/* Domestic UPI */}
+                      <button
+                        type="button"
+                        onClick={() => handleSelectPaygMethod("upi", selectedPaygAmount)}
+                        className="p-3 rounded-xl border border-white/15 bg-white/[0.04] hover:bg-white/[0.08] hover:border-white/30 text-white font-mono text-xs font-bold flex items-center justify-between transition-all cursor-pointer"
+                      >
+                        <div className="flex items-center gap-2">
+                          <Smartphone size={16} className="text-zinc-300 shrink-0" />
+                          <div className="text-left">
+                            <div>Domestic UPI</div>
+                            <div className="text-[10px] text-zinc-400 font-normal">₹{(selectedPaygAmount * USD_TO_INR_RATE).toLocaleString()} · Zero fee QR</div>
+                          </div>
+                        </div>
+                        <ArrowRight size={13} className="text-zinc-400" />
+                      </button>
+
+                      {/* Solana Pay */}
+                      <button
+                        type="button"
+                        onClick={() => handleSelectPaygMethod("crypto", selectedPaygAmount)}
+                        className="p-3 rounded-xl border border-purple-500/30 bg-purple-950/20 hover:bg-purple-950/40 hover:border-purple-500/60 text-white font-mono text-xs font-bold flex items-center justify-between transition-all cursor-pointer"
+                      >
+                        <div className="flex items-center gap-2">
+                          <Wallet size={16} className="text-purple-400 shrink-0" />
+                          <div className="text-left">
+                            <div>Solana Pay</div>
+                            <div className="text-[10px] text-purple-300 font-normal">${selectedPaygAmount} SOL / USDC</div>
+                          </div>
+                        </div>
+                        <ArrowRight size={13} className="text-purple-400" />
+                      </button>
+                    </div>
+                  </div>
                 </div>
-              </StarBorderCard>
+              </div>
             </div>
           )}
         </div>

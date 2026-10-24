@@ -224,12 +224,12 @@ const permanentAccountDeleteInput = z.object({ userId: z.number().int().positive
 const adminCreditGrantInput = z.object({
   userId: z.number().int().positive(),
   amountUsd: z.number().finite().positive().max(10_000_000).refine(value => Math.round(value * 100) === value * 100, "Use an amount with no more than two decimal places"),
-  balanceType: z.enum(["payg", "tokens"]).default("payg").optional(),
+  balanceType: z.enum(["payg", "tokens", "bundle"]).default("payg").optional(),
 });
 const setAccountCreditInput = z.object({
   userId: z.number().int().positive(),
   targetAmountUsd: z.number().finite().min(0, "Amount cannot be negative").max(10_000_000, "Amount exceeds limit").refine(value => Math.round(value * 100) === value * 100, "Use an amount with no more than two decimal places"),
-  balanceType: z.enum(["payg", "tokens"]).default("payg").optional(),
+  balanceType: z.enum(["payg", "tokens", "bundle"]).default("payg").optional(),
   note: z.string().trim().max(256, "Note must be 256 characters or fewer").optional(),
 });
 const setAllUsersCreditInput = z.object({

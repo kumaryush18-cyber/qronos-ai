@@ -877,4 +877,24 @@ export const userNotificationReads = mysqlTable(
 export type UserNotificationRead = typeof userNotificationReads.$inferSelect;
 export type InsertUserNotificationRead = typeof userNotificationReads.$inferInsert;
 
+export const processedWebhooks = mysqlTable(
+  "processed_webhooks",
+  {
+    id: bigint("id", { mode: "number" }).autoincrement().primaryKey(),
+    webhookId: varchar("webhook_id", { length: 191 }).notNull().unique(),
+    provider: varchar("provider", { length: 64 }).notNull().default("whop"),
+    eventType: varchar("event_type", { length: 128 }).notNull(),
+    payload: text("payload"),
+    processedAt: timestamp("processed_at").defaultNow().notNull(),
+  },
+  table => [
+    uniqueIndex("processed_webhooks_webhook_id_idx").on(table.webhookId),
+    index("processed_webhooks_provider_idx").on(table.provider),
+    index("processed_webhooks_processed_at_idx").on(table.processedAt),
+  ],
+);
+
+export type ProcessedWebhook = typeof processedWebhooks.$inferSelect;
+export type InsertProcessedWebhook = typeof processedWebhooks.$inferInsert;
+
 

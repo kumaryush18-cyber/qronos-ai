@@ -27,68 +27,199 @@ export interface CryptoTier {
 export const UPI_TIERS: UPITier[] = [
   {
     id: "inr_starter",
-    name: "Starter",
+    name: "$10 Top-up",
     amountUsd: 10,
-    amountInr: 960, // $10 * 96 displayed above
-    scanAmountUsd: 11, // $10 + $1 scanned internally
-    scanAmountInr: 1056, // 11 * 96 = ₹1,056 charged on scan
+    amountInr: 960,
+    scanAmountUsd: 11,
+    scanAmountInr: 1056,
     credits: 3000,
     creditsNanos: 3000 * 1_000_000_000,
-    description: "Ideal for light prototyping and personal scripts ($10/mo · ₹960)",
+    description: "Light prototyping & API scripts ($10 deposit · ₹960)",
+  },
+  {
+    id: "inr_topup_15",
+    name: "$15 Top-up",
+    amountUsd: 15,
+    amountInr: 1440,
+    scanAmountUsd: 16,
+    scanAmountInr: 1536,
+    credits: 4800,
+    creditsNanos: 4800 * 1_000_000_000,
+    description: "Personal projects & tests ($15 deposit · ₹1,440)",
+  },
+  {
+    id: "inr_topup_20",
+    name: "$20 Top-up",
+    amountUsd: 20,
+    amountInr: 1920,
+    scanAmountUsd: 21,
+    scanAmountInr: 2016,
+    credits: 6600,
+    creditsNanos: 6600 * 1_000_000_000,
+    description: "Standard developer usage ($20 deposit · ₹1,920)",
   },
   {
     id: "inr_developer",
-    name: "Pro Plan",
+    name: "$25 Top-up",
     amountUsd: 25,
-    amountInr: 2400, // $25 * 96 displayed above
-    scanAmountUsd: 26, // $25 + $1 scanned internally
-    scanAmountInr: 2496, // 26 * 96 = ₹2,496 charged on scan
+    amountInr: 2400,
+    scanAmountUsd: 26,
+    scanAmountInr: 2496,
     credits: 8500,
     creditsNanos: 8500 * 1_000_000_000,
     popular: true,
-    description: "Most popular for active builders and automated agents ($25/mo · ₹2,400)",
+    description: "Most popular for active builders & agents ($25 deposit · ₹2,400)",
+  },
+  {
+    id: "inr_topup_30",
+    name: "$30 Top-up",
+    amountUsd: 30,
+    amountInr: 2880,
+    scanAmountUsd: 31,
+    scanAmountInr: 2976,
+    credits: 10500,
+    creditsNanos: 10500 * 1_000_000_000,
+    description: "Engineering sprints & testing ($30 deposit · ₹2,880)",
   },
   {
     id: "inr_power",
-    name: "Max Plan",
+    name: "$50 Top-up",
     amountUsd: 50,
-    amountInr: 4800, // $50 * 96 displayed above
-    scanAmountUsd: 51, // $50 + $1 scanned internally
-    scanAmountInr: 4896, // 51 * 96 = ₹4,896 charged on scan
+    amountInr: 4800,
+    scanAmountUsd: 51,
+    scanAmountInr: 4896,
     credits: 18000,
     creditsNanos: 18000 * 1_000_000_000,
-    description: "Enterprise scale inference for high-demand clusters ($50/mo · ₹4,800)",
+    description: "Heavy inference & agent loops ($50 deposit · ₹4,800)",
   },
   {
     id: "inr_power_100",
-    name: "Power Plan",
+    name: "$100 Top-up",
     amountUsd: 100,
-    amountInr: 9600, // $100 * 96 displayed above
-    scanAmountUsd: 101, // $100 + $1 scanned internally
-    scanAmountInr: 9696, // 101 * 96 = ₹9,696 charged on scan
+    amountInr: 9600,
+    scanAmountUsd: 101,
+    scanAmountInr: 9696,
     credits: 40000,
     creditsNanos: 40000 * 1_000_000_000,
-    description: "Heavy reasoning pipelines and continuous multi-agent clusters ($100/mo · ₹9,600)",
+    description: "Multi-agent pipelines & continuous workloads ($100 deposit · ₹9,600)",
+  },
+  {
+    id: "inr_topup_150",
+    name: "$150 Top-up",
+    amountUsd: 150,
+    amountInr: 14400,
+    scanAmountUsd: 151,
+    scanAmountInr: 14496,
+    credits: 65000,
+    creditsNanos: 65000 * 1_000_000_000,
+    description: "High concurrency & team workflows ($150 deposit · ₹14,400)",
   },
   {
     id: "inr_ultra_200",
-    name: "Ultra Plan",
+    name: "$200 Top-up",
     amountUsd: 200,
-    amountInr: 19200, // $200 * 96 displayed above
-    scanAmountUsd: 201, // $200 + $1 scanned internally
-    scanAmountInr: 19296, // 201 * 96 = ₹19,296 charged on scan
+    amountInr: 19200,
+    scanAmountUsd: 201,
+    scanAmountInr: 19296,
     credits: 100000,
     creditsNanos: 100000 * 1_000_000_000,
-    description: "Maximum enterprise throughput and dedicated compute allocation ($200/mo · ₹19,200)",
+    description: "Maximum enterprise throughput ($200 deposit · ₹19,200)",
   },
 ];
 
 export const CRYPTO_TIERS: CryptoTier[] = [
-  { id: "crypto_10", name: "Starter", usd: 10, credits: 3000, creditsNanos: 3000 * 1_000_000_000 },
-  { id: "crypto_25", name: "Pro Plan", usd: 25, credits: 8500, creditsNanos: 8500 * 1_000_000_000, popular: true },
-  { id: "crypto_50", name: "Max Plan", usd: 50, credits: 18000, creditsNanos: 18000 * 1_000_000_000 },
-  { id: "crypto_100", name: "Power Plan", usd: 100, credits: 40000, creditsNanos: 40000 * 1_000_000_000 },
-  { id: "crypto_200", name: "Ultra Plan", usd: 200, credits: 100000, creditsNanos: 100000 * 1_000_000_000 },
+  { id: "crypto_10", name: "$10 Top-up", usd: 10, credits: 3000, creditsNanos: 3000 * 1_000_000_000 },
+  { id: "crypto_15", name: "$15 Top-up", usd: 15, credits: 4800, creditsNanos: 4800 * 1_000_000_000 },
+  { id: "crypto_20", name: "$20 Top-up", usd: 20, credits: 6600, creditsNanos: 6600 * 1_000_000_000 },
+  { id: "crypto_25", name: "$25 Top-up", usd: 25, credits: 8500, creditsNanos: 8500 * 1_000_000_000, popular: true },
+  { id: "crypto_30", name: "$30 Top-up", usd: 30, credits: 10500, creditsNanos: 10500 * 1_000_000_000 },
+  { id: "crypto_50", name: "$50 Top-up", usd: 50, credits: 18000, creditsNanos: 18000 * 1_000_000_000 },
+  { id: "crypto_100", name: "$100 Top-up", usd: 100, credits: 40000, creditsNanos: 40000 * 1_000_000_000 },
+  { id: "crypto_150", name: "$150 Top-up", usd: 150, credits: 6500, creditsNanos: 65000 * 1_000_000_000 },
+  { id: "crypto_200", name: "$200 Top-up", usd: 200, credits: 100000, creditsNanos: 100000 * 1_000_000_000 },
+];
+
+export const PAYG_TOPUP_AMOUNTS = [10, 15, 20, 25, 30, 50, 100, 150, 200] as const;
+export type PaygTopupAmount = (typeof PAYG_TOPUP_AMOUNTS)[number];
+
+export const WHOP_10_CREDITS_CHECKOUT_URL = "https://whop.com/qronos/10-credits-a922/";
+
+export interface PaygTopupOption {
+  amountUsd: number;
+  amountInr: number;
+  scanAmountUsd: number;
+  scanAmountInr: number;
+  popular?: boolean;
+  whopLink?: string;
+  label: string;
+}
+
+export const PAYG_TOPUP_OPTIONS: PaygTopupOption[] = [
+  {
+    amountUsd: 10,
+    amountInr: 960,
+    scanAmountUsd: 11,
+    scanAmountInr: 1056,
+    whopLink: WHOP_10_CREDITS_CHECKOUT_URL,
+    label: "$10",
+  },
+  {
+    amountUsd: 15,
+    amountInr: 1440,
+    scanAmountUsd: 16,
+    scanAmountInr: 1536,
+    label: "$15",
+  },
+  {
+    amountUsd: 20,
+    amountInr: 1920,
+    scanAmountUsd: 21,
+    scanAmountInr: 2016,
+    label: "$20",
+  },
+  {
+    amountUsd: 25,
+    amountInr: 2400,
+    scanAmountUsd: 26,
+    scanAmountInr: 2496,
+    popular: true,
+    label: "$25",
+  },
+  {
+    amountUsd: 30,
+    amountInr: 2880,
+    scanAmountUsd: 31,
+    scanAmountInr: 2976,
+    label: "$30",
+  },
+  {
+    amountUsd: 50,
+    amountInr: 4800,
+    scanAmountUsd: 51,
+    scanAmountInr: 4896,
+    label: "$50",
+  },
+  {
+    amountUsd: 100,
+    amountInr: 9600,
+    scanAmountUsd: 101,
+    scanAmountInr: 9696,
+    label: "$100",
+  },
+  {
+    amountUsd: 150,
+    amountInr: 14400,
+    scanAmountUsd: 151,
+    scanAmountInr: 14496,
+    label: "$150",
+  },
+  {
+    amountUsd: 200,
+    amountInr: 19200,
+    scanAmountUsd: 201,
+    scanAmountInr: 19296,
+    label: "$200",
+  },
 ];
 
 export interface TokenPlanTier {
