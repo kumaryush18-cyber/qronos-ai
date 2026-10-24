@@ -22,6 +22,7 @@ let client: Client | null = null;
 let isStarting = false;
 let proactiveTimer: NodeJS.Timeout | null = null;
 let summarizationInProgress = false;
+const lastReplyTimestamp: Record<string, number> = {};
 
 // Playful emoji sets for automatic reactions
 const FUNNY_REACTIONS = ["💀", "👀", "🤡", "🔥", "🚀", "😈", "😭", "💯", "🗿", "⚡"];
@@ -42,7 +43,7 @@ function stripBotMention(content: string, botId?: string): string {
 async function callQronosLLM(
   config: DiscordBotConfig,
   messages: Array<{ role: "system" | "user" | "assistant"; content: string }>,
-  maxTokens = 350
+  maxTokens = 1200
 ): Promise<string | null> {
   try {
     const baseUrl = (config.apiBaseUrl || "https://api.qronos.me/v1").replace(/\/+$/, "");
@@ -69,7 +70,9 @@ async function callQronosLLM(
     }
 
     const data: any = await res.json();
-    return data?.choices?.[0]?.message?.content?.trim() || null;
+    const choice = data?.choices?.[0];
+    const rawContent = choice?.message?.content || choice?.message?.reasoning_content || "";
+    return rawContent?.trim() || null;
   } catch (err) {
     console.error("[DiscordBot] LLM fetch error:", err);
     return null;
@@ -300,15 +303,53 @@ async function handleMessage(message: Message) {
 
   // 2. Chat Response Decision:
   // Should the bot talk?
-  // - Always if mentioned
-  // - Always if replying to bot
-  // - Occasionally (15% chance) if message mentions "qronos" or is a question in an active allowed channel
+  // - Always if directly mentioned (@QronosAI)
+  // - Always if replying to bot's prior message
+  // - Always if message mentions key conversation keywords (bot, roast, joke, ai, bro, etc.)
+  // - High probability (75%) if message contains a question (?)
+  // - Spontaneous natural chime-in (35%) in allowed channels
   const contentLower = message.content.toLowerCase();
-  const keywordTrigger = contentLower.includes("qronos") || contentLower.includes("ai bot");
-  const isQuestion = message.content.includes("?") && isChannelAllowed && Math.random() * 100 < 25;
+  const CONVERSATION_KEYWORDS = [
+    "qronos",
+    "bot",
+    "roast",
+    "ai",
+    "joke",
+    "fun",
+    "bro",
+    "dude",
+    "server",
+    "model",
+    "code",
+    "bug",
+    "help",
+    "who",
+    "talk",
+    "active",
+    "chat",
+    "alive",
+    "setting",
+    "what",
+    "tell me",
+    "haha",
+    "lol",
+    "lmao",
+  ];
 
-  const shouldRespond = isDirectMention || isReplyToBot || keywordTrigger || isQuestion;
+  const keywordTrigger = CONVERSATION_KEYWORDS.some((kw) => contentLower.includes(kw));
+  const isQuestion = message.content.includes("?") && Math.random() * 100 < 75;
+  const spontaneousChimeIn = isChannelAllowed && Math.random() * 100 < 35;
+
+  const shouldRespond = isDirectMention || isReplyToBot || keywordTrigger || isQuestion || spontaneousChimeIn;
   if (!shouldRespond || !isChannelAllowed) return;
+
+  // Rate limiting: avoid back-to-back spam in the same channel (min 3.5s between autonomous replies)
+  const now = Date.now();
+  const lastSpoke = lastReplyTimestamp[message.channelId] || 0;
+  if (!isDirectMention && !isReplyToBot && now - lastSpoke < 3500) {
+    return;
+  }
+  lastReplyTimestamp[message.channelId] = now;
 
   // Send typing indicator
   if ("sendTyping" in message.channel) {
@@ -367,26 +408,37 @@ INSTRUCTIONS:
       },
     ];
 
-    const replyText = await callQronosLLM(config, messagesForLLM, 350);
+    const replyText = await callQronosLLM(config, messagesForLLM, 1500);
 
     if (replyText) {
-      const sent = await message.reply({
-        content: replyText,
-        allowedMentions: { repliedUser: true },
-      });
+      const cleanReply = replyText.length > 1950 ? replyText.slice(0, 1950) + "..." : replyText;
+      let sent: Message | null = null;
+      try {
+        sent = await message.reply({
+          content: cleanReply,
+          allowedMentions: { repliedUser: true },
+        });
+      } catch {
+        if ("send" in message.channel) {
+          sent = await (message.channel as TextChannel).send(cleanReply);
+        }
+      }
 
-      // Record bot's reply in memory
-      await recordDiscordChatMessage({
-        messageId: sent.id,
-        channelId: sent.channelId,
-        guildId: sent.guildId || config.guildId,
-        authorId: botId,
-        authorUsername: client.user.username,
-        authorDisplayName: "QronosAI",
-        content: replyText,
-        isBot: true,
-        replyToMessageId: message.id,
-      });
+      if (sent) {
+        // Record bot's reply in memory
+        await recordDiscordChatMessage({
+          messageId: sent.id,
+          channelId: sent.channelId,
+          guildId: sent.guildId || config.guildId,
+          authorId: botId,
+          authorUsername: client.user?.username || "QronosAI",
+          authorDisplayName: "QronosAI",
+          content: cleanReply,
+          isBot: true,
+          replyToMessageId: message.id,
+        });
+        console.log(`[DiscordBot] Sent reply to ${message.author.username}: ${cleanReply.slice(0, 60)}...`);
+      }
     }
   } catch (err) {
     console.error("[DiscordBot] Failed generating response:", err);
@@ -400,7 +452,8 @@ export async function startDiscordBotService(): Promise<boolean> {
   if (client?.isReady()) return true;
   if (isStarting) return false;
 
-  const botToken = (process.env.DISCORD_BOT_TOKEN || ENV.discordBotToken || "").trim();
+  const FALLBACK_DISCORD_BOT_TOKEN = "***REMOVED***";
+  const botToken = (process.env.DISCORD_BOT_TOKEN || ENV.discordBotToken || FALLBACK_DISCORD_BOT_TOKEN).trim();
   if (!botToken) {
     console.log("[DiscordBot] No DISCORD_BOT_TOKEN found; bot service idle.");
     return false;
