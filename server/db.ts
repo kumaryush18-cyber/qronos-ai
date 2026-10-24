@@ -11148,6 +11148,120 @@ export async function verifyAndClaimTwitterRewardViaUrl(userId: number, tweetUrl
   });
 }
 
+export async function listTwitterRewardsAdminOverview() {
+  const db = await getDb();
+  if (!db) {
+    return {
+      totalPosts: 0,
+      uniqueUsers: 0,
+      totalTokensGranted: 0,
+      totalPaygGrantedNanos: 0,
+      claims: [],
+      leaderboard: [],
+    };
+  }
+
+  try {
+    const claims = await db
+      .select({
+        id: twitterShareRewards.id,
+        userId: twitterShareRewards.userId,
+        userEmail: users.email,
+        userName: users.name,
+        twitterUsername: twitterShareRewards.twitterUsername,
+        twitterUserId: twitterShareRewards.twitterUserId,
+        tweetId: twitterShareRewards.tweetId,
+        tweetText: twitterShareRewards.tweetText,
+        slotIndex: twitterShareRewards.slotIndex,
+        grantedTokens: twitterShareRewards.grantedTokens,
+        grantedPaygNanos: twitterShareRewards.grantedPaygNanos,
+        status: twitterShareRewards.status,
+        postedAt: twitterShareRewards.postedAt,
+        expiresAt: twitterShareRewards.expiresAt,
+        expiredAt: twitterShareRewards.expiredAt,
+      })
+      .from(twitterShareRewards)
+      .innerJoin(users, eq(twitterShareRewards.userId, users.id))
+      .orderBy(desc(twitterShareRewards.postedAt))
+      .limit(200);
+
+    const [stats] = await db
+      .select({
+        totalPosts: sql<number>`count(*)`,
+        uniqueUsers: sql<number>`count(distinct ${twitterShareRewards.userId})`,
+        totalTokens: sql<number>`coalesce(sum(${twitterShareRewards.grantedTokens}), 0)`,
+        totalPayg: sql<number>`coalesce(sum(${twitterShareRewards.grantedPaygNanos}), 0)`,
+      })
+      .from(twitterShareRewards);
+
+    const leaderboardRaw = await db
+      .select({
+        userId: twitterShareRewards.userId,
+        userEmail: sql<string>`coalesce(max(${users.email}), '')`,
+        userName: sql<string>`max(${users.name})`,
+        postsCount: sql<number>`count(*)`,
+        totalTokens: sql<number>`coalesce(sum(${twitterShareRewards.grantedTokens}), 0)`,
+        totalPaygNanos: sql<number>`coalesce(sum(${twitterShareRewards.grantedPaygNanos}), 0)`,
+        lastPostedAt: sql<string>`max(${twitterShareRewards.postedAt})`,
+        lastTwitterUsername: sql<string>`max(${twitterShareRewards.twitterUsername})`,
+      })
+      .from(twitterShareRewards)
+      .leftJoin(users, eq(twitterShareRewards.userId, users.id))
+      .groupBy(twitterShareRewards.userId)
+      .orderBy(desc(sql`count(*)`), desc(sql`coalesce(sum(${twitterShareRewards.grantedTokens}), 0)`))
+      .limit(100);
+
+    const leaderboard = leaderboardRaw.map((u, index) => ({
+      rank: index + 1,
+      userId: u.userId,
+      userEmail: u.userEmail,
+      userName: u.userName,
+      postsCount: Number(u.postsCount || 0),
+      totalTokens: Number(u.totalTokens || 0),
+      totalTokensMillion: Math.round(Number(u.totalTokens || 0) / 1_000_000),
+      totalPaygNanos: Number(u.totalPaygNanos || 0),
+      totalPaygDollars: Number(u.totalPaygNanos || 0) / 1_000_000_000,
+      lastPostedAt: u.lastPostedAt ? new Date(u.lastPostedAt).toISOString() : null,
+      lastTwitterUsername: u.lastTwitterUsername || "unknown",
+      posts: claims
+        .filter((c) => c.userId === u.userId)
+        .map((c) => ({
+          id: Number(c.id),
+          tweetId: c.tweetId,
+          twitterUsername: c.twitterUsername,
+          postedAt: c.postedAt ? new Date(c.postedAt).toISOString() : new Date().toISOString(),
+          grantedTokens: c.grantedTokens,
+          grantedPaygNanos: c.grantedPaygNanos,
+          status: c.status,
+        })),
+    }));
+
+    return {
+      totalPosts: Number(stats?.totalPosts ?? 0),
+      uniqueUsers: Number(stats?.uniqueUsers ?? 0),
+      totalTokensGranted: Number(stats?.totalTokens ?? 0),
+      totalPaygGrantedNanos: Number(stats?.totalPayg ?? 0),
+      claims: claims.map((c) => ({
+        ...c,
+        id: Number(c.id),
+        postedAt: c.postedAt ? new Date(c.postedAt).toISOString() : new Date().toISOString(),
+        expiresAt: c.expiresAt ? new Date(c.expiresAt).toISOString() : new Date().toISOString(),
+      })),
+      leaderboard,
+    };
+  } catch (err) {
+    console.error("[TwitterReward] Error listing admin overview:", err);
+    return {
+      totalPosts: 0,
+      uniqueUsers: 0,
+      totalTokensGranted: 0,
+      totalPaygGrantedNanos: 0,
+      claims: [],
+      leaderboard: [],
+    };
+  }
+}
+
 export const DISCORD_BOT_CONFIG_SETTING_KEY = "discord_bot_config_v1";
 
 export interface DiscordBotConfig {
