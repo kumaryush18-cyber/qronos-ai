@@ -152,14 +152,14 @@ export function PaygPaymentModal({
                       <CreditCard className="w-5 h-5" />
                     </div>
                     <div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-semibold text-white text-base">Credit / Debit Card & Apple Pay</span>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-semibold text-white text-base">Cards, Apple/Google Pay, PayPal & Crypto</span>
                         <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-orange-500/20 text-orange-300 border border-orange-500/30">
-                          Whop • Instant
+                          Whop • 1-Click
                         </span>
                       </div>
                       <p className="text-xs text-zinc-400 mt-0.5 leading-snug">
-                        Visa, MasterCard, Amex, Apple Pay, Google Pay via Whop Checkout.
+                        Visa, MasterCard, Amex, Apple Pay, Google Pay, PayPal & Crypto via Whop Checkout.
                       </p>
                     </div>
                   </div>
@@ -172,7 +172,7 @@ export function PaygPaymentModal({
                 <div className="p-3 rounded-xl bg-white/[0.02] border border-white/5 flex items-center justify-between text-xs text-zinc-400">
                   <div className="flex items-center gap-2">
                     <CreditCard className="w-4 h-4 text-orange-400" />
-                    <span>Card / Apple Pay via Whop currently active for <strong>$10</strong> top-up.</span>
+                    <span>Card / PayPal / Crypto via Whop currently active for <strong>$10</strong> top-up.</span>
                   </div>
                   <button
                     type="button"

@@ -363,8 +363,8 @@ export function DashboardPricingSection() {
                           }`}
                         >
                           {opt.amountUsd === 10 && (
-                            <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 px-1.5 py-0.2 rounded-full text-[8px] font-mono font-bold uppercase bg-orange-500 text-black shadow-sm">
-                              Whop Card
+                            <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 px-1.5 py-0.2 rounded-full text-[8px] font-mono font-bold uppercase bg-orange-500 text-black shadow-sm whitespace-nowrap">
+                              Card/PayPal/Crypto
                             </span>
                           )}
                           {opt.popular && (
@@ -423,7 +423,7 @@ export function DashboardPricingSection() {
                     </span>
 
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                      {/* Whop Card Button */}
+                      {/* Whop Card / PayPal / Crypto Button */}
                       {selectedPaygAmount === 10 ? (
                         <a
                           href={`${WHOP_10_CREDITS_CHECKOUT_URL}${user?.email ? `?email=${encodeURIComponent(user.email)}` : ""}`}
@@ -434,8 +434,8 @@ export function DashboardPricingSection() {
                           <div className="flex items-center gap-2">
                             <CreditCard size={16} className="text-orange-400 shrink-0" />
                             <div className="text-left">
-                              <div>Card & Apple Pay</div>
-                              <div className="text-[10px] text-orange-300 font-normal">via Whop Checkout</div>
+                              <div>Card, Apple/Google Pay, PayPal & Crypto</div>
+                              <div className="text-[10px] text-orange-300 font-normal">via Whop 1-Click Checkout</div>
                             </div>
                           </div>
                           <ExternalLink size={13} className="text-orange-400 group-hover:translate-x-0.5 transition-transform" />
@@ -444,7 +444,7 @@ export function DashboardPricingSection() {
                         <div className="p-3 rounded-xl border border-white/5 bg-white/[0.02] text-zinc-500 font-mono text-xs flex items-center justify-between">
                           <div className="flex items-center gap-2">
                             <CreditCard size={15} />
-                            <span>Whop Card ($10 only)</span>
+                            <span>Card/PayPal/Crypto ($10 active)</span>
                           </div>
                           <button
                             type="button"

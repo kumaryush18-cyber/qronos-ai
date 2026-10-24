@@ -2218,8 +2218,8 @@ export async function claimDailyCheckin(userId: number, now = new Date()) {
   const checkinDate = utcUsageDate(now);
   const referenceId = `checkin:${utcCalendarKey(now)}`;
 
-  // Random reward between $0.01 and $2.00 (inclusive, up to 2 decimal places)
-  const rewardCents = Math.floor(Math.random() * 200) + 1; // 1 to 200 cents ($0.01 to $2.00)
+  // Random reward between $0.01 and $0.10 (inclusive, up to 2 decimal places)
+  const rewardCents = Math.floor(Math.random() * 10) + 1; // 1 to 10 cents ($0.01 to $0.10)
   const rewardDollars = rewardCents / 100;
   const rewardNanos = Math.round(rewardDollars * NANODOLLARS_PER_DOLLAR);
   const rewardFormatted = `$${rewardDollars.toFixed(2)}`;

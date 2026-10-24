@@ -1461,7 +1461,7 @@ function UnifiedBalancesPortfolio() {
             className="w-full sm:w-auto bg-white text-black font-bold text-xs hover:bg-zinc-200 cursor-pointer shadow-md"
           >
             {claimCheckin.isPending ? <Loader2 size={13} className="animate-spin" /> : <Gift size={13} />}
-            <span>Claim Free Daily Reward ($0.01 - $2.00)</span>
+            <span>Claim Free Daily Reward ($0.01 - $0.10)</span>
           </Button>
         ) : (
           <div className="flex items-center gap-1.5 text-[11px] text-zinc-300 bg-white/[0.06] border border-white/15 px-3 py-1 rounded-full font-medium">

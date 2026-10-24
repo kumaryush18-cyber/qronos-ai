@@ -256,7 +256,7 @@ export const TOKEN_PLAN_TIERS: TokenPlanTier[] = [
     features: [
       "10 Million starter tokens",
       "Access to verified open-weights & GLM",
-      "Daily UTC check-in rewards (Up to $2)",
+      "Daily UTC check-in rewards (Up to $0.10)",
       "Standard token throughput",
       "Community support on Discord",
       "Zero credit card required",
