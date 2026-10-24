@@ -10483,107 +10483,107 @@ export interface TwitterRewardConfig {
 export const DEFAULT_TWITTER_REWARD_SLOTS: TwitterRewardSlot[] = [
   {
     slotIndex: 0,
-    title: "Wholesale Frontier Models",
-    focus: "Cheapest rates for Claude Opus 5.5, DeepSeek V4 & Sonnet",
-    templateText: "🚀 Wholesale AI Compute on @QronosAI\n\n• Claude Opus 5.5, Sonnet & DeepSeek\n• Dedicated token plans from just $10\n• Instant UPI QR & Solana USDC checkout\n\n👉 Start building with free trial:\n{{REFERRAL_LINK}}\n#AI #Dev #Coding",
+    title: "Top-Tier Models at Cheaper Prices",
+    focus: "Top-tier models like Claude Opus 5.5, Sonnet & DeepSeek at cheaper prices",
+    templateText: "🚀 Top-Tier Frontier Models on @QronosAI\n\n• Claude Opus 5.5, Sonnet & DeepSeek\n• Way cheaper rates than retail providers\n• Dedicated quotas: 700M tokens for $10\n\n👉 Get your developer key:\n{{REFERRAL_LINK}}\n#AI #Dev #Coding",
     enabled: true,
   },
   {
     slotIndex: 1,
-    title: "Free Sonnet 5.5 Access",
-    focus: "Free promotional access to Claude Sonnet for limited time",
-    templateText: "⚡ Free Claude Sonnet Access | @QronosAI\n\n• High-throughput coding agent routing\n• Token plans from $10 · Zero markup\n• Works with Cursor, Cline & Claude Code\n\n👉 Claim free developer trial:\n{{REFERRAL_LINK}}\n#Claude #AI #Cursor",
+    title: "Massive Token Grants ($10 - 700M)",
+    focus: "Massive token grants starting at $10 for 700M tokens",
+    templateText: "💎 Massive Token Grants on @QronosAI\n\n• $10 gives you 700M tokens\n• $30 scales to 2.5B tokens\n• Run Claude Opus 5.5 & DeepSeek V4\n\n👉 Claim your token grant:\n{{REFERRAL_LINK}}\n#Coding #Dev #LLM",
     enabled: true,
   },
   {
     slotIndex: 2,
-    title: "Massive Token Quotas",
-    focus: "Bulk token packages starting from $10 to $800",
-    templateText: "💎 Massive Coding Quotas on @QronosAI\n\n• 600M tokens from only $10 (Plus plan)\n• Claude Opus 5.5, Sonnet & DeepSeek\n• Instant recharge via Domestic UPI & Solana\n\n👉 Claim your token grant:\n{{REFERRAL_LINK}}\n#Coding #Dev #LLM",
+    title: "High-Scale Quotas ($30 - 2.5B)",
+    focus: "Scale workloads with 2.5 Billion tokens for $30",
+    templateText: "⚡ High-Scale AI Coding on @QronosAI\n\n• 2.5 Billion tokens for just $30\n• Claude Opus 5.5 & Sonnet at lowest rates\n• Instant UPI QR & Solana Pay recharge\n\n👉 Start building today:\n{{REFERRAL_LINK}}\n#Cursor #Claude #AI",
     enabled: true,
   },
   {
     slotIndex: 3,
-    title: "Solana Pay Native",
-    focus: "Instant crypto checkout on Solana network with USDC",
-    templateText: "🌐 Crypto-Native AI Gateway @QronosAI\n\n• Sub-second recharge via Solana Pay (USDC)\n• Claude Opus 5.5 & DeepSeek at wholesale\n• High concurrency · Zero tier gating\n\n👉 Connect & build now:\n{{REFERRAL_LINK}}\n#Solana #Web3 #AI",
+    title: "Claude Opus 5.5 Cheaper",
+    focus: "Claude Opus 5.5 thinking model at unbeatable cheap rates",
+    templateText: "🧠 Claude Opus 5.5 at Cheaper Prices\n\n• Sub-millisecond failover routing\n• Full extended thinking tokens\n• Massive grants: 700M tokens from $10\n\n👉 Unlock cheaper frontier AI:\n{{REFERRAL_LINK}}\n#Reasoning #AI #Dev",
     enabled: true,
   },
   {
     slotIndex: 4,
-    title: "Domestic UPI Checkout",
+    title: "Domestic UPI QR Payments",
     focus: "Zero transaction fee instant UPI QR payments for Indian developers",
-    templateText: "🇮🇳 Instant Domestic UPI on @QronosAI\n\n• Pay via PhonePe, Google Pay or Paytm QR\n• 600M tokens starting at ₹960 ($10)\n• Claude Opus 5.5 & Sonnet wholesale\n\n👉 Get your developer API key:\n{{REFERRAL_LINK}}\n#Dev #AI #Coding",
+    templateText: "🇮🇳 Indian Devs: Instant UPI on @QronosAI\n\n• Pay directly via PhonePe, GPay, Paytm\n• 700M tokens starting at ₹960 ($10)\n• Claude Opus 5.5 & Sonnet wholesale\n\n👉 Grab your developer key:\n{{REFERRAL_LINK}}\n#Dev #AI #Coding",
     enabled: true,
   },
   {
     slotIndex: 5,
-    title: "Sub-ms Router Failover",
-    focus: "High-availability proxy balancer with sub-millisecond failover",
-    templateText: "🛡️ Zero Downtime AI Routing | @QronosAI\n\n• Sub-millisecond failover proxy\n• Claude Opus 5.5 & DeepSeek V4 Pro\n• Pooled enterprise keys · No rate limits\n\n👉 Try high-throughput gateway:\n{{REFERRAL_LINK}}\n#DevOps #AI #Tech",
+    title: "Solana Pay Native",
+    focus: "Instant crypto checkout on Solana network with USDC",
+    templateText: "🌐 Crypto-Native AI Gateway @QronosAI\n\n• Instant USDC checkout on Solana\n• Top-tier models at much cheaper rates\n• 700M tokens from $10 · Zero tier gating\n\n👉 Connect & build now:\n{{REFERRAL_LINK}}\n#Solana #Web3 #AI",
     enabled: true,
   },
   {
     slotIndex: 6,
     title: "Cursor & Cline Drop-in",
     focus: "Universal OpenAI & Anthropic base URL for AI coding extensions",
-    templateText: "💻 Supercharge Cursor & Cline | @QronosAI\n\n• Unified OpenAI & Anthropic base URL\n• Run Claude Opus 5.5 at wholesale costs\n• Setup in 30 seconds · Plans from $10\n\n👉 Grab your drop-in API key:\n{{REFERRAL_LINK}}\n#Cursor #Cline #AI",
+    templateText: "💻 Supercharge Cursor & Cline | @QronosAI\n\n• Unified OpenAI & Anthropic base URL\n• Top-tier frontier models way cheaper\n• Massive quotas: 700M tokens for $10\n\n👉 Setup in 30 seconds:\n{{REFERRAL_LINK}}\n#Cursor #Cline #AI",
     enabled: true,
   },
   {
     slotIndex: 7,
-    title: "Roo Code & Claude Code",
-    focus: "Full native tool-calling and prompt caching support for CLI agents",
-    templateText: "🤖 Claude Code & Roo Code on @QronosAI\n\n• Native tool-calling & prompt caching\n• High-context streaming with wholesale rates\n• Token plans from $10 with UPI/Solana\n\n👉 Start with free tokens:\n{{REFERRAL_LINK}}\n#ClaudeCode #AI #Dev",
+    title: "Claude Code CLI Support",
+    focus: "Full native tool-calling and prompt caching support for Claude Code CLI",
+    templateText: "🤖 Full Support for Claude Code CLI\n\n• Prompt caching pass-through on @QronosAI\n• Claude Opus 5.5 & Sonnet at cheaper rates\n• $10 for 700M or $30 for 2.5B tokens\n\n👉 Start with free tokens:\n{{REFERRAL_LINK}}\n#ClaudeCode #AI #Dev",
     enabled: true,
   },
   {
     slotIndex: 8,
-    title: "Enterprise Concurrency",
-    focus: "High RPM/TPM without restrictive tier gating or per-minute throttling",
-    templateText: "🚀 Enterprise Concurrency on @QronosAI\n\n• High RPM/TPM without restrictive gating\n• Pooled enterprise Claude Opus 5.5 keys\n• Domestic UPI QR & Solana USDC accepted\n\n👉 Scale your AI apps:\n{{REFERRAL_LINK}}\n#AI #Scale #Developers",
+    title: "Free Developer Trial",
+    focus: "Free trial access to Claude Sonnet and top models without credit card",
+    templateText: "⚡ Free Developer Access on @QronosAI\n\n• Test Claude Sonnet & DeepSeek for free\n• Zero credit card required to begin\n• Top-tier models at rock-bottom prices\n\n👉 Claim free developer trial:\n{{REFERRAL_LINK}}\n#Claude #AI #Cursor",
     enabled: true,
   },
   {
     slotIndex: 9,
-    title: "Deep Reasoning & Thinking",
-    focus: "Extended reasoning tokens on Claude Opus 5.5 and Kimi K3",
-    templateText: "🧠 Deep Reasoning Models on @QronosAI\n\n• Claude Opus 5.5 & Kimi K3 Thinking\n• Full reasoning token streaming\n• Massive token plans from $10\n\n👉 Unlock deep thinking compute:\n{{REFERRAL_LINK}}\n#Reasoning #AI #LLM",
+    title: "Zero Rate-Limit Anxiety",
+    focus: "Enterprise concurrency and pooling without per-minute throttling",
+    templateText: "🚀 Zero Rate-Limit Anxiety on @QronosAI\n\n• Pooled enterprise Claude Opus 5.5 keys\n• Massive concurrency without tier gating\n• Bulk token packages: $30 for 2.5B tokens\n\n👉 Scale your AI apps:\n{{REFERRAL_LINK}}\n#AI #Scale #Developers",
     enabled: true,
   },
   {
     slotIndex: 10,
-    title: "Cross-Protocol Gateway",
-    focus: "Unified translation between OpenAI completions and Anthropic messages",
-    templateText: "🔄 Universal Protocol Gateway | @QronosAI\n\n• Translate OpenAI requests to Anthropic models\n• One key unlocks every top frontier model\n• True wholesale developer pricing\n\n👉 Test the gateway free:\n{{REFERRAL_LINK}}\n#AI #Developers #Code",
+    title: "Deep Reasoning & Thinking",
+    focus: "Extended reasoning tokens on Claude Opus 5.5 and Kimi K3",
+    templateText: "🧠 Extended Reasoning on @QronosAI\n\n• Claude Opus 5.5 & Kimi K3 Thinking\n• Top models at dramatically cheaper rates\n• Plans from $10 (700M tokens)\n\n👉 Unlock deep reasoning:\n{{REFERRAL_LINK}}\n#Reasoning #AI #LLM",
     enabled: true,
   },
   {
     slotIndex: 11,
-    title: "Wholesale Developer Rates",
-    focus: "Zero retail markup passed directly to developers and solo founders",
-    templateText: "🔥 Stop Overpaying for AI APIs | @QronosAI\n\n• True wholesale pricing on Claude Opus 5.5\n• Plus plan: 600M tokens for $10\n• Instant UPI QR & Solana Pay support\n\n👉 Claim your wholesale key:\n{{REFERRAL_LINK}}\n#AI #Coding #Tech",
+    title: "Cross-Protocol Gateway",
+    focus: "Unified translation between OpenAI completions and Anthropic messages",
+    templateText: "🔄 Universal Protocol Translator @QronosAI\n\n• Route OpenAI requests to Anthropic\n• One API key for all top-tier models\n• Rock-bottom prices: $10 for 700M tokens\n\n👉 Test the gateway free:\n{{REFERRAL_LINK}}\n#AI #Developers #Code",
     enabled: true,
   },
   {
     slotIndex: 12,
-    title: "Flexible PAYG Compute",
-    focus: "Pay only for what you compute with zero monthly subscriptions",
-    templateText: "⚡ Flexible Pay-As-You-Go | @QronosAI\n\n• Pay only for what you compute\n• No recurring monthly subscriptions\n• Recharge via UPI or Solana crypto\n\n👉 Start with instant trial:\n{{REFERRAL_LINK}}\n#AI #PayAsYouGo #Dev",
+    title: "Slash AI API Costs",
+    focus: "Dramatically reduce API expenditure for founders and indie hackers",
+    templateText: "🔥 Stop Overpaying for AI APIs! @QronosAI\n\n• Cut your API bills by up to 70%\n• Plus plan: 700M tokens for just $10\n• Domestic UPI QR & Solana Pay accepted\n\n👉 Get your API key now:\n{{REFERRAL_LINK}}\n#AI #Coding #Tech",
     enabled: true,
   },
   {
     slotIndex: 13,
-    title: "Multimodal Vision & Docs",
-    focus: "High-throughput visual analysis, OCR, diagrams, and PDF document parsing",
-    templateText: "👁️ High-Throughput Vision | @QronosAI\n\n• Fast visual OCR, diagrams & PDF parsing\n• Claude Sonnet & DeepSeek V4 Pro\n• Enterprise throughput · Wholesale rates\n\n👉 Start document extraction:\n{{REFERRAL_LINK}}\n#OCR #Vision #AI",
+    title: "High-Throughput Vision",
+    focus: "Fast visual OCR, diagrams, and PDF document parsing",
+    templateText: "👁️ High-Throughput Vision on @QronosAI\n\n• Parse PDFs, images & diagrams fast\n• Claude Sonnet & DeepSeek V4 Pro\n• Dedicated token plans from $10 (700M)\n\n👉 Start document extraction:\n{{REFERRAL_LINK}}\n#OCR #Vision #AI",
     enabled: true,
   },
   {
     slotIndex: 14,
-    title: "Verified Community Perks",
-    focus: "10M free tokens on Discord verification plus 25% lifetime referral revenue",
-    templateText: "🎁 Developer Community Perks | @QronosAI\n\n• 10M free tokens on Discord verification\n• 25% lifetime referral recharge commission\n• Plus token plans from just $10\n\n👉 Join & claim your reward:\n{{REFERRAL_LINK}}\n#AI #Community #Dev",
+    title: "Developer Community Perks",
+    focus: "10M free tokens on Discord verify plus 25% lifetime referral revenue",
+    templateText: "🎁 Developer Community Perks @QronosAI\n\n• 10M free tokens on Discord verify\n• 25% lifetime referral recharge commission\n• Cheaper frontier models from $10\n\n👉 Join & claim your reward:\n{{REFERRAL_LINK}}\n#AI #Community #Dev",
     enabled: true,
   },
 ];
@@ -11110,6 +11110,35 @@ export async function listTwitterRewardsAdminOverview() {
       })
       .from(twitterShareRewards);
 
+    const leaderboardRaw = await db
+      .select({
+        userId: twitterShareRewards.userId,
+        userEmail: users.email,
+        userName: users.name,
+        postsCount: sql<number>`count(*)`,
+        totalTokens: sql<number>`coalesce(sum(${twitterShareRewards.grantedTokens}), 0)`,
+        totalPaygNanos: sql<number>`coalesce(sum(${twitterShareRewards.grantedPaygNanos}), 0)`,
+        lastPostedAt: sql<string>`max(${twitterShareRewards.postedAt})`,
+        lastTwitterUsername: sql<string>`max(${twitterShareRewards.twitterUsername})`,
+      })
+      .from(twitterShareRewards)
+      .innerJoin(users, eq(twitterShareRewards.userId, users.id))
+      .groupBy(twitterShareRewards.userId, users.email, users.name)
+      .orderBy(desc(sql`count(*)`), desc(sql`max(${twitterShareRewards.postedAt})`))
+      .limit(100);
+
+    const leaderboard = leaderboardRaw.map((u, index) => ({
+      rank: index + 1,
+      userId: u.userId,
+      userEmail: u.userEmail,
+      userName: u.userName,
+      postsCount: Number(u.postsCount || 0),
+      totalTokensMillion: Math.round(Number(u.totalTokens || 0) / 1_000_000),
+      totalPaygDollars: Number(u.totalPaygNanos || 0) / 1_000_000_000,
+      lastPostedAt: u.lastPostedAt ? new Date(u.lastPostedAt).toISOString() : null,
+      lastTwitterUsername: u.lastTwitterUsername || "unknown",
+    }));
+
     return {
       totalPosts: Number(stats?.totalPosts ?? 0),
       uniqueUsers: Number(stats?.uniqueUsers ?? 0),
@@ -11121,6 +11150,7 @@ export async function listTwitterRewardsAdminOverview() {
         postedAt: c.postedAt ? new Date(c.postedAt).toISOString() : new Date().toISOString(),
         expiresAt: c.expiresAt ? new Date(c.expiresAt).toISOString() : new Date().toISOString(),
       })),
+      leaderboard,
     };
   } catch (err) {
     console.error("[TwitterReward] Error listing admin overview:", err);

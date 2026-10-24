@@ -24,6 +24,7 @@ import {
   Layers,
   ChevronDown,
   ChevronUp,
+  Trophy,
 } from "lucide-react";
 import { toast } from "sonner";
 import { formatDistanceToNow, format } from "date-fns";
@@ -54,7 +55,7 @@ export function AdminTwitterRewardsSection() {
   const [selectedModel, setSelectedModel] = useState<string>("claude-sonnet-5.5");
   const [slots, setSlots] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
-  const [activeTab, setActiveTab] = useState<"slots" | "analytics">("slots");
+  const [activeTab, setActiveTab] = useState<"slots" | "leaderboard" | "feed">("slots");
   const [regeneratingSlotIndex, setRegeneratingSlotIndex] = useState<number | null>(null);
 
   // Sync state when config loads
@@ -151,6 +152,17 @@ export function AdminTwitterRewardsSection() {
       (claim.userName && claim.userName.toLowerCase().includes(q)) ||
       (claim.twitterUsername && claim.twitterUsername.toLowerCase().includes(q)) ||
       claim.tweetId.toLowerCase().includes(q)
+    );
+  });
+
+  // Filtered user leaderboard for table
+  const filteredLeaderboard = ((overviewQuery.data as any)?.leaderboard || []).filter((user: any) => {
+    if (!searchQuery.trim()) return true;
+    const q = searchQuery.toLowerCase();
+    return (
+      (user.userEmail && user.userEmail.toLowerCase().includes(q)) ||
+      (user.userName && user.userName.toLowerCase().includes(q)) ||
+      (user.lastTwitterUsername && user.lastTwitterUsername.toLowerCase().includes(q))
     );
   });
 
@@ -336,15 +348,29 @@ export function AdminTwitterRewardsSection() {
           <Button
             size="sm"
             variant="ghost"
-            onClick={() => setActiveTab("analytics")}
+            onClick={() => setActiveTab("leaderboard")}
             className={`h-8 px-3.5 rounded-xl font-mono text-xs font-bold transition-all cursor-pointer ${
-              activeTab === "analytics"
+              activeTab === "leaderboard"
+                ? "bg-white text-black shadow-md"
+                : "text-zinc-400 hover:text-white hover:bg-white/10"
+            }`}
+          >
+            <Trophy size={13} className="mr-1.5 text-amber-400" />
+            User Leaderboard ({((overviewQuery.data as any)?.leaderboard || []).length})
+          </Button>
+
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => setActiveTab("feed")}
+            className={`h-8 px-3.5 rounded-xl font-mono text-xs font-bold transition-all cursor-pointer ${
+              activeTab === "feed"
                 ? "bg-white text-black shadow-md"
                 : "text-zinc-400 hover:text-white hover:bg-white/10"
             }`}
           >
             <Users size={13} className="mr-1.5" />
-            User Post Activity ({overviewQuery.data?.totalPosts || 0})
+            Live Posts Feed ({overviewQuery.data?.totalPosts || 0})
           </Button>
         </div>
 
@@ -478,8 +504,8 @@ export function AdminTwitterRewardsSection() {
         </div>
       )}
 
-      {/* TAB 2: USER POST ACTIVITY & ANALYTICS */}
-      {activeTab === "analytics" && (
+      {/* TAB 2: USER LEADERBOARD */}
+      {activeTab === "leaderboard" && (
         <div className="space-y-4">
           {/* Top Metrics Grid */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
@@ -536,13 +562,143 @@ export function AdminTwitterRewardsSection() {
             </div>
           </div>
 
+          {/* User Leaderboard Table */}
+          <div className="rounded-2xl border border-white/10 bg-[#0c0d12]/95 p-5 space-y-4 shadow-xl">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/8 pb-3">
+              <div className="space-y-0.5">
+                <h2 className="text-sm font-bold font-mono uppercase tracking-wider text-white flex items-center gap-2">
+                  <Trophy size={15} className="text-amber-400" />
+                  Top Advocates & User Share Leaderboard
+                </h2>
+                <p className="text-[11px] text-zinc-400 font-mono">
+                  Ranked by total verified posts and cumulative compute rewards earned.
+                </p>
+              </div>
+
+              <div className="relative w-full sm:w-72">
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
+                <Input
+                  placeholder="Filter users or handles..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="h-8 pl-8 text-xs font-mono bg-black/40 border-white/10 text-white placeholder:text-zinc-600 rounded-xl"
+                />
+              </div>
+            </div>
+
+            {filteredLeaderboard.length === 0 ? (
+              <div className="p-8 text-center text-xs font-mono text-zinc-500 rounded-xl border border-dashed border-white/10">
+                No user share activity recorded yet. Once users post on 𝕏 and claim compute, the ranking leaderboard will update here in real-time.
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs font-mono">
+                  <thead>
+                    <tr className="border-b border-white/10 text-[10px] uppercase tracking-wider text-zinc-500">
+                      <th className="pb-2.5 font-bold w-16">Rank</th>
+                      <th className="pb-2.5 font-bold">User Account</th>
+                      <th className="pb-2.5 font-bold">Last 𝕏 Handle</th>
+                      <th className="pb-2.5 font-bold text-center">Total Posts</th>
+                      <th className="pb-2.5 font-bold">Total Tokens Earned</th>
+                      <th className="pb-2.5 font-bold">Total PAYG Earned</th>
+                      <th className="pb-2.5 font-bold text-right">Last Share</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-white/5">
+                    {filteredLeaderboard.map((item: any, idx: number) => {
+                      const rank = idx + 1;
+                      const rankBadge =
+                        rank === 1 ? "🥇 #1" : rank === 2 ? "🥈 #2" : rank === 3 ? "🥉 #3" : `#${rank}`;
+                      const rankColor =
+                        rank === 1
+                          ? "text-amber-400 font-bold"
+                          : rank === 2
+                          ? "text-zinc-300 font-bold"
+                          : rank === 3
+                          ? "text-amber-600 font-bold"
+                          : "text-zinc-500";
+
+                      return (
+                        <tr key={item.userId} className="hover:bg-white/[0.02] transition-colors">
+                          <td className="py-3">
+                            <span className={`inline-flex items-center text-xs ${rankColor}`}>
+                              {rankBadge}
+                            </span>
+                          </td>
+
+                          <td className="py-3">
+                            <div className="font-bold text-white">
+                              {item.userEmail || `User #${item.userId}`}
+                            </div>
+                            {item.userName && (
+                              <div className="text-[10px] text-zinc-500">{item.userName}</div>
+                            )}
+                          </td>
+
+                          <td className="py-3">
+                            {item.lastTwitterUsername ? (
+                              <span className="font-bold text-zinc-300">@{item.lastTwitterUsername}</span>
+                            ) : (
+                              <span className="text-zinc-600">—</span>
+                            )}
+                          </td>
+
+                          <td className="py-3 text-center">
+                            <Badge className="bg-emerald-500/10 text-emerald-400 border-emerald-500/30 text-[11px] font-mono font-bold">
+                              {Number(item.postsCount).toLocaleString()} {Number(item.postsCount) === 1 ? "post" : "posts"}
+                            </Badge>
+                          </td>
+
+                          <td className="py-3">
+                            <span className="text-cyan-400 font-bold">
+                              {Math.round(Number(item.totalTokens) / 1_000_000).toLocaleString()}M Tokens
+                            </span>
+                          </td>
+
+                          <td className="py-3">
+                            <span className="text-emerald-400 font-bold">
+                              ${(Number(item.totalPaygNanos) / 1_000_000_000).toFixed(2)}
+                            </span>
+                          </td>
+
+                          <td className="py-3 text-right text-zinc-400">
+                            {item.lastPostedAt ? (
+                              <div>
+                                <div>{format(new Date(item.lastPostedAt), "MMM d, h:mm a")}</div>
+                                <div className="text-[10px] text-zinc-600">
+                                  {formatDistanceToNow(new Date(item.lastPostedAt), { addSuffix: true })}
+                                </div>
+                              </div>
+                            ) : (
+                              <span className="text-zinc-600">—</span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* TAB 3: LIVE POSTS FEED */}
+      {activeTab === "feed" && (
+        <div className="space-y-4">
           {/* User Posts Table */}
           <div className="rounded-2xl border border-white/10 bg-[#0c0d12]/95 p-5 space-y-4 shadow-xl">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/8 pb-3">
-              <h2 className="text-sm font-bold font-mono uppercase tracking-wider text-white flex items-center gap-2">
-                <TwitterXIcon className="h-4 w-4" />
-                Live User Posts & Reward Feed
-              </h2>
+              <div className="space-y-0.5">
+                <h2 className="text-sm font-bold font-mono uppercase tracking-wider text-white flex items-center gap-2">
+                  <TwitterXIcon className="h-4 w-4" />
+                  Live User Posts & Reward Feed
+                </h2>
+                <p className="text-[11px] text-zinc-400 font-mono">
+                  Real-time stream of all verified posts and 12-hour compute allocations.
+                </p>
+              </div>
 
               <div className="relative w-full sm:w-72">
                 <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />

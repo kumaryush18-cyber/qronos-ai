@@ -1294,17 +1294,33 @@ ${input.intent ? `Requested Notification Type: ${input.intent}` : ""}`;
         const slot = config.slots[input.slotIndex] || DEFAULT_TWITTER_REWARD_SLOTS[input.slotIndex];
         const focus = input.customFocus?.trim() || slot.focus;
 
-        const systemPrompt = `You are a world-class viral tech copywriter for Qronos AI (universal LLM gateway).
-Write an engaging, punchy post for X (Twitter) promoting Qronos AI.
+        const systemPrompt = `You are a viral developer marketing copywriter for Qronos AI (@QronosAI).
+Generate an ultra-clean, structured post for X (Twitter).
 Theme/Angle: "${focus}"
-Requirements:
-1. Must mention @QronosAI.
-2. Must include the exact link placeholder: {{REFERRAL_LINK}}
-3. Target exact length around 280-300 characters.
-4. Highlight real developer benefits: wholesale pricing, instant UPI & Solana Pay crypto, Cursor/Cline compatibility, free Sonnet 5.5 testing, high concurrency.
-Return ONLY the raw tweet text. Do not wrap in quotes or markdown.`;
 
-        const userPrompt = `Write the high-converting tweet for slot #${input.slotIndex + 1} (${slot.title}). Focus: ${focus}`;
+CORE VALUE FOCUS:
+• Top-tier frontier models (Claude Opus 5.5, Sonnet 4.6, DeepSeek V4, GPT-6 Astra) at dramatically cheaper prices!
+• Massive token grants: $10 for 700M tokens or $30 for 2.5B tokens!
+• Instant payments via Domestic UPI QR & Solana Pay (USDC), drop-in for Cursor, Cline & Claude Code.
+
+EXACT FORMATTING STRUCTURE (Follow this layout line-by-line):
+[Emoji] [Headline] on @QronosAI
+
+• [Benefit 1: Cheaper top-tier models like Claude Opus 5.5]
+• [Benefit 2: Massive tokens: 700M for $10 or 2.5B for $30]
+• [Benefit 3: Instant UPI/Solana or Cursor/Cline drop-in]
+
+👉 [Call to action]:
+{{REFERRAL_LINK}}
+#AI #Dev #Coding
+
+CRITICAL RULES:
+1. Total length with {{REFERRAL_LINK}} MUST be strictly UNDER 250 characters.
+2. Use bullet points (•) and clean line breaks as shown.
+3. Must include exact {{REFERRAL_LINK}} and mention @QronosAI.
+4. Output ONLY the raw post text. No quotes, markdown code fences, or explanations.`;
+
+        const userPrompt = `Write the structured tweet for slot #${input.slotIndex + 1} (${slot.title}). Focus: ${focus}`;
 
         let generatedText = slot.templateText;
         try {
@@ -1326,7 +1342,7 @@ Return ONLY the raw tweet text. Do not wrap in quotes or markdown.`;
           console.error("[regenerateTwitterSlot] AI completion failed, falling back:", err);
         }
 
-        const exact300 = formatTweetExact300(generatedText, "{{AFFILIATE_CODE}}", 300);
+        const exact300 = formatTweetExact300(generatedText, "{{AFFILIATE_CODE}}", 265);
         slot.templateText = exact300;
         slot.lastGeneratedAt = new Date().toISOString();
         slot.lastGeneratedModel = input.model;
@@ -1345,16 +1361,33 @@ Return ONLY the raw tweet text. Do not wrap in quotes or markdown.`;
 
         for (let i = 0; i < config.slots.length; i++) {
           const slot = config.slots[i];
-          const systemPrompt = `You are a world-class viral tech copywriter for Qronos AI (universal LLM gateway).
-Write an engaging, punchy post for X (Twitter) promoting Qronos AI.
+          const systemPrompt = `You are a viral developer marketing copywriter for Qronos AI (@QronosAI).
+Generate an ultra-clean, structured post for X (Twitter).
 Theme/Angle: "${slot.focus}"
-Requirements:
-1. Must mention @QronosAI.
-2. Must include the exact link placeholder: {{REFERRAL_LINK}}
-3. Target exact length around 280-300 characters.
-Return ONLY the raw tweet text. Do not wrap in quotes or markdown.`;
 
-          const userPrompt = `Write the high-converting tweet for slot #${i + 1} (${slot.title}). Focus: ${slot.focus}`;
+CORE VALUE FOCUS:
+• Top-tier frontier models (Claude Opus 5.5, Sonnet 4.6, DeepSeek V4) at dramatically cheaper prices!
+• Massive token grants: $10 for 700M tokens or $30 for 2.5B tokens!
+• Instant Domestic UPI QR & Solana Pay (USDC), drop-in for Cursor, Cline & Claude Code.
+
+EXACT FORMATTING STRUCTURE (Follow this layout line-by-line):
+[Emoji] [Headline] on @QronosAI
+
+• [Benefit 1: Cheaper top-tier models like Claude Opus 5.5]
+• [Benefit 2: Massive tokens: 700M for $10 or 2.5B for $30]
+• [Benefit 3: Instant UPI/Solana or Cursor/Cline drop-in]
+
+👉 [Call to action]:
+{{REFERRAL_LINK}}
+#AI #Dev #Coding
+
+CRITICAL RULES:
+1. Total length with {{REFERRAL_LINK}} MUST be strictly UNDER 250 characters.
+2. Use bullet points (•) and clean line breaks as shown.
+3. Must include exact {{REFERRAL_LINK}} and mention @QronosAI.
+4. Output ONLY the raw post text. No quotes, markdown code fences, or explanations.`;
+
+          const userPrompt = `Write the structured tweet for slot #${i + 1} (${slot.title}). Focus: ${slot.focus}`;
 
           try {
             const completion = await runPlaygroundCompletion({
@@ -1370,7 +1403,7 @@ Return ONLY the raw tweet text. Do not wrap in quotes or markdown.`;
             });
             if (completion.content) {
               const cleaned = completion.content.replace(/^["']|["']$/g, "").trim();
-              slot.templateText = formatTweetExact300(cleaned, "{{AFFILIATE_CODE}}", 300);
+              slot.templateText = formatTweetExact300(cleaned, "{{AFFILIATE_CODE}}", 265);
               slot.lastGeneratedAt = new Date().toISOString();
               slot.lastGeneratedModel = input.model;
             }
