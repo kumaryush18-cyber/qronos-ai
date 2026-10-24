@@ -734,7 +734,7 @@ export const appRouter = router({
 
       const activeSlots = config.slots.filter((s) => s.enabled);
       const slotIndexToUse = activeSlots.length > 0
-        ? (status.totalPostsCount % activeSlots.length)
+        ? Math.floor(Math.random() * activeSlots.length)
         : 0;
       const selectedSlot = activeSlots[slotIndexToUse] || config.slots[0];
       const previewTweet = formatTweetExact300(selectedSlot.templateText, userRefCode);

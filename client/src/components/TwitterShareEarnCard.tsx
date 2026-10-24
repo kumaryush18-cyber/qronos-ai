@@ -12,6 +12,7 @@ import {
   CheckCircle2,
   HelpCircle,
   Loader2,
+  Shuffle,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -266,22 +267,38 @@ export function TwitterShareEarnCard() {
             <span>On your 𝕏 post, click the <strong>Share icon (📤)</strong> → click <strong>"Copy link"</strong> → paste it above.</span>
           </div>
 
-          <button
-            type="button"
-            onClick={() => setShowGuide(!showGuide)}
-            className="text-[10px] text-zinc-500 hover:text-zinc-300 underline underline-offset-2 self-start sm:self-auto cursor-pointer"
-          >
-            {showGuide ? "Hide tweet preview" : "View post text"}
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => {
+                refetch();
+                toast.info("Swapped to another random 𝕏 post template");
+              }}
+              className="inline-flex items-center gap-1 text-[10px] text-zinc-400 hover:text-white transition-colors cursor-pointer"
+            >
+              <Shuffle size={11} className="text-emerald-400" />
+              <span>Shuffle copy</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowGuide(!showGuide)}
+              className="text-[10px] text-zinc-500 hover:text-zinc-300 underline underline-offset-2 self-start sm:self-auto cursor-pointer"
+            >
+              {showGuide ? "Hide preview" : "View preview"}
+            </button>
+          </div>
         </div>
 
         {/* Optional Collapsible preview */}
         {showGuide && (
-          <div className="p-3 rounded-xl border border-white/5 bg-black/60 text-xs font-mono space-y-1.5">
-            <span className="text-[10px] text-zinc-500 uppercase tracking-wider block">Pre-filled Post Content</span>
-            <p className="text-zinc-300 bg-white/[0.03] p-2 rounded border border-white/5 select-all">
+          <div className="p-3.5 rounded-xl border border-white/5 bg-black/60 text-xs font-mono space-y-2">
+            <div className="flex items-center justify-between text-[10px] text-zinc-500 uppercase tracking-wider">
+              <span>Pre-filled Post Format</span>
+              <span className="text-emerald-400">Heading & Bullet Points</span>
+            </div>
+            <pre className="text-zinc-300 bg-white/[0.03] p-3 rounded-lg border border-white/5 select-all whitespace-pre-wrap font-sans text-xs leading-relaxed">
               {previewTweet}
-            </p>
+            </pre>
           </div>
         )}
       </div>
