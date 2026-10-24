@@ -43,7 +43,7 @@ function stripBotMention(content: string, botId?: string): string {
 async function callQronosLLM(
   config: DiscordBotConfig,
   messages: Array<{ role: "system" | "user" | "assistant"; content: string }>,
-  maxTokens = 1200
+  maxTokens = 65536
 ): Promise<string | null> {
   try {
     const baseUrl = (config.apiBaseUrl || "https://api.qronos.me/v1").replace(/\/+$/, "");
@@ -121,7 +121,7 @@ Output ONLY 3-6 bullet points summarizing the key context. Keep it compact.`;
         { role: "system", content: "You are a concise semantic memory summarizer." },
         { role: "user", content: summaryPrompt },
       ],
-      250
+      8192
     );
 
     if (newSummary) {
@@ -166,7 +166,7 @@ If the message is generic or trivial banter with no personal fact, reply with "N
         { role: "system", content: "You are a member personality fact extractor. Output the fact or NONE." },
         { role: "user", content: extractPrompt },
       ],
-      60
+      4096
     );
 
     if (note && !note.includes("NONE") && note.length > 5 && note.length < 150) {
@@ -228,7 +228,7 @@ Guidelines:
         { role: "system", content: config.systemPrompt },
         { role: "user", content: icebreakerPrompt },
       ],
-      120
+      65536
     );
 
     if (icebreaker) {
@@ -408,7 +408,7 @@ INSTRUCTIONS:
       },
     ];
 
-    const replyText = await callQronosLLM(config, messagesForLLM, 1500);
+    const replyText = await callQronosLLM(config, messagesForLLM, 65536);
 
     if (replyText) {
       const cleanReply = replyText.length > 1950 ? replyText.slice(0, 1950) + "..." : replyText;
