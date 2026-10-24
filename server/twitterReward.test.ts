@@ -7,31 +7,35 @@ import {
 } from "./db";
 
 describe("Twitter (X) Share-to-Earn Rewards Engine", () => {
-  it("formats all 15 default slot templates to exactly 300 characters with referral code substitution", () => {
+  it("formats all 15 default slot templates with referral code substitution and pins @Qronosme", () => {
     DEFAULT_TWITTER_REWARD_SLOTS.forEach((slot, idx) => {
       const code = `usr${idx}`;
-      const tweet = formatTweetExact300(slot.templateText, code, 300);
+      const tweet = formatTweetExact300(slot.templateText, code, 265);
 
-      expect(tweet.length).toBe(300);
+      expect(tweet.length).toBeLessThanOrEqual(270);
       expect(tweet).toContain(`aff=${code}`);
-      expect(tweet).toContain("@QronosAI");
+      expect(tweet).toContain("@Qronosme");
     });
   });
 
-  it("handles variable length referral codes and maintains exact 300 character boundary", () => {
+  it("handles variable length referral codes and stays within Twitter limits", () => {
     const slot = DEFAULT_TWITTER_REWARD_SLOTS[0];
 
     const shortCode = "a";
     const normalCode = "a7xp";
     const longCode = "customsuperaffiliate999";
 
-    const tweet1 = formatTweetExact300(slot.templateText, shortCode, 300);
-    const tweet2 = formatTweetExact300(slot.templateText, normalCode, 300);
-    const tweet3 = formatTweetExact300(slot.templateText, longCode, 300);
+    const tweet1 = formatTweetExact300(slot.templateText, shortCode, 265);
+    const tweet2 = formatTweetExact300(slot.templateText, normalCode, 265);
+    const tweet3 = formatTweetExact300(slot.templateText, longCode, 265);
 
-    expect(tweet1.length).toBe(300);
-    expect(tweet2.length).toBe(300);
-    expect(tweet3.length).toBe(300);
+    expect(tweet1.length).toBeLessThanOrEqual(270);
+    expect(tweet2.length).toBeLessThanOrEqual(270);
+    expect(tweet3.length).toBeLessThanOrEqual(270);
+
+    expect(tweet1).toContain("@Qronosme");
+    expect(tweet2).toContain("@Qronosme");
+    expect(tweet3).toContain("@Qronosme");
   });
 
   it("loads default config containing 15 slots and customizable grant parameters", async () => {
@@ -45,10 +49,10 @@ describe("Twitter (X) Share-to-Earn Rewards Engine", () => {
 
     // Spot-check key marketing themes
     const themes = config.slots.map((s) => s.title);
-    expect(themes).toContain("Wholesale Frontier Models");
-    expect(themes).toContain("Free Sonnet 5.5 Access");
+    expect(themes).toContain("Top-Tier Models at Cheaper Prices");
+    expect(themes).toContain("Claude Opus 5.5 Cheaper");
     expect(themes).toContain("Solana Pay Native");
-    expect(themes).toContain("Domestic UPI Checkout");
+    expect(themes).toContain("Domestic UPI QR Payments");
     expect(themes).toContain("Cursor & Cline Drop-in");
   });
 

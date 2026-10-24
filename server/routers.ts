@@ -1294,7 +1294,7 @@ ${input.intent ? `Requested Notification Type: ${input.intent}` : ""}`;
         const slot = config.slots[input.slotIndex] || DEFAULT_TWITTER_REWARD_SLOTS[input.slotIndex];
         const focus = input.customFocus?.trim() || slot.focus;
 
-        const systemPrompt = `You are a viral developer marketing copywriter for Qronos AI (@QronosAI).
+        const systemPrompt = `You are a viral developer marketing copywriter for Qronos AI (@Qronosme).
 Generate an ultra-clean, structured post for X (Twitter).
 Theme/Angle: "${focus}"
 
@@ -1304,7 +1304,7 @@ CORE VALUE FOCUS:
 • Instant payments via Domestic UPI QR & Solana Pay (USDC), drop-in for Cursor, Cline & Claude Code.
 
 EXACT FORMATTING STRUCTURE (Follow this layout line-by-line):
-[Emoji] [Headline] on @QronosAI
+[Emoji] [Headline] | @Qronosme
 
 • [Benefit 1: Cheaper top-tier models like Claude Opus 5.5]
 • [Benefit 2: Massive tokens: 600M for $10 or 2.2B for $30]
@@ -1312,15 +1312,15 @@ EXACT FORMATTING STRUCTURE (Follow this layout line-by-line):
 
 👉 [Call to action]:
 {{REFERRAL_LINK}}
-#AI #Dev #Coding
+📌 Pin @Qronosme #AI #Dev
 
 CRITICAL RULES:
 1. Total length with {{REFERRAL_LINK}} MUST be strictly UNDER 250 characters.
 2. Use bullet points (•) and clean line breaks as shown.
-3. Must include exact {{REFERRAL_LINK}} and mention @QronosAI.
+3. PIN MY HANDLE: In every piece of content, you MUST pin and tag the official handle @Qronosme in the headline and include '📌 Pin @Qronosme'. Never omit @Qronosme.
 4. Output ONLY the raw post text. No quotes, markdown code fences, or explanations.`;
 
-        const userPrompt = `Write the structured tweet for slot #${input.slotIndex + 1} (${slot.title}). Focus: ${focus}`;
+        const userPrompt = `Write the structured tweet for slot #${input.slotIndex + 1} (${slot.title}). Focus: ${focus}. Pin the official handle @Qronosme in the content.`;
 
         let generatedText = slot.templateText;
         try {
@@ -1361,7 +1361,7 @@ CRITICAL RULES:
 
         for (let i = 0; i < config.slots.length; i++) {
           const slot = config.slots[i];
-          const systemPrompt = `You are a viral developer marketing copywriter for Qronos AI (@QronosAI).
+          const systemPrompt = `You are a viral developer marketing copywriter for Qronos AI (@Qronosme).
 Generate an ultra-clean, structured post for X (Twitter).
 Theme/Angle: "${slot.focus}"
 
@@ -1371,7 +1371,7 @@ CORE VALUE FOCUS:
 • Instant Domestic UPI QR & Solana Pay (USDC), drop-in for Cursor, Cline & Claude Code.
 
 EXACT FORMATTING STRUCTURE (Follow this layout line-by-line):
-[Emoji] [Headline] on @QronosAI
+[Emoji] [Headline] | @Qronosme
 
 • [Benefit 1: Cheaper top-tier models like Claude Opus 5.5]
 • [Benefit 2: Massive tokens: 600M for $10 or 2.2B for $30]
@@ -1379,15 +1379,15 @@ EXACT FORMATTING STRUCTURE (Follow this layout line-by-line):
 
 👉 [Call to action]:
 {{REFERRAL_LINK}}
-#AI #Dev #Coding
+📌 Pin @Qronosme #AI #Dev
 
 CRITICAL RULES:
 1. Total length with {{REFERRAL_LINK}} MUST be strictly UNDER 250 characters.
 2. Use bullet points (•) and clean line breaks as shown.
-3. Must include exact {{REFERRAL_LINK}} and mention @QronosAI.
+3. PIN MY HANDLE: In every piece of content, you MUST pin and tag the official handle @Qronosme in the headline and include '📌 Pin @Qronosme'. Never omit @Qronosme.
 4. Output ONLY the raw post text. No quotes, markdown code fences, or explanations.`;
 
-          const userPrompt = `Write the structured tweet for slot #${i + 1} (${slot.title}). Focus: ${slot.focus}`;
+          const userPrompt = `Write the structured tweet for slot #${i + 1} (${slot.title}). Focus: ${slot.focus}. Pin the official handle @Qronosme in the content.`;
 
           try {
             const completion = await runPlaygroundCompletion({

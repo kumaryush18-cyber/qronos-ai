@@ -2238,7 +2238,7 @@ function ReferralWorkspace() {
   };
 
   const shareText = encodeURIComponent(
-    `Route Claude Opus 5.5, GLM-5.3 & DeepSeek with sub-millisecond failover on Qronos AI. Sign up with my link to get 5M free coding tokens bonus (15M total):`
+    `Route Claude Opus 5.5, GLM-5.3 & DeepSeek with sub-millisecond failover on @Qronosme. 📌 Pin @Qronosme. Sign up with my link to get 5M free coding tokens bonus (15M total):`
   );
 
   return (

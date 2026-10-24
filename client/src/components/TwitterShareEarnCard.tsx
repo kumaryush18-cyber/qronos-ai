@@ -121,7 +121,7 @@ export function TwitterShareEarnCard() {
   const paygDollars = status?.config?.paygGrantDollars ?? 0;
   const canPost = Boolean(status?.canPost ?? true);
   const activeReward = status?.activeReward ?? null;
-  const previewTweet = status?.previewTweet ?? "Wholesale AI compute on @QronosAI! https://qronos.me";
+  const previewTweet = status?.previewTweet ?? "Wholesale AI compute on @Qronosme! 📌 Pin @Qronosme https://qronos.me";
 
   const rewardLabel = [
     tokenMillion > 0 ? `+${tokenMillion}M Tokens` : "",

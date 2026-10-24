@@ -10486,105 +10486,105 @@ export const DEFAULT_TWITTER_REWARD_SLOTS: TwitterRewardSlot[] = [
     slotIndex: 0,
     title: "Top-Tier Models at Cheaper Prices",
     focus: "Top-tier models like Claude Opus 5.5, Sonnet & DeepSeek at cheaper prices",
-    templateText: "🚀 Top-Tier Frontier Models on @QronosAI\n\n• Claude Opus 5.5, Sonnet & DeepSeek\n• Way cheaper rates than retail providers\n• Dedicated quotas: 700M tokens for $10\n\n👉 Get your developer key:\n{{REFERRAL_LINK}}\n#AI #Dev #Coding",
+    templateText: "🚀 Top-Tier Frontier Models | @Qronosme\n\n• Claude Opus 5.5, Sonnet & DeepSeek\n• Wholesale rates, way below retail\n• Massive quotas: 600M tokens from $10\n\n👉 Get your developer key:\n{{REFERRAL_LINK}}\n📌 Pin @Qronosme #AI #Dev",
     enabled: true,
   },
   {
     slotIndex: 1,
     title: "Massive Token Grants ($30 - 2.2B)",
     focus: "Massive token grants starting at $10 for 600M and $30 for 2.2B tokens",
-    templateText: "💎 Massive Token Grants on @QronosAI\n\n• $10 gives you 600M tokens\n• $30 scales to 2.2B tokens\n• Run Claude Opus 5.5 & DeepSeek V4\n\n👉 Claim your token grant:\n{{REFERRAL_LINK}}\n#Coding #Dev #LLM",
+    templateText: "💎 Massive Token Grants | @Qronosme\n\n• $10 gives you 600M tokens\n• $30 scales to 2.2B tokens\n• Run Claude Opus 5.5 & DeepSeek V4\n\n👉 Claim your token grant:\n{{REFERRAL_LINK}}\n📌 Pin @Qronosme #Coding #LLM",
     enabled: true,
   },
   {
     slotIndex: 2,
     title: "High-Scale Quotas ($30 - 2.2B)",
     focus: "Scale workloads with 2.2 Billion tokens for $30",
-    templateText: "⚡ High-Scale AI Coding on @QronosAI\n\n• 2.2 Billion tokens for just $30\n• Claude Opus 5.5 & Sonnet at lowest rates\n• Instant UPI QR & Solana Pay recharge\n\n👉 Start building today:\n{{REFERRAL_LINK}}\n#Cursor #Claude #AI",
+    templateText: "⚡ High-Scale AI Coding | @Qronosme\n\n• 2.2 Billion tokens for just $30\n• Claude Opus 5.5 & Sonnet lowest rates\n• Instant UPI QR & Solana Pay recharge\n\n👉 Start building today:\n{{REFERRAL_LINK}}\n📌 Pin @Qronosme #Cursor #AI",
     enabled: true,
   },
   {
     slotIndex: 3,
     title: "Claude Opus 5.5 Cheaper",
     focus: "Claude Opus 5.5 thinking model at unbeatable cheap rates",
-    templateText: "🧠 Claude Opus 5.5 at Cheaper Prices\n\n• Sub-millisecond failover routing\n• Full extended thinking tokens\n• Massive grants: 700M tokens from $10\n\n👉 Unlock cheaper frontier AI:\n{{REFERRAL_LINK}}\n#Reasoning #AI #Dev",
+    templateText: "🧠 Claude Opus 5.5 | @Qronosme\n\n• Sub-millisecond failover routing\n• Full extended thinking tokens\n• Massive grants: 600M from $10, 2.2B at $30\n\n👉 Unlock frontier AI:\n{{REFERRAL_LINK}}\n📌 Pin @Qronosme #Reasoning #Dev",
     enabled: true,
   },
   {
     slotIndex: 4,
     title: "Domestic UPI QR Payments",
     focus: "Zero transaction fee instant UPI QR payments for Indian developers",
-    templateText: "🇮🇳 Indian Devs: Instant UPI on @QronosAI\n\n• Pay directly via PhonePe, GPay, Paytm\n• 700M tokens starting at ₹960 ($10)\n• Claude Opus 5.5 & Sonnet wholesale\n\n👉 Grab your developer key:\n{{REFERRAL_LINK}}\n#Dev #AI #Coding",
+    templateText: "🇮🇳 Indian Devs: Instant UPI | @Qronosme\n\n• Pay directly via PhonePe, GPay, Paytm\n• 600M tokens from ₹960 ($10)\n• Claude Opus 5.5 & Sonnet wholesale\n\n👉 Grab your developer key:\n{{REFERRAL_LINK}}\n📌 Pin @Qronosme #Dev #AI",
     enabled: true,
   },
   {
     slotIndex: 5,
     title: "Solana Pay Native",
     focus: "Instant crypto checkout on Solana network with USDC",
-    templateText: "🌐 Crypto-Native AI Gateway @QronosAI\n\n• Instant USDC checkout on Solana\n• Top-tier models at much cheaper rates\n• 700M tokens from $10 · Zero tier gating\n\n👉 Connect & build now:\n{{REFERRAL_LINK}}\n#Solana #Web3 #AI",
+    templateText: "🌐 Crypto-Native AI Gateway | @Qronosme\n\n• Instant USDC checkout on Solana\n• Wholesale frontier models, zero markup\n• 600M tokens from $10 · No tier gating\n\n👉 Connect & build now:\n{{REFERRAL_LINK}}\n📌 Pin @Qronosme #Solana #Web3",
     enabled: true,
   },
   {
     slotIndex: 6,
     title: "Cursor & Cline Drop-in",
     focus: "Universal OpenAI & Anthropic base URL for AI coding extensions",
-    templateText: "💻 Supercharge Cursor & Cline | @QronosAI\n\n• Unified OpenAI & Anthropic base URL\n• Top-tier frontier models way cheaper\n• Massive quotas: 700M tokens for $10\n\n👉 Setup in 30 seconds:\n{{REFERRAL_LINK}}\n#Cursor #Cline #AI",
+    templateText: "💻 Supercharge Cursor & Cline | @Qronosme\n\n• Unified OpenAI & Anthropic base URL\n• Top-tier models at wholesale prices\n• Massive quotas: 600M tokens for $10\n\n👉 Setup in 30 seconds:\n{{REFERRAL_LINK}}\n📌 Pin @Qronosme #Cursor #Cline",
     enabled: true,
   },
   {
     slotIndex: 7,
     title: "Claude Code CLI Support",
     focus: "Full native tool-calling and prompt caching support for Claude Code CLI",
-    templateText: "🤖 Full Support for Claude Code CLI\n\n• Prompt caching pass-through on @QronosAI\n• Claude Opus 5.5 & Sonnet at cheaper rates\n• $10 for 600M or $30 for 2.2B tokens\n\n👉 Start with free tokens:\n{{REFERRAL_LINK}}\n#ClaudeCode #AI #Dev",
+    templateText: "🤖 Support for Claude Code CLI | @Qronosme\n\n• Native prompt caching pass-through\n• Claude Opus 5.5 & Sonnet wholesale\n• $10 for 600M or $30 for 2.2B tokens\n\n👉 Start with free tokens:\n{{REFERRAL_LINK}}\n📌 Pin @Qronosme #ClaudeCode #AI",
     enabled: true,
   },
   {
     slotIndex: 8,
     title: "Free Developer Trial",
     focus: "Free trial access to Claude Sonnet and top models without credit card",
-    templateText: "⚡ Free Developer Access on @QronosAI\n\n• Test Claude Sonnet & DeepSeek for free\n• Zero credit card required to begin\n• Top-tier models at rock-bottom prices\n\n👉 Claim free developer trial:\n{{REFERRAL_LINK}}\n#Claude #AI #Cursor",
+    templateText: "⚡ Free Developer Access | @Qronosme\n\n• Test Claude Sonnet & DeepSeek free\n• Zero credit card required to begin\n• Top-tier models at rock-bottom prices\n\n👉 Claim free developer trial:\n{{REFERRAL_LINK}}\n📌 Pin @Qronosme #Claude #AI",
     enabled: true,
   },
   {
     slotIndex: 9,
     title: "Zero Rate-Limit Anxiety",
     focus: "Enterprise concurrency and pooling without per-minute throttling",
-    templateText: "🚀 Zero Rate-Limit Anxiety on @QronosAI\n\n• Pooled enterprise Claude Opus 5.5 keys\n• Massive concurrency without tier gating\n• Bulk token packages: $30 for 2.2B tokens\n\n👉 Scale your AI apps:\n{{REFERRAL_LINK}}\n#AI #Scale #Developers",
+    templateText: "🚀 Zero Rate-Limit Anxiety | @Qronosme\n\n• Pooled enterprise Claude Opus 5.5 keys\n• Massive concurrency without tier gating\n• Bulk token packages: $30 for 2.2B tokens\n\n👉 Scale your AI apps:\n{{REFERRAL_LINK}}\n📌 Pin @Qronosme #AI #Developers",
     enabled: true,
   },
   {
     slotIndex: 10,
     title: "Deep Reasoning & Thinking",
     focus: "Extended reasoning tokens on Claude Opus 5.5 and Kimi K3",
-    templateText: "🧠 Extended Reasoning on @QronosAI\n\n• Claude Opus 5.5 & Kimi K3 Thinking\n• Top models at dramatically cheaper rates\n• Plans from $10 (700M tokens)\n\n👉 Unlock deep reasoning:\n{{REFERRAL_LINK}}\n#Reasoning #AI #LLM",
+    templateText: "🧠 Extended Reasoning | @Qronosme\n\n• Claude Opus 5.5 & Kimi K3 Thinking\n• Top models at dramatically cheaper rates\n• Plans from $10 (600M) & $30 (2.2B)\n\n👉 Unlock deep reasoning:\n{{REFERRAL_LINK}}\n📌 Pin @Qronosme #Reasoning #AI",
     enabled: true,
   },
   {
     slotIndex: 11,
     title: "Cross-Protocol Gateway",
-    focus: "Unified translation between OpenAI completions and Anthropic messages",
-    templateText: "🔄 Universal Protocol Translator @QronosAI\n\n• Route OpenAI requests to Anthropic\n• One API key for all top-tier models\n• Rock-bottom prices: $10 for 700M tokens\n\n👉 Test the gateway free:\n{{REFERRAL_LINK}}\n#AI #Developers #Code",
+    focus: "Universal translation between OpenAI completions and Anthropic messages",
+    templateText: "🔄 Universal Protocol Gateway | @Qronosme\n\n• Route OpenAI requests to Anthropic\n• One API key for all top-tier models\n• Rock-bottom prices: $10 for 600M tokens\n\n👉 Test the gateway free:\n{{REFERRAL_LINK}}\n📌 Pin @Qronosme #Developers #AI",
     enabled: true,
   },
   {
     slotIndex: 12,
     title: "Slash AI API Costs",
     focus: "Dramatically reduce API expenditure for founders and indie hackers",
-    templateText: "🔥 Stop Overpaying for AI APIs! @QronosAI\n\n• Cut your API bills by up to 70%\n• Plus plan: 700M tokens for just $10\n• Domestic UPI QR & Solana Pay accepted\n\n👉 Get your API key now:\n{{REFERRAL_LINK}}\n#AI #Coding #Tech",
+    templateText: "🔥 Stop Overpaying for AI APIs! | @Qronosme\n\n• Cut your API bills by up to 70%\n• Massive value: 600M tokens for $10\n• Domestic UPI QR & Solana Pay accepted\n\n👉 Get your API key now:\n{{REFERRAL_LINK}}\n📌 Pin @Qronosme #Coding #Tech",
     enabled: true,
   },
   {
     slotIndex: 13,
     title: "High-Throughput Vision",
     focus: "Fast visual OCR, diagrams, and PDF document parsing",
-    templateText: "👁️ High-Throughput Vision on @QronosAI\n\n• Parse PDFs, images & diagrams fast\n• Claude Sonnet & DeepSeek V4 Pro\n• Dedicated token plans from $10 (700M)\n\n👉 Start document extraction:\n{{REFERRAL_LINK}}\n#OCR #Vision #AI",
+    templateText: "👁️ High-Throughput Vision | @Qronosme\n\n• Parse PDFs, images & diagrams fast\n• Claude Sonnet & DeepSeek V4 Pro\n• Dedicated token plans from $10 (600M)\n\n👉 Start document extraction:\n{{REFERRAL_LINK}}\n📌 Pin @Qronosme #Vision #OCR",
     enabled: true,
   },
   {
     slotIndex: 14,
     title: "Developer Community Perks",
     focus: "10M free tokens on Discord verify plus 25% lifetime referral revenue",
-    templateText: "🎁 Developer Community Perks @QronosAI\n\n• 10M free tokens on Discord verify\n• 25% lifetime referral recharge commission\n• Cheaper frontier models from $10\n\n👉 Join & claim your reward:\n{{REFERRAL_LINK}}\n#AI #Community #Dev",
+    templateText: "🎁 Developer Community Perks | @Qronosme\n\n• 10M free tokens on Discord verify\n• 25% lifetime referral revenue share\n• Wholesale frontier models from $10\n\n👉 Join & claim your reward:\n{{REFERRAL_LINK}}\n📌 Pin @Qronosme #Community #AI",
     enabled: true,
   },
 ];
@@ -10592,9 +10592,18 @@ export const DEFAULT_TWITTER_REWARD_SLOTS: TwitterRewardSlot[] = [
 export function formatTweetExact300(templateText: string, referralCode = "qr01", targetLength = 265): string {
   const link = `https://qronos.me/sign-up?aff=${referralCode}`;
   let text = templateText
+    .replace(/@QronosAI/g, "@Qronosme")
     .replace(/\{\{REFERRAL_LINK\}\}/g, link)
     .replace(/\{\{AFFILIATE_CODE\}\}/g, referralCode)
     .trim();
+
+  // Ensure @Qronosme is pinned in the text
+  if (!text.toLowerCase().includes("@qronosme")) {
+    text = text.replace(/on Qronos AI/i, "on @Qronosme").replace(/Qronos AI/i, "@Qronosme");
+    if (!text.toLowerCase().includes("@qronosme")) {
+      text = `📌 Pin @Qronosme\n\n${text}`;
+    }
+  }
 
   if (!text.includes(link)) {
     text = `${text}\n\n👉 ${link}`;
@@ -11107,6 +11116,7 @@ export async function verifyAndClaimTwitterRewardViaUrl(userId: number, tweetUrl
       const userRefCode = (refObj.code || "").toLowerCase();
 
       const mentionsQronos =
+        lowerHtml.includes("@qronosme") ||
         lowerHtml.includes("@qronosai") ||
         lowerHtml.includes("qronos.me") ||
         lowerHtml.includes("qronos ai") ||
@@ -11114,11 +11124,11 @@ export async function verifyAndClaimTwitterRewardViaUrl(userId: number, tweetUrl
       const mentionsReferral = Boolean(userRefCode && lowerHtml.includes(userRefCode));
 
       if (!mentionsQronos && !mentionsReferral) {
-        throw new Error("Your 𝕏 post must mention @QronosAI or include your referral link (qronos.me) to qualify for rewards.");
+        throw new Error("Your 𝕏 post must mention @Qronosme or include your referral link (qronos.me) to qualify for rewards.");
       }
     }
   } catch (err: any) {
-    if (err.message && (err.message.includes("Post not found") || err.message.includes("must mention @QronosAI"))) {
+    if (err.message && (err.message.includes("Post not found") || err.message.includes("must mention @Qronosme") || err.message.includes("must mention @QronosAI"))) {
       throw err;
     }
     console.warn(`[TwitterVerify] oEmbed note for tweetId ${tweetId}:`, err?.message || err);
