@@ -2,7 +2,7 @@ import type { Express, Request, Response } from "express";
 import crypto from "crypto";
 import { sql, eq } from "drizzle-orm";
 import { getDb } from "./db";
-import { users, creditAccounts, creditLedger, processedWebhooks, preProvisionedAccounts } from "../drizzle/schema";
+import { users, creditAccounts, creditLedger, processedWebhooks } from "../drizzle/schema";
 import { applyReferralCommissionForRecharge } from "./db";
 
 export const DEFAULT_WHOP_WEBHOOK_SECRET = "ws_2e999f5dc62963e37d850099325994f0740271c4c87ea4275b635e98f60b43a0";
@@ -360,6 +360,7 @@ export function registerWhopPaymentGateway(app: Express): void {
                   productId,
                   planId,
                   paymentId,
+                  status: "credited",
                 }),
               });
             }
@@ -367,34 +368,30 @@ export function registerWhopPaymentGateway(app: Express): void {
 
           console.log(`[Whop Webhook] Successfully credited +$${amountUsd.toFixed(2)} PAYG balance to user #${user.id} (${user.email}).`);
         } else {
-          // User has not signed up on Qronos with this email yet. Pre-provision credits so they are ready upon registration!
-          await db.transaction(async (tx) => {
-            await tx.insert(preProvisionedAccounts).values({
-              email: customerEmail,
-              introductoryCreditNanos: amountNanos,
-            }).onDuplicateKeyUpdate({
-              set: {
-                introductoryCreditNanos: sql`${preProvisionedAccounts.introductoryCreditNanos} + ${amountNanos}`,
-              },
-            });
+          // Users MUST have an existing registered account in Qronos to receive a top-up.
+          console.warn(`[Whop Webhook] Refusing credit top-up: No registered Qronos account found for email: ${customerEmail}.`);
 
-            if (webhookId) {
-              await tx.insert(processedWebhooks).values({
-                webhookId,
-                provider: "whop",
-                eventType,
-                payload: JSON.stringify({
-                  preProvisionedEmail: customerEmail,
-                  amountUsd,
-                  productId,
-                  planId,
-                  paymentId,
-                }),
-              });
-            }
+          if (webhookId) {
+            await db.insert(processedWebhooks).values({
+              webhookId,
+              provider: "whop",
+              eventType,
+              payload: JSON.stringify({
+                unregisteredEmail: customerEmail,
+                amountUsd,
+                productId,
+                planId,
+                paymentId,
+                status: "account_not_found",
+              }),
+            }).catch(() => {});
+          }
+
+          return res.status(200).json({
+            success: false,
+            error: "account_not_found",
+            message: `User with email ${customerEmail} does not have an account in Qronos. Top-up requires an existing account.`,
           });
-
-          console.log(`[Whop Webhook] Pre-provisioned +$${amountUsd.toFixed(2)} credits for upcoming user registration: ${customerEmail}`);
         }
 
         const elapsedMs = Date.now() - startTime;

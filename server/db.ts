@@ -2189,6 +2189,7 @@ export async function creditAccountFromDodoPay(input: {
 export async function getCreditProfile(userId: number, now = new Date()) {
   const db = await getDb();
   if (!db) return null;
+  await syncUserTwitterRewardExpiry(userId);
   const account = await ensureCreditAccount(userId);
   if (!account) return null;
   const today = utcUsageDate(now);
@@ -10490,16 +10491,16 @@ export const DEFAULT_TWITTER_REWARD_SLOTS: TwitterRewardSlot[] = [
   },
   {
     slotIndex: 1,
-    title: "Massive Token Grants ($10 - 700M)",
-    focus: "Massive token grants starting at $10 for 700M tokens",
-    templateText: "💎 Massive Token Grants on @QronosAI\n\n• $10 gives you 700M tokens\n• $30 scales to 2.5B tokens\n• Run Claude Opus 5.5 & DeepSeek V4\n\n👉 Claim your token grant:\n{{REFERRAL_LINK}}\n#Coding #Dev #LLM",
+    title: "Massive Token Grants ($30 - 2.2B)",
+    focus: "Massive token grants starting at $10 for 600M and $30 for 2.2B tokens",
+    templateText: "💎 Massive Token Grants on @QronosAI\n\n• $10 gives you 600M tokens\n• $30 scales to 2.2B tokens\n• Run Claude Opus 5.5 & DeepSeek V4\n\n👉 Claim your token grant:\n{{REFERRAL_LINK}}\n#Coding #Dev #LLM",
     enabled: true,
   },
   {
     slotIndex: 2,
-    title: "High-Scale Quotas ($30 - 2.5B)",
-    focus: "Scale workloads with 2.5 Billion tokens for $30",
-    templateText: "⚡ High-Scale AI Coding on @QronosAI\n\n• 2.5 Billion tokens for just $30\n• Claude Opus 5.5 & Sonnet at lowest rates\n• Instant UPI QR & Solana Pay recharge\n\n👉 Start building today:\n{{REFERRAL_LINK}}\n#Cursor #Claude #AI",
+    title: "High-Scale Quotas ($30 - 2.2B)",
+    focus: "Scale workloads with 2.2 Billion tokens for $30",
+    templateText: "⚡ High-Scale AI Coding on @QronosAI\n\n• 2.2 Billion tokens for just $30\n• Claude Opus 5.5 & Sonnet at lowest rates\n• Instant UPI QR & Solana Pay recharge\n\n👉 Start building today:\n{{REFERRAL_LINK}}\n#Cursor #Claude #AI",
     enabled: true,
   },
   {
@@ -10534,7 +10535,7 @@ export const DEFAULT_TWITTER_REWARD_SLOTS: TwitterRewardSlot[] = [
     slotIndex: 7,
     title: "Claude Code CLI Support",
     focus: "Full native tool-calling and prompt caching support for Claude Code CLI",
-    templateText: "🤖 Full Support for Claude Code CLI\n\n• Prompt caching pass-through on @QronosAI\n• Claude Opus 5.5 & Sonnet at cheaper rates\n• $10 for 700M or $30 for 2.5B tokens\n\n👉 Start with free tokens:\n{{REFERRAL_LINK}}\n#ClaudeCode #AI #Dev",
+    templateText: "🤖 Full Support for Claude Code CLI\n\n• Prompt caching pass-through on @QronosAI\n• Claude Opus 5.5 & Sonnet at cheaper rates\n• $10 for 600M or $30 for 2.2B tokens\n\n👉 Start with free tokens:\n{{REFERRAL_LINK}}\n#ClaudeCode #AI #Dev",
     enabled: true,
   },
   {
@@ -10548,7 +10549,7 @@ export const DEFAULT_TWITTER_REWARD_SLOTS: TwitterRewardSlot[] = [
     slotIndex: 9,
     title: "Zero Rate-Limit Anxiety",
     focus: "Enterprise concurrency and pooling without per-minute throttling",
-    templateText: "🚀 Zero Rate-Limit Anxiety on @QronosAI\n\n• Pooled enterprise Claude Opus 5.5 keys\n• Massive concurrency without tier gating\n• Bulk token packages: $30 for 2.5B tokens\n\n👉 Scale your AI apps:\n{{REFERRAL_LINK}}\n#AI #Scale #Developers",
+    templateText: "🚀 Zero Rate-Limit Anxiety on @QronosAI\n\n• Pooled enterprise Claude Opus 5.5 keys\n• Massive concurrency without tier gating\n• Bulk token packages: $30 for 2.2B tokens\n\n👉 Scale your AI apps:\n{{REFERRAL_LINK}}\n#AI #Scale #Developers",
     enabled: true,
   },
   {
@@ -10766,6 +10767,75 @@ export async function syncUserTwitterRewardExpiry(userId: number): Promise<void>
   } catch (err) {
     console.error("[TwitterReward] Error syncing reward expiry:", err);
   }
+}
+
+/**
+ * Global background sweep: automatically expires all stale 𝕏 rewards past the 12-hour mark
+ * across all accounts, subtracting any unused or partially remaining balance.
+ */
+export async function sweepAllExpiredTwitterRewards(): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+
+  try {
+    const now = new Date();
+    const expiredActive = await db
+      .select()
+      .from(twitterShareRewards)
+      .where(
+        and(
+          eq(twitterShareRewards.status, "active"),
+          lte(twitterShareRewards.expiresAt, now)
+        )
+      );
+
+    if (expiredActive.length === 0) return;
+
+    for (const reward of expiredActive) {
+      await db
+        .update(twitterShareRewards)
+        .set({ status: "expired", expiredAt: now })
+        .where(eq(twitterShareRewards.id, reward.id));
+
+      if (reward.grantedTokens > 0) {
+        await db
+          .update(creditAccounts)
+          .set({
+            codingPlanTokens: sql`GREATEST(0, ${creditAccounts.codingPlanTokens} - ${reward.grantedTokens})`,
+          })
+          .where(eq(creditAccounts.userId, reward.userId));
+      }
+
+      if (reward.grantedPaygNanos > 0) {
+        await db
+          .update(creditAccounts)
+          .set({
+            paygBalanceNanos: sql`GREATEST(0, ${creditAccounts.paygBalanceNanos} - ${reward.grantedPaygNanos})`,
+          })
+          .where(eq(creditAccounts.userId, reward.userId));
+      }
+
+      await db.insert(creditLedger).values({
+        userId: reward.userId,
+        kind: "usage_debit",
+        amountNanos: reward.grantedPaygNanos,
+        balanceAfterNanos: 0,
+        referenceId: `twitter_reward_expired:${reward.id}`,
+        note: `Twitter 12-hour reward grant expired automatically (-${Math.round(reward.grantedTokens / 1_000_000)}M tokens).`,
+      }).catch(() => {});
+    }
+
+    console.log(`[TwitterReward] Swept and expired ${expiredActive.length} stale 12-hour 𝕏 reward grants.`);
+  } catch (err) {
+    console.error("[TwitterReward] Error sweeping expired rewards:", err);
+  }
+}
+
+// Background sweep running every 60 seconds
+if (typeof setInterval !== "undefined") {
+  setInterval(() => {
+    sweepAllExpiredTwitterRewards().catch(() => {});
+  }, 60_000);
 }
 
 export async function getUserTwitterRewardStatus(userId: number) {

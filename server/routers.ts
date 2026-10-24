@@ -1300,14 +1300,14 @@ Theme/Angle: "${focus}"
 
 CORE VALUE FOCUS:
 • Top-tier frontier models (Claude Opus 5.5, Sonnet 4.6, DeepSeek V4, GPT-6 Astra) at dramatically cheaper prices!
-• Massive token grants: $10 for 700M tokens or $30 for 2.5B tokens!
+• Massive token grants: $10 for 600M tokens or $30 for 2.2B tokens!
 • Instant payments via Domestic UPI QR & Solana Pay (USDC), drop-in for Cursor, Cline & Claude Code.
 
 EXACT FORMATTING STRUCTURE (Follow this layout line-by-line):
 [Emoji] [Headline] on @QronosAI
 
 • [Benefit 1: Cheaper top-tier models like Claude Opus 5.5]
-• [Benefit 2: Massive tokens: 700M for $10 or 2.5B for $30]
+• [Benefit 2: Massive tokens: 600M for $10 or 2.2B for $30]
 • [Benefit 3: Instant UPI/Solana or Cursor/Cline drop-in]
 
 👉 [Call to action]:
@@ -1367,14 +1367,14 @@ Theme/Angle: "${slot.focus}"
 
 CORE VALUE FOCUS:
 • Top-tier frontier models (Claude Opus 5.5, Sonnet 4.6, DeepSeek V4) at dramatically cheaper prices!
-• Massive token grants: $10 for 700M tokens or $30 for 2.5B tokens!
+• Massive token grants: $10 for 600M tokens or $30 for 2.2B tokens!
 • Instant Domestic UPI QR & Solana Pay (USDC), drop-in for Cursor, Cline & Claude Code.
 
 EXACT FORMATTING STRUCTURE (Follow this layout line-by-line):
 [Emoji] [Headline] on @QronosAI
 
 • [Benefit 1: Cheaper top-tier models like Claude Opus 5.5]
-• [Benefit 2: Massive tokens: 700M for $10 or 2.5B for $30]
+• [Benefit 2: Massive tokens: 600M for $10 or 2.2B for $30]
 • [Benefit 3: Instant UPI/Solana or Cursor/Cline drop-in]
 
 👉 [Call to action]:
