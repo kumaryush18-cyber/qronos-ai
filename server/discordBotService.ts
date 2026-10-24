@@ -46,7 +46,10 @@ async function callQronosLLM(
   maxTokens = 65536
 ): Promise<string | null> {
   try {
-    const baseUrl = (config.apiBaseUrl || "https://api.qronos.me/v1").replace(/\/+$/, "");
+    let baseUrl = (config.apiBaseUrl || "https://api.qronos.me/v1").trim().replace(/\/+$/, "");
+    if (!baseUrl.endsWith("/v1")) {
+      baseUrl = `${baseUrl}/v1`;
+    }
     const url = `${baseUrl}/chat/completions`;
 
     const res = await fetch(url, {
