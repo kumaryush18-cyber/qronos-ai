@@ -1,51 +1,72 @@
-import { QronosGlyph } from "./QronosGlyph";
+import { useEffect } from "react";
 
-export function RouteLoader() {
+const LOADING_ASSET_URL =
+  "https://res.cloudinary.com/dhrh8heb5/video/upload/ar_1.0,c_crop,g_center,w_500,fps_15,e_accelerate:40/gemini_generated_video_d86dda13_ey5bf3.gif";
+
+export interface RouteLoaderProps {
+  onEnded?: () => void;
+}
+
+export function RouteLoader({ onEnded }: RouteLoaderProps) {
+  useEffect(() => {
+    if (onEnded) {
+      // With e_accelerate:40 (+40% faster), 1 full cycle finishes in exactly 7.14 seconds
+      const timer = setTimeout(() => {
+        onEnded();
+      }, 7140);
+      return () => clearTimeout(timer);
+    }
+  }, [onEnded]);
+
   return (
     <div
-      className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black text-white selection:bg-white/20 select-none overflow-hidden"
+      className="fixed inset-0 z-[999999] flex items-center justify-center bg-[#010101] overflow-hidden select-none cursor-default"
+      style={{ backgroundColor: "#010101" }}
       role="status"
-      aria-live="polite"
       aria-label="Loading Qronos AI"
+      onClick={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+      }}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+      }}
+      onPointerDown={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+      }}
+      onTouchStart={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+      }}
+      onKeyDown={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+      }}
     >
-      {/* Background ambient radial glow */}
-      <div className="absolute h-96 w-96 rounded-full bg-white/[0.03] blur-3xl pointer-events-none" />
-
-      <div className="relative z-10 flex flex-col items-center text-center p-8 max-w-sm">
-        {/* Orbiting Star Light Frame around Qronos Glyph */}
-        <div className="relative flex items-center justify-center p-[2px] rounded-2xl overflow-hidden mb-5">
-          <div
-            aria-hidden="true"
-            className="absolute inset-[-50%] pointer-events-none animate-spin"
-            style={{
-              animationDuration: "2.8s",
-              animationTimingFunction: "linear",
-              background:
-                "conic-gradient(from 0deg, transparent 0deg, transparent 220deg, rgba(255,255,255,0.4) 280deg, rgba(255,255,255,0.95) 360deg)",
-            }}
+      {/* Curved Metallic Silver Border Big Icon Container */}
+      <div
+        className="relative flex items-center justify-center w-24 h-24 sm:w-28 sm:h-28 md:w-32 md:h-32 aspect-square p-[2px] rounded-[24px] overflow-hidden"
+        style={{
+          background:
+            "linear-gradient(135deg, #f8fafc 0%, #94a3b8 20%, #ffffff 40%, #475569 65%, #cbd5e1 85%, #64748b 100%)",
+          boxShadow:
+            "0 0 25px rgba(226, 232, 240, 0.15), 0 10px 25px rgba(0, 0, 0, 0.7), inset 0 1px 1.5px rgba(255, 255, 255, 0.7), inset 0 -1px 1.5px rgba(0, 0, 0, 0.8)",
+        }}
+      >
+        {/* Inner black card with curved edges clipping the media */}
+        <div
+          className="w-full h-full rounded-[22px] overflow-hidden flex items-center justify-center"
+          style={{ backgroundColor: "#010101" }}
+        >
+          <img
+            src={LOADING_ASSET_URL}
+            alt="Qronos AI Loading"
+            draggable={false}
+            className="w-full h-full object-contain pointer-events-none select-none p-1.5"
+            onError={() => onEnded?.()}
           />
-          <div className="relative z-10 p-3 bg-[#0c0d12] rounded-[14px] border border-white/10 shadow-2xl">
-            <QronosGlyph size={48} className="rounded-lg overflow-hidden shadow-lg" />
-          </div>
-        </div>
-
-        {/* Brand and Status Copy */}
-        <div className="space-y-1.5">
-          <h2 className="text-base font-extrabold tracking-tight text-white font-mono flex items-center justify-center gap-1.5">
-            <span>Qronos</span>
-            <span className="text-zinc-500">AI</span>
-          </h2>
-          <div className="flex items-center justify-center gap-2">
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-            <span className="text-[11px] text-zinc-400 font-mono tracking-wider uppercase font-semibold">
-              Connecting to Routing Mesh…
-            </span>
-          </div>
-        </div>
-
-        {/* Minimal Progress Bar with Shimmer */}
-        <div className="w-36 h-[2px] bg-white/10 rounded-full mt-5 overflow-hidden relative">
-          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white to-transparent animate-[shimmer_1.4s_infinite]" />
         </div>
       </div>
     </div>

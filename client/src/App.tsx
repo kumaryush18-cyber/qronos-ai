@@ -1,4 +1,4 @@
-import { Suspense, lazy } from "react";
+import { Suspense, lazy, useState, useEffect } from "react";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Route, Switch, Redirect } from "wouter";
@@ -220,6 +220,16 @@ function Router() {
 }
 
 function App() {
+  const [introFinished, setIntroFinished] = useState(false);
+
+  useEffect(() => {
+    // Safety fallback: ensure loading screen releases after 7.8s (GIF duration at +40% speed is 7.14s)
+    const timer = setTimeout(() => {
+      setIntroFinished(true);
+    }, 7800);
+    return () => clearTimeout(timer);
+  }, []);
+
   return (
     <ErrorBoundary>
       <ThemeProvider
@@ -227,6 +237,9 @@ function App() {
       >
         <TooltipProvider>
           <Toaster />
+          {!introFinished && (
+            <RouteLoader onEnded={() => setIntroFinished(true)} />
+          )}
           <Router />
           <SupportChatWidget />
         </TooltipProvider>
