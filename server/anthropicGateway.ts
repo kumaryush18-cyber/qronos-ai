@@ -870,15 +870,6 @@ async function handleNativeTokenRouterMessagesRequest(req: Request, res: Respons
       `Access denied: This API key is configured for Tier 1 (Pay-As-You-Go) and cannot access '${model}'. This model is not enabled for PAYG access.`
     );
   }
-  if (keyGroup === "bundle" && !modelAccess.isBundle) {
-    return respondError(
-      res,
-      requestId,
-      403,
-      "permission_error",
-      `Access denied: The model '${model}' is not enabled for Tier 2 (Credit Bundles) access. Please generate and use a Tier 1 (Pay-As-You-Go) or Token Plan API key.`
-    );
-  }
 
   const userAgent = (req.headers["user-agent"] ?? "") as string;
   const isClaudeCli = isClaudeCodeRequest(req);
@@ -1198,7 +1189,7 @@ async function handleNativeTokenRouterMessagesRequest(req: Request, res: Respons
 
 export function registerAnthropicMessagesGateway(app: Express) {
   app.post("/v1/messages", async (req: Request, res: Response) => {
-    const requestId = `tf_msg_${randomUUID().replaceAll("-", "")}`;
+    const requestId = `qronos_msg_${randomUUID().replaceAll("-", "")}`;
     const secret = anthropicApiKey(req);
     if (!secret) return respondError(res, requestId, 401, "authentication_error", "Send a Qronos AI key using the x-api-key or Bearer authorization header.");
     const key = await findActiveApiKey(secret);
@@ -1265,16 +1256,6 @@ export function registerAnthropicMessagesGateway(app: Express) {
         403,
         "permission_error",
         `Access denied: This API key is configured for Tier 1 (Pay-As-You-Go) and cannot access '${model}'. This model is not enabled for PAYG access.`
-      );
-    }
-
-    if (keyGroup === "bundle" && !modelAccess.isBundle) {
-      return respondError(
-        res,
-        requestId,
-        403,
-        "permission_error",
-        `Access denied: The model '${model}' is not enabled for Tier 2 (Credit Bundles) access. Please generate and use a Tier 1 (Pay-As-You-Go) or Token Plan API key.`
       );
     }
 
@@ -1595,6 +1576,7 @@ export function registerAnthropicMessagesGateway(app: Express) {
     res.setHeader("content-type", "text/event-stream; charset=utf-8");
     res.setHeader("cache-control", "no-cache, no-transform");
     res.setHeader("connection", "keep-alive");
+    res.setHeader("X-Accel-Buffering", "no");
     res.flushHeaders();
 
     const initialReportedInput = scaledReportedTokens

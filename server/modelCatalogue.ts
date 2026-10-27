@@ -337,12 +337,12 @@ export function normalizeModelIdentifier(raw: string | unknown): string {
   if (modelById.has(dashed)) return dashed;
 
   // Claude Sonnet 5.5
-  if (dashed === "claude-sonnet-5.5" || dashed === "sonnet-5.5" || dashed === "claude-5.5-sonnet" || dashed === "claude-sonnet" || dashed === "sonnet" || dashed.startsWith("claude-3-5-sonnet") || dashed.startsWith("claude-3-7-sonnet") || dashed === "anthropic/claude-sonnet-5.5") {
+  if (dashed === "claude-sonnet-5.5" || dashed === "sonnet-5.5" || dashed === "claude-5.5-sonnet" || dashed === "claude-sonnet" || dashed === "sonnet" || dashed.startsWith("claude-3-5-sonnet") || dashed.startsWith("claude-3.5-sonnet") || dashed.startsWith("claude-3-7-sonnet") || dashed.startsWith("claude-3.7-sonnet") || dashed === "anthropic/claude-sonnet-5.5") {
     if (modelById.has("claude-sonnet-5.5")) return "claude-sonnet-5.5";
   }
 
   // Claude Haiku 5.5
-  if (dashed === "claude-haiku-5.5" || dashed === "haiku-5.5" || dashed === "claude-5.5-haiku" || dashed === "claude-haiku" || dashed === "haiku" || dashed.startsWith("claude-3-5-haiku") || dashed === "anthropic/claude-haiku-5.5") {
+  if (dashed === "claude-haiku-5.5" || dashed === "haiku-5.5" || dashed === "claude-5.5-haiku" || dashed === "claude-haiku" || dashed === "haiku" || dashed.startsWith("claude-3-5-haiku") || dashed.startsWith("claude-3.5-haiku") || dashed === "anthropic/claude-haiku-5.5") {
     if (modelById.has("claude-haiku-5.5")) return "claude-haiku-5.5";
   }
 
@@ -371,11 +371,6 @@ export function normalizeModelIdentifier(raw: string | unknown): string {
     if (modelById.has("claude-opus-5.5")) return "claude-opus-5.5";
   }
 
-  // GPT-6 Sol aliases
-  if (dashed === "gpt-6-sol" || dashed === "gpt6-sol" || dashed === "gpt-6sol" || dashed === "sol" || dashed === "gpt-sol" || dashed === "openai/gpt-6-sol") {
-    if (modelById.has("gpt-6-sol")) return "gpt-6-sol";
-  }
-
   // Claude Opus aliases
   if (dashed.startsWith("claude-3-opus") || dashed === "claude-opus" || dashed === "opus") {
     if (modelById.has("claude-opus-5")) return "claude-opus-5";
@@ -389,6 +384,11 @@ export function normalizeModelIdentifier(raw: string | unknown): string {
   // GPT-6 Astra aliases
   if (dashed === "gpt-6" || dashed === "gpt6" || dashed === "gpt-6-astra" || dashed === "astra" || dashed === "openai/gpt-6-astra") {
     if (modelById.has("gpt-6-astra")) return "gpt-6-astra";
+  }
+
+  // GPT-6 Sol aliases
+  if (dashed === "gpt-6-sol" || dashed === "gpt6-sol" || dashed === "gpt-6sol" || dashed === "sol" || dashed === "gpt-sol" || dashed === "openai/gpt-6-sol") {
+    if (modelById.has("gpt-6-sol")) return "gpt-6-sol";
   }
 
   // DeepSeek aliases

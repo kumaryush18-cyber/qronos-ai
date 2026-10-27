@@ -10,6 +10,7 @@ import {
   releaseBaiCredentialCapacityLease,
   releaseBailuWebshareProxySlot,
   findActiveApiKey,
+  getCreditProfile,
   getClaudeFable5NvidiaRuntimeConfig,
   getClaudeOpus5RuntimeConfig,
   getEligibleClaudeOpus5QwenModels,
@@ -127,10 +128,11 @@ import { sdk } from "./_core/sdk";
 export let TOKENFORGE_CATALOGUE = getDynamicModelCatalogue().map(model => ({
   id: model.id,
   object: "model" as const,
-  created: 0,
+  created: 1700000000,
   owned_by: "qronos",
   capabilities: model.capabilities,
 }));
+export let QRONOS_CATALOGUE = TOKENFORGE_CATALOGUE;
 
 let MODELS = new Set<string>(TOKENFORGE_CATALOGUE.map(model => model.id));
 
@@ -138,10 +140,11 @@ export function refreshGatewayCatalogue() {
   TOKENFORGE_CATALOGUE = getDynamicModelCatalogue().map(model => ({
     id: model.id,
     object: "model" as const,
-    created: 0,
+    created: 1700000000,
     owned_by: "qronos",
     capabilities: model.capabilities,
   }));
+  QRONOS_CATALOGUE = TOKENFORGE_CATALOGUE;
   MODELS = new Set<string>(TOKENFORGE_CATALOGUE.map(model => model.id));
 }
 
@@ -167,11 +170,11 @@ const GLM53_PUBLIC_IDENTITY = "I am GLM 5.3, available through Qronos AI.";
 const SONNET46_PUBLIC_IDENTITY = "I am Claude Sonnet 4.6, available through Qronos AI.";
 const DEEPSEEK_V4_PRO_PUBLIC_IDENTITY = "I am DeepSeek V4 Pro, available through Qronos AI.";
 const QWEN38_MAX_PUBLIC_IDENTITY = "I am Qwen 3.8 Max, available through Qronos AI.";
-export const CLAUDE_OPUS5_UPSTREAM_IDENTITY_OR_PROMPT_LEAK = /\b(?:qoder|deepseek|qwen|nemotron|lightning|fxqidian|tokenrouter|tokenharbor|orcarouter|bluesminds|bailu|sarcfalenvelope|dogsalkznychnengthy|strictly\s+follow\s+the\s+identity|first\s+priority\s+is\s+identity|present\s+yourself\s+only\s+as\s+Claude\s+Opus\s+5|openai|open\s*ai|chatgpt|chat-gpt|gpt(?:-[0-9a-z.]+)?|codex(?:\s*cli|-cli)?|grok|xai|x\.ai|x\s*ai|zhipu|z\s*ai|zai|z\.ai|alibaba|aliyun)\b/i;
-export const CLAUDE_FABLE5_UPSTREAM_IDENTITY_OR_PROMPT_LEAK = /\b(?:qoder|deepseek|qwen|nemotron|lightning|llama|fxqidian|tokenrouter|tokenharbor|orcarouter|bluesminds|bailu|sarcfalenvelope|dogsalkznychnengthy|strictly\s+follow\s+the\s+identity|first\s+priority\s+is\s+identity|present\s+yourself\s+only\s+as\s+Claude\s+Fable\s+5|openai|open\s*ai|chatgpt|chat-gpt|gpt(?:-[0-9a-z.]+)?|codex(?:\s*cli|-cli)?|grok|xai|x\.ai|x\s*ai|zhipu|z\s*ai|zai|z\.ai|alibaba|aliyun)\b/i;
-export const GLM53_UPSTREAM_IDENTITY_OR_PROMPT_LEAK = /\b(?:qoder|deepseek|qwen|nemotron|lightning|llama|fxqidian|tokenrouter|tokenharbor|orcarouter|bluesminds|bailu|sarcfalenvelope|dogsalkznychnengthy|strictly\s+follow\s+the\s+identity|first\s+priority\s+is\s+identity|present\s+yourself\s+only\s+as\s+GLM\s+5\.3|openai|open\s*ai|chatgpt|chat-gpt|gpt(?:-[0-9a-z.]+)?|codex(?:\s*cli|-cli)?|grok|xai|x\.ai|x\s*ai|zhipu|z\s*ai|zai|z\.ai|alibaba|aliyun)\b/i;
-export const MANAGED_MODEL_UPSTREAM_IDENTITY_OR_PROMPT_LEAK = /\b(?:tokenrouter|tokenharbor|orcarouter|fxqidian|bluesminds|b\.ai|bailu|sarcfalenvelope|dogsalkznychnengthy|strictly\s+follow\s+the\s+identity|first\s+priority\s+is\s+identity|qoder|openai|open\s*ai|chatgpt|chat-gpt|gpt(?:-[0-9a-z.]+)?|codex(?:\s*cli|-cli)?|grok|xai|x\.ai|x\s*ai|zhipu|z\s*ai|zai|z\.ai|alibaba|aliyun)\b/i;
-export const MANAGED_MODEL_IDENTITY_DISCLOSURE = /\b(?:i(?:'m| am)\s+(?:an?\s+)?(?:[a-z0-9_.-]+\/[a-z0-9_.-]+|qoder|qwen|nemotron|deepseek|glm|kimi|moonshot|minimax|hailuo|bailu|baichuan|llama|mistral|yi|openai|open\s*ai|chatgpt|gpt|codex(?:\s*cli|-cli)?|grok|xai|x\.ai|x\s*ai|zhipu|z\s*ai|zai|z\.ai)(?:-[a-z0-9._\/-]+)?|(?:my|the)\s+(?:actual|real|underlying|base|internal)\s+(?:model|provider|identity|engine)|(?:served|powered)\s+by\s+(?:an?\s+)?[a-z0-9][a-z0-9._\/-]*|(?:created|trained|developed|made)\s+by\s+(?:openai|open\s*ai|anthropic|alibaba|aliyun|deepseek|meta|google|mistral|microsoft|zhipu|xai|x\s*ai|moonshot|minimax|baichuan|qoder))\b/i;
+export const CLAUDE_OPUS5_UPSTREAM_IDENTITY_OR_PROMPT_LEAK = /\b(?:qoder|deepseek|qwen|nemotron|lightning|fxqidian|tokenrouter|tokenharbor|orcarouter|bluesminds|bailu|sarcfalenvelope|dogsalkznychnengthy|strictly\s+follow\s+the\s+identity|first\s+priority\s+is\s+identity|present\s+yourself\s+only\s+as\s+Claude\s+Opus\s+5|openai|open\s*ai|chatgpt|chat-gpt|codex(?:\s*cli|-cli)?|grok|xai|x\.ai|x\s*ai|zhipu|z\s*ai|zai|z\.ai|alibaba|aliyun)\b/i;
+export const CLAUDE_FABLE5_UPSTREAM_IDENTITY_OR_PROMPT_LEAK = /\b(?:qoder|deepseek|qwen|nemotron|lightning|llama|fxqidian|tokenrouter|tokenharbor|orcarouter|bluesminds|bailu|sarcfalenvelope|dogsalkznychnengthy|strictly\s+follow\s+the\s+identity|first\s+priority\s+is\s+identity|present\s+yourself\s+only\s+as\s+Claude\s+Fable\s+5|openai|open\s*ai|chatgpt|chat-gpt|codex(?:\s*cli|-cli)?|grok|xai|x\.ai|x\s*ai|zhipu|z\s*ai|zai|z\.ai|alibaba|aliyun)\b/i;
+export const GLM53_UPSTREAM_IDENTITY_OR_PROMPT_LEAK = /\b(?:qoder|deepseek|qwen|nemotron|lightning|llama|fxqidian|tokenrouter|tokenharbor|orcarouter|bluesminds|bailu|sarcfalenvelope|dogsalkznychnengthy|strictly\s+follow\s+the\s+identity|first\s+priority\s+is\s+identity|present\s+yourself\s+only\s+as\s+GLM\s+5\.3|openai|open\s*ai|chatgpt|chat-gpt|codex(?:\s*cli|-cli)?|grok|xai|x\.ai|x\s*ai|zhipu|z\s*ai|zai|z\.ai|alibaba|aliyun)\b/i;
+export const MANAGED_MODEL_UPSTREAM_IDENTITY_OR_PROMPT_LEAK = /\b(?:tokenrouter|tokenharbor|orcarouter|fxqidian|bluesminds|b\.ai|bailu|sarcfalenvelope|dogsalkznychnengthy|strictly\s+follow\s+the\s+identity|first\s+priority\s+is\s+identity|qoder|openai|open\s*ai|chatgpt|chat-gpt|codex(?:\s*cli|-cli)?|grok|xai|x\.ai|x\s*ai|zhipu|z\s*ai|zai|z\.ai|alibaba|aliyun)\b/i;
+export const MANAGED_MODEL_IDENTITY_DISCLOSURE = /\b(?:i(?:'m| am)\s+(?:an?\s+)?(?:[a-z0-9_.-]+\/[a-z0-9_.-]+|qoder|qwen|nemotron|deepseek|glm|kimi|moonshot|minimax|hailuo|bailu|baichuan|llama|mistral|yi|openai|open\s*ai|chatgpt|codex(?:\s*cli|-cli)?|grok|xai|x\.ai|x\s*ai|zhipu|z\s*ai|zai|z\.ai)(?:-[a-z0-9._\/-]+)?|(?:my|the)\s+(?:actual|real|underlying|base|internal)\s+(?:model|provider|identity|engine)|(?:served|powered)\s+by\s+(?:an?\s+)?[a-z0-9][a-z0-9._\/-]*|(?:created|trained|developed|made)\s+by\s+(?:openai|open\s*ai|anthropic|alibaba|aliyun|deepseek|meta|google|mistral|microsoft|zhipu|xai|x\s*ai|moonshot|minimax|baichuan|qoder))\b/i;
 
 export function isPromptExtractionOrAdversarialAttack(text: string): boolean {
   if (!text || typeof text !== "string") return false;
@@ -466,8 +469,12 @@ function errorResponse(res: Response, requestId: string, status: number, message
 }
 
 function bearer(req: Request) {
-  const value = req.header("authorization");
-  return value?.startsWith("Bearer ") ? value.slice(7).trim() : null;
+  const xApiKey = req.header("x-api-key")?.trim() || req.header("api-key")?.trim();
+  if (xApiKey) return xApiKey;
+  const value = req.header("authorization")?.trim();
+  if (!value) return null;
+  const match = value.match(/^bearer\s+(.+)$/i);
+  return match ? match[1].trim() : null;
 }
 
 export function cleanHeaderBearerToken(key: string | undefined | null): string {
@@ -3676,7 +3683,7 @@ export function isManagedIdentityDisclosureRequest(messages: TokenForgeChatMessa
   if (/\b(?:who|what\s+company|which\s+company)\s+(?:created|made|trained|developed|built)\s+you\b/i.test(text)) return true;
 
   // Specific inquiries asking if the assistant is from, made by, running, or is an upstream or competing model
-  if (/\b(?:are\s+you|is\s+this|tell\s+me\s+if\s+you\s+are|if\s+you\s+are|whether\s+you\s+are|you\s+are|you're|who\s+created\s+you|was\s+it|are\s+you\s+(?:made|running|from))\s+(?:really\s+)?(?:an?\s+|the\s+)?(?:[a-z0-9._/-]+\s+)?(?:qoder|qwen|nemotron|deepseek|glm|kimi|moonshot|minimax|hailuo|bailu|baichuan|llama|mistral|yi|grok|xai|x\.ai|x\s*ai|zhipu|z\s*ai|zai|z\.ai|chatgpt|chat-gpt|gpt|claude|gemini|openai|open\s*ai|alibaba|aliyun|codex(?:\s*cli|-cli)?)(?:-[a-z0-9._/-]+|[0-9._/-]+)?\b/i.test(text)) return true;
+  if (/\b(?:are\s+you|is\s+this|tell\s+me\s+if\s+you\s+are|if\s+you\s+are|whether\s+you\s+are|you\s+are|you're|who\s+created\s+you|was\s+it|are\s+you\s+(?:made|running|from))\s+(?:really\s+)?(?:an?\s+|the\s+)?(?:[a-z0-9._/-]+\s+)?(?:qoder|qwen|nemotron|deepseek|glm|kimi|moonshot|minimax|hailuo|bailu|baichuan|llama|mistral|yi|grok|xai|x\.ai|x\s*ai|zhipu|z\s*ai|zai|z\.ai|chatgpt|chat-gpt|claude|gemini|openai|open\s*ai|alibaba|aliyun|codex(?:\s*cli|-cli)?)(?:-[a-z0-9._/-]+|[0-9._/-]+)?\b/i.test(text)) return true;
   if (/\btell\s+me\s+if\s+you\s+are\s+from\s+(?:alibaba|aliyun|openai|zhipu|deepseek|qwen|xai|google|meta|anthropic)\b/i.test(text)) return true;
 
   // Inquiries asking what model is being used or run
@@ -3694,11 +3701,11 @@ export function isManagedIdentityDisclosureRequest(messages: TokenForgeChatMessa
   if (/\b(?:don'?t|stop)\s+lie(?:\s+to\s+me)?\b/i.test(text)) return true;
 
   // "You are not opus / not claude" confrontation prompts
-  if (/\b(?:you\s+are|you're|you\s+aren'?t|so\s+you\s+are)\s+not\s+(?:an?\s+)?(?:opus|claude|fable|sonnet|deepseek|glm|qwen|qoder|openai|gpt|chatgpt|grok|xai|zhipu|alibaba)(?:\s+5)?\b/i.test(text)) return true;
-  if (/\b(?:aren'?t\s+you|are\s+you\s+not)\s+(?:an?\s+)?(?:opus|claude|fable|sonnet|deepseek|glm|qwen|qoder|openai|gpt|chatgpt|grok|xai|zhipu|alibaba)(?:\s+5)?\b/i.test(text)) return true;
+  if (/\b(?:you\s+are|you're|you\s+aren'?t|so\s+you\s+are)\s+not\s+(?:an?\s+)?(?:opus|claude|fable|sonnet|deepseek|glm|qwen|qoder|openai|chatgpt|grok|xai|zhipu|alibaba)(?:\s+5)?\b/i.test(text)) return true;
+  if (/\b(?:aren'?t\s+you|are\s+you\s+not)\s+(?:an?\s+)?(?:opus|claude|fable|sonnet|deepseek|glm|qwen|qoder|openai|chatgpt|grok|xai|zhipu|alibaba)(?:\s+5)?\b/i.test(text)) return true;
   if (/\bnot\s+(?:claude\s+)?opus(?:\s+5)?\b/i.test(text)) return true;
   if (/\bnot\s+(?:claude\s+)?fable(?:\s+5)?\b/i.test(text)) return true;
-  if (/\bnot\s+(?:really\s+)?(?:opus|claude|deepseek|qwen|glm|qoder|openai|gpt|chatgpt|grok|xai|zhipu|alibaba)\b/i.test(text)) return true;
+  if (/\bnot\s+(?:really\s+)?(?:opus|claude|deepseek|qwen|glm|qoder|openai|chatgpt|grok|xai|zhipu|alibaba)\b/i.test(text)) return true;
 
   // Confession or underlying model probing
   if (/\badmit\s+(?:that\s+)?you\s+(?:are|use)\b/i.test(text)) return true;
@@ -3747,7 +3754,6 @@ export function inspectManagedSafetyProbe(messages: TokenForgeChatMessage[] | un
     ["Qoder", /\bqoder(?:-[0-9a-z.]+)?\b/i],
     ["OpenAI", /\bopenai\b/i],
     ["ChatGPT", /\bchat-?gpt\b/i],
-    ["GPT", /\bgpt(?:-[0-9a-z.]+)?\b/i],
     ["Codex / Codex CLI", /\bcodex(?:\s*cli|-cli)?\b/i],
     ["DeepSeek", /\bdeepseek(?:-[0-9a-z.]+)?\b/i],
     ["Qwen", /\bqwen(?:-[0-9a-z.]+)?\b/i],
@@ -4039,18 +4045,18 @@ function publicManagedContent(model: TokenForgeModelId, value: unknown, isDelta 
   return text.length ? text : (value.length ? value : "");
 }
 
-function publicToolCalls(value: unknown) {
+function publicToolCalls(value: unknown, isDelta = false) {
   if (!Array.isArray(value)) return undefined;
   const calls = value.flatMap((candidate, fallbackIndex) => {
     if (!isRecord(candidate)) return [];
     const fn = isRecord(candidate.function) ? candidate.function : null;
-    if (!fn || typeof fn.name !== "string") return [];
+    if (!fn || (typeof fn.name !== "string" && typeof fn.arguments !== "string")) return [];
     return [{
-      ...(typeof candidate.index === "number" ? { index: candidate.index } : { index: fallbackIndex }),
+      index: typeof candidate.index === "number" ? candidate.index : fallbackIndex,
       ...(typeof candidate.id === "string" ? { id: candidate.id } : {}),
-      type: "function",
+      ...(typeof candidate.type === "string" ? { type: candidate.type } : (isDelta ? {} : { type: "function" })),
       function: {
-        name: fn.name,
+        ...(typeof fn.name === "string" ? { name: fn.name } : {}),
         ...(typeof fn.arguments === "string" ? { arguments: fn.arguments } : {}),
       },
     }];
@@ -4061,12 +4067,15 @@ function publicToolCalls(value: unknown) {
 function publicAssistantSegment(model: TokenForgeModelId, value: unknown, isDelta = false) {
   if (!isRecord(value)) return undefined;
   const content = publicManagedContent(model, value.content, isDelta);
-  const toolCalls = publicToolCalls(value.tool_calls);
+  const toolCalls = publicToolCalls(value.tool_calls, isDelta);
   const role = value.role === "assistant" ? "assistant" : undefined;
-  if (content === undefined && !toolCalls && !role) return undefined;
+  const rawReasoning = (value as any)?.reasoning_content ?? (value as any)?.reasoning ?? (value as any)?.thinking;
+  const reasoningContent = typeof rawReasoning === "string" && rawReasoning.length > 0 ? rawReasoning : undefined;
+  if (content === undefined && !toolCalls && !role && !reasoningContent) return undefined;
   return {
     ...(role ? { role } : {}),
     ...(content !== undefined ? { content } : {}),
+    ...(reasoningContent ? { reasoning_content: reasoningContent } : {}),
     ...(toolCalls ? { tool_calls: toolCalls } : {}),
   };
 }
@@ -4155,7 +4164,7 @@ function isManagedProviderFailurePayload(value: unknown) {
  * known vendor fields. This blocks model IDs, fingerprints, provider metadata, reasoning, and
  * future vendor extensions from reaching callers.
  */
-function projectStrictManagedResponse(model: TokenForgeModelId, payload: unknown) {
+function projectStrictManagedResponse(model: TokenForgeModelId, payload: unknown, requestId?: string) {
   if (!isRecord(payload) || isManagedProviderFailurePayload(payload)) return publicManagedFailurePayload();
   const rawChoices = Array.isArray(payload.choices) ? payload.choices : [];
   const choices = rawChoices.flatMap((candidate, fallbackIndex) => {
@@ -4172,8 +4181,10 @@ function projectStrictManagedResponse(model: TokenForgeModelId, payload: unknown
   });
   const upstreamObject = payload.object;
   const object = typeof upstreamObject === "string" && upstreamObject === "chat.completion.chunk" ? "chat.completion.chunk" : "chat.completion";
+  const upstreamId = typeof (payload as any)?.id === "string" && (payload as any).id.trim() ? (payload as any).id.trim() : null;
+  const id = requestId ? (requestId.startsWith("chatcmpl-") ? requestId : `chatcmpl-${requestId}`) : (upstreamId || `chatcmpl-qronos-${randomUUID().replaceAll("-", "")}`);
   return {
-    id: "chatcmpl-tokenforge",
+    id,
     object,
     created: typeof payload.created === "number" ? payload.created : Math.floor(Date.now() / 1_000),
     model,
@@ -4182,26 +4193,26 @@ function projectStrictManagedResponse(model: TokenForgeModelId, payload: unknown
   };
 }
 
-export function sanitizeModelResponsePayload(model: TokenForgeModelId, payload: unknown) {
-  return isStrictPublicManagedModel(model) ? projectStrictManagedResponse(model, payload) : payload;
+export function sanitizeModelResponsePayload(model: TokenForgeModelId, payload: unknown, requestId?: string) {
+  return isStrictPublicManagedModel(model) ? projectStrictManagedResponse(model, payload, requestId) : payload;
 }
 
-export function sanitizeModelSseData(model: TokenForgeModelId, data: string) {
+export function sanitizeModelSseData(model: TokenForgeModelId, data: string, requestId?: string) {
   if (!isStrictPublicManagedModel(model) || data === "[DONE]") return data;
   try {
-    return JSON.stringify(projectStrictManagedResponse(model, JSON.parse(data)));
+    return JSON.stringify(projectStrictManagedResponse(model, JSON.parse(data), requestId));
   } catch {
     return JSON.stringify(publicManagedFailurePayload());
   }
 }
 
 /** Drop upstream SSE event, retry, id, and vendor-extension lines; OpenAI clients need only public data frames. */
-function strictPublicManagedSseFrames(model: TokenForgeModelId, lines: string[]) {
+function strictPublicManagedSseFrames(model: TokenForgeModelId, lines: string[], requestId?: string) {
   return lines.flatMap(line => {
     if (!line.startsWith("data:")) return [];
     const data = line.slice(5).trim();
     if (!data) return [];
-    return [`data: ${sanitizeModelSseData(model, data)}`];
+    return [`data: ${sanitizeModelSseData(model, data, requestId)}`];
   });
 }
 
@@ -4707,13 +4718,87 @@ export function formatInspectionMessages(messages: unknown): string {
 
 export function registerOpenAiGateway(app: Express) {
   app.get("/v1/models", async (_req, res) => {
-    res.setHeader("x-request-id", `tf_req_${randomUUID().replaceAll("-", "")}`);
-    const availabilityByModel = new Map((await getModelAvailabilitySnapshot()).map(item => [item.modelId, item.available]));
-    res.json({ object: "list", data: TOKENFORGE_CATALOGUE.filter(model => availabilityByModel.get(model.id) === true) });
+    res.setHeader("x-request-id", `qronos_req_${randomUUID().replaceAll("-", "")}`);
+    let snapshot: Array<{ modelId: string; available: boolean }> = [];
+    try {
+      snapshot = await getModelAvailabilitySnapshot();
+    } catch {
+      snapshot = [];
+    }
+    if (!snapshot || snapshot.length === 0) {
+      return res.json({ object: "list", data: TOKENFORGE_CATALOGUE });
+    }
+    const availabilityByModel = new Map(snapshot.map(item => [item.modelId, item.available]));
+    const data = TOKENFORGE_CATALOGUE.filter(model => availabilityByModel.get(model.id) !== false);
+    return res.json({ object: "list", data: data.length > 0 ? data : TOKENFORGE_CATALOGUE });
+  });
+
+  app.get("/v1/models/:model", async (req: Request, res: Response) => {
+    const rawModel = req.params.model;
+    const normalized = normalizeModelIdentifier(rawModel);
+    const model = TOKENFORGE_CATALOGUE.find(m => m.id === normalized || m.id === rawModel);
+    if (!model) {
+      return res.status(404).json({
+        error: {
+          message: `Model '${rawModel}' not found in active Qronos AI catalogue.`,
+          type: "invalid_request_error",
+          code: "model_not_found",
+        },
+      });
+    }
+    res.setHeader("x-request-id", `qronos_req_${randomUUID().replaceAll("-", "")}`);
+    return res.json(model);
+  });
+
+  app.get(["/v1/balance", "/v1/user/balance"], async (req: Request, res: Response) => {
+    const requestId = `qronos_bal_${randomUUID().replaceAll("-", "")}`;
+    res.setHeader("x-request-id", requestId);
+    const secret = bearer(req);
+    if (!secret) {
+      return errorResponse(res, requestId, 401, "Send a Qronos AI key using the Bearer authorization or x-api-key header.", "invalid_api_key");
+    }
+    const key = await findActiveApiKey(secret);
+    if (!key) {
+      return errorResponse(res, requestId, 401, "The supplied Qronos AI key is missing, invalid, or revoked.", "invalid_api_key");
+    }
+    const [profile, tier, quota] = await Promise.all([
+      getCreditProfile(key.userId),
+      getUserTier(key.userId),
+      getQuotaStatus(key.userId),
+    ]);
+    if (!profile) {
+      return errorResponse(res, requestId, 503, "User profile is temporarily unavailable.", "service_unavailable");
+    }
+
+    const paygBalanceNanos = Number(profile.paygBalanceNanos ?? 0);
+    const paygBalanceUsd = paygBalanceNanos / 1_000_000_000;
+    const codingTokens = Number(profile.codingPlanTokens ?? 0);
+
+    return res.json({
+      object: "balance",
+      user_id: key.userId,
+      tier,
+      key_group: (key as any).keyGroup || "payg",
+      key_label: key.label,
+      token_plan: {
+        tokens_remaining: codingTokens,
+        formatted: `${(codingTokens / 1_000_000).toFixed(2)}M tokens`,
+      },
+      payg: {
+        balance_usd: Number(paygBalanceUsd.toFixed(4)),
+        balance_nanos: paygBalanceNanos,
+        formatted: `$${paygBalanceUsd.toFixed(2)}`,
+      },
+      quota: {
+        suspended: Boolean(quota?.suspended),
+        daily_requests_remaining: quota?.remainingRequests ?? 0,
+        daily_tokens_remaining: quota?.remainingTokens ?? 0,
+      },
+    });
   });
 
   app.post("/v1/chat/completions", async (req: Request, res) => {
-    const requestId = `tf_req_${randomUUID().replaceAll("-", "")}`;
+    const requestId = `qronos_req_${randomUUID().replaceAll("-", "")}`;
     const secret = bearer(req);
     if (!secret) return errorResponse(res, requestId, 401, "Send a Qronos AI key using the Bearer authorization header.", "invalid_api_key");
 
@@ -4775,17 +4860,7 @@ export function registerOpenAiGateway(app: Express) {
       );
     }
 
-    if (keyGroup === "bundle" && !modelAccess.isBundle) {
-      return errorResponse(
-        res,
-        requestId,
-        403,
-        `Access denied: The model '${input.model}' is not enabled for Tier 2 (Credit Bundles) access. Please generate and use a Tier 1 (Pay-As-You-Go) or Token Plan API key.`,
-        "model_not_bundle_enabled"
-      );
-    }
-
-    const pricingTier: PricingTier = keyGroup === "payg" ? "payg" : "bundle";
+    const pricingTier: PricingTier = "payg";
 
     const userTier = await getUserTier(key.userId);
     const minTier = await getModelMinTier(input.model);
@@ -4884,6 +4959,23 @@ export function registerOpenAiGateway(app: Express) {
     clearTimeout(timeout);
 
     if (!upstream.ok) {
+      if (upstream.status === 400 && upstreamInput.stream && (upstreamInput as any).stream_options) {
+        delete (upstreamInput as any).stream_options;
+        try {
+          const retryAborter = new AbortController();
+          const retryTimeout = setTimeout(() => retryAborter.abort(), PROVIDER_TIMEOUT_MS);
+          const retried = await forwardProviderRequest(model, upstreamInput, retryAborter.signal, providerContext);
+          clearTimeout(retryTimeout);
+          if (retried.ok) {
+            upstream = retried;
+          }
+        } catch {
+          // Fall through to error handler
+        }
+      }
+    }
+
+    if (!upstream.ok) {
       const payload = await upstream.json().catch(() => null);
       const message = publicProviderErrorMessage(upstream.status);
       const rawError = providerContext.rawErrorMessage
@@ -4933,7 +5025,7 @@ export function registerOpenAiGateway(app: Express) {
         }
         return errorResponse(res, requestId, 503, message, "provider_unavailable");
       }
-      const publicPayload = sanitizeModelResponsePayload(input.model as TokenForgeModelId, payload);
+      const publicPayload = sanitizeModelResponsePayload(input.model as TokenForgeModelId, payload, requestId);
       let content = textContentFrom(publicPayload);
       const thinking = reasoningContentFrom(publicPayload) || (payload as any)?.choices?.[0]?.message?.reasoning_content;
       const wasReasoningPromoted = Boolean((payload as any)?.choices?.[0]?.message?.isReasoningPromoted);
@@ -5022,6 +5114,7 @@ export function registerOpenAiGateway(app: Express) {
     res.setHeader("content-type", "text/event-stream; charset=utf-8");
     res.setHeader("cache-control", "no-cache, no-transform");
     res.setHeader("connection", "keep-alive");
+    res.setHeader("X-Accel-Buffering", "no");
     res.flushHeaders();
 
     const reader = upstream.body?.getReader();
@@ -5092,10 +5185,22 @@ export function registerOpenAiGateway(app: Express) {
           } catch { /* passthrough malformed upstream event */ }
         }
         if (isStrictPublicManagedModel(input.model as TokenForgeModelId)) {
-          const publicFrames = strictPublicManagedSseFrames(input.model as TokenForgeModelId, lines);
+          const publicFrames = strictPublicManagedSseFrames(input.model as TokenForgeModelId, lines, requestId);
           if (publicFrames.length) res.write(`${publicFrames.join("\n\n")}\n\n`);
         } else {
           res.write(value);
+        }
+      }
+
+      // Process any remaining residual line in buffer
+      if (buffer.trim().length > 0) {
+        const remainingLines = [buffer.trim()];
+        buffer = "";
+        if (isStrictPublicManagedModel(input.model as TokenForgeModelId)) {
+          const publicFrames = strictPublicManagedSseFrames(input.model as TokenForgeModelId, remainingLines, requestId);
+          if (publicFrames.length) res.write(`${publicFrames.join("\n\n")}\n\n`);
+        } else {
+          res.write(remainingLines[0] + "\n\n");
         }
       }
 
@@ -5117,6 +5222,19 @@ export function registerOpenAiGateway(app: Express) {
     } catch {
       streamFailed = true;
       streamFailedMessage = "The selected provider stream did not complete.";
+      if (!res.writableEnded && !res.destroyed) {
+        try {
+          res.write(`data: ${JSON.stringify({
+            error: {
+              message: publicProviderErrorMessage(),
+              type: "provider_unavailable",
+              code: "provider_unavailable",
+            },
+          })}\n\ndata: [DONE]\n\n`);
+        } catch {
+          // ignore
+        }
+      }
     } finally {
       clearTimeout(timeout);
       const durationMs = Date.now() - startedAt;

@@ -167,13 +167,6 @@ import {
   stopInviteTrackerSession,
   deleteInviteTrackerHistory,
   clearAllInviteTrackerHistory,
-  getTwitterRewardConfig,
-  saveTwitterRewardConfig,
-  getUserTwitterRewardStatus,
-  listTwitterRewardsAdminOverview,
-  formatTweetExact300,
-  DEFAULT_TWITTER_REWARD_SLOTS,
-  verifyAndClaimTwitterRewardViaUrl,
   getOrCreateReferralCode,
   getDiscordBotConfig,
   saveDiscordBotConfig,
@@ -737,48 +730,6 @@ export const appRouter = router({
       if (!gift) throw new TRPCError({ code: "NOT_FOUND", message: "No verified special referral gift is available for this account." });
       return gift;
     }),
-    twitterRewardStatus: protectedProcedure.query(async ({ ctx }) => {
-      const status = await getUserTwitterRewardStatus(ctx.user.id);
-      const config = await getTwitterRewardConfig();
-      const referralCodeObj = await getOrCreateReferralCode(ctx.user.id);
-      const userRefCode = referralCodeObj.code || "qr01";
-
-      const activeSlots = config.slots.filter((s) => s.enabled);
-      const slotIndexToUse = activeSlots.length > 0
-        ? Math.floor(Math.random() * activeSlots.length)
-        : 0;
-      const selectedSlot = activeSlots[slotIndexToUse] || config.slots[0];
-      const previewTweet = formatTweetExact300(selectedSlot.templateText, userRefCode);
-
-      return {
-        ...status,
-        config: {
-          enabled: config.enabled,
-          tokenGrantMillion: config.tokenGrantMillion,
-          paygGrantDollars: config.paygGrantDollars,
-          cooldownHours: config.cooldownHours,
-        },
-        previewTweet,
-        slotTitle: selectedSlot.title,
-        slotFocus: selectedSlot.focus,
-      };
-    }),
-    verifyTwitterShare: protectedProcedure
-      .input(
-        z.object({
-          tweetUrl: z.string().min(5, "Please enter a valid link").max(500),
-        })
-      )
-      .mutation(async ({ ctx, input }) => {
-        try {
-          return await verifyAndClaimTwitterRewardViaUrl(ctx.user.id, input.tweetUrl);
-        } catch (error: any) {
-          throw new TRPCError({
-            code: "BAD_REQUEST",
-            message: error?.message || "Verification failed. Please check your link.",
-          });
-        }
-      }),
     createApiKey: verifiedDeveloperProcedure
       .input(
         z.object({
@@ -797,7 +748,8 @@ export const appRouter = router({
           });
         }
         try {
-          return await createApiKey(ctx.user.id, input.label, input.keyGroup, {
+          const normalizedKeyGroup = input.keyGroup === "bundle" ? "payg" : input.keyGroup;
+          return await createApiKey(ctx.user.id, input.label, normalizedKeyGroup, {
             expiresAt: input.expiresAt ? new Date(input.expiresAt) : null,
             spendLimitTokens: input.spendLimitTokens,
             spendLimitNanos: input.spendLimitNanos,
@@ -823,7 +775,8 @@ export const appRouter = router({
     rotateApiKey: verifiedDeveloperProcedure
       .input(z.object({ apiKeyId: z.number().int().positive(), label: apiKeyLabel, keyGroup: z.enum(["payg", "bundle", "token_plan", "tokens", "coding_plan"]).optional() }))
       .mutation(async ({ ctx, input }) => {
-        const result = await rotateApiKey(ctx.user.id, input.apiKeyId, input.label, input.keyGroup);
+        const normalizedKeyGroup = input.keyGroup === "bundle" ? "payg" : input.keyGroup;
+        const result = await rotateApiKey(ctx.user.id, input.apiKeyId, input.label, normalizedKeyGroup);
         if (!result) throw new TRPCError({ code: "NOT_FOUND", message: "This active API key was not found" });
         return result;
       }),
@@ -1250,48 +1203,6 @@ ${input.intent ? `Requested Notification Type: ${input.intent}` : ""}`;
       await clearAllInviteTrackerHistory(ctx.user?.id);
       return { success: true };
     }),
-    twitterRewardsOverview: adminProcedure.query(async () => {
-      return listTwitterRewardsAdminOverview();
-    }),
-    twitterRewardConfig: adminProcedure.query(async () => {
-      return getTwitterRewardConfig();
-    }),
-    saveTwitterRewardConfig: adminProcedure
-      .input(
-        z.object({
-          enabled: z.boolean(),
-          tokenGrantMillion: z.number().min(0).max(1000),
-          paygGrantDollars: z.number().min(0).max(100),
-          cooldownHours: z.number().min(1).max(168).default(12),
-          selectedModel: z.string().default("claude-sonnet-5.5"),
-          slots: z.array(
-            z.object({
-              slotIndex: z.number().int().min(0).max(14),
-              title: z.string().max(100),
-              focus: z.string().max(255),
-              templateText: z.string(),
-              enabled: z.boolean(),
-              lastGeneratedAt: z.string().optional(),
-              lastGeneratedModel: z.string().optional(),
-            })
-          ),
-        })
-      )
-      .mutation(async ({ ctx, input }) => {
-        await saveTwitterRewardConfig(input as any, ctx.user.id);
-        await writeAuditEvent({
-          actorUserId: ctx.user.id,
-          action: "twitter_reward.config_updated",
-          entityType: "platform_setting",
-          entityId: "twitter_reward_config",
-          metadata: {
-            tokenGrantMillion: input.tokenGrantMillion,
-            paygGrantDollars: input.paygGrantDollars,
-            slotsCount: input.slots.length,
-          },
-        });
-        return { success: true };
-      }),
     discordBotStatus: adminProcedure.query(async () => {
       return getDiscordBotLiveStatus();
     }),
@@ -1357,141 +1268,6 @@ ${input.intent ? `Requested Notification Type: ${input.intent}` : ""}`;
       )
       .mutation(async ({ input }) => {
         return sendDiscordBotTestMessage(input.channelId, input.content);
-      }),
-    regenerateTwitterSlot: adminProcedure
-      .input(
-        z.object({
-          slotIndex: z.number().int().min(0).max(14),
-          model: z.string().trim().default("claude-sonnet-5.5"),
-          customFocus: z.string().optional(),
-        })
-      )
-      .mutation(async ({ ctx, input }) => {
-        const config = await getTwitterRewardConfig();
-        const slot = config.slots[input.slotIndex] || DEFAULT_TWITTER_REWARD_SLOTS[input.slotIndex];
-        const focus = input.customFocus?.trim() || slot.focus;
-
-        const systemPrompt = `You are a viral developer marketing copywriter for Qronos AI (@Qronosme).
-Generate an ultra-clean, structured post for X (Twitter).
-Theme/Angle: "${focus}"
-
-CORE VALUE FOCUS:
-• Top-tier frontier models (Claude Opus 5.5, Sonnet 4.6, DeepSeek V4, GPT-6 Astra) at dramatically cheaper prices!
-• Massive token grants: $10 for 600M tokens or $30 for 2.2B tokens!
-• Instant payments via Domestic UPI QR & Solana Pay (USDC), drop-in for Cursor, Cline & Claude Code.
-
-EXACT FORMATTING STRUCTURE (Follow this layout line-by-line):
-[Emoji] [Headline] | @Qronosme
-
-• [Benefit 1: Cheaper top-tier models like Claude Opus 5.5]
-• [Benefit 2: Massive tokens: 600M for $10 or 2.2B for $30]
-• [Benefit 3: Instant UPI/Solana or Cursor/Cline drop-in]
-
-👉 [Call to action]:
-{{REFERRAL_LINK}}
-📌 Pin @Qronosme #AI #Dev
-
-CRITICAL RULES:
-1. Total length with {{REFERRAL_LINK}} MUST be strictly UNDER 250 characters.
-2. Use bullet points (•) and clean line breaks as shown.
-3. PIN MY HANDLE: In every piece of content, you MUST pin and tag the official handle @Qronosme in the headline and include '📌 Pin @Qronosme'. Never omit @Qronosme.
-4. Output ONLY the raw post text. No quotes, markdown code fences, or explanations.`;
-
-        const userPrompt = `Write the structured tweet for slot #${input.slotIndex + 1} (${slot.title}). Focus: ${focus}. Pin the official handle @Qronosme in the content.`;
-
-        let generatedText = slot.templateText;
-        try {
-          const completion = await runPlaygroundCompletion({
-            userId: ctx.user.id,
-            model: input.model as TokenForgeModelId,
-            messages: [
-              { role: "system", content: systemPrompt },
-              { role: "user", content: userPrompt },
-            ],
-            temperature: 0.7,
-            maxOutputTokens: 250,
-            sourceIpHash: "admin-twitter-slot-generator",
-          });
-          if (completion.content) {
-            generatedText = completion.content.replace(/^["']|["']$/g, "").trim();
-          }
-        } catch (err) {
-          console.error("[regenerateTwitterSlot] AI completion failed, falling back:", err);
-        }
-
-        const exact300 = formatTweetExact300(generatedText, "{{AFFILIATE_CODE}}", 265);
-        slot.templateText = exact300;
-        slot.lastGeneratedAt = new Date().toISOString();
-        slot.lastGeneratedModel = input.model;
-
-        await saveTwitterRewardConfig(config, ctx.user.id);
-        return { success: true, slot };
-      }),
-    regenerateAllTwitterSlots: adminProcedure
-      .input(
-        z.object({
-          model: z.string().trim().default("claude-sonnet-5.5"),
-        })
-      )
-      .mutation(async ({ ctx, input }) => {
-        const config = await getTwitterRewardConfig();
-
-        for (let i = 0; i < config.slots.length; i++) {
-          const slot = config.slots[i];
-          const systemPrompt = `You are a viral developer marketing copywriter for Qronos AI (@Qronosme).
-Generate an ultra-clean, structured post for X (Twitter).
-Theme/Angle: "${slot.focus}"
-
-CORE VALUE FOCUS:
-• Top-tier frontier models (Claude Opus 5.5, Sonnet 4.6, DeepSeek V4) at dramatically cheaper prices!
-• Massive token grants: $10 for 600M tokens or $30 for 2.2B tokens!
-• Instant Domestic UPI QR & Solana Pay (USDC), drop-in for Cursor, Cline & Claude Code.
-
-EXACT FORMATTING STRUCTURE (Follow this layout line-by-line):
-[Emoji] [Headline] | @Qronosme
-
-• [Benefit 1: Cheaper top-tier models like Claude Opus 5.5]
-• [Benefit 2: Massive tokens: 600M for $10 or 2.2B for $30]
-• [Benefit 3: Instant UPI/Solana or Cursor/Cline drop-in]
-
-👉 [Call to action]:
-{{REFERRAL_LINK}}
-📌 Pin @Qronosme #AI #Dev
-
-CRITICAL RULES:
-1. Total length with {{REFERRAL_LINK}} MUST be strictly UNDER 250 characters.
-2. Use bullet points (•) and clean line breaks as shown.
-3. PIN MY HANDLE: In every piece of content, you MUST pin and tag the official handle @Qronosme in the headline and include '📌 Pin @Qronosme'. Never omit @Qronosme.
-4. Output ONLY the raw post text. No quotes, markdown code fences, or explanations.`;
-
-          const userPrompt = `Write the structured tweet for slot #${i + 1} (${slot.title}). Focus: ${slot.focus}. Pin the official handle @Qronosme in the content.`;
-
-          try {
-            const completion = await runPlaygroundCompletion({
-              userId: ctx.user.id,
-              model: input.model as TokenForgeModelId,
-              messages: [
-                { role: "system", content: systemPrompt },
-                { role: "user", content: userPrompt },
-              ],
-              temperature: 0.7,
-              maxOutputTokens: 250,
-              sourceIpHash: `admin-twitter-slot-${i}`,
-            });
-            if (completion.content) {
-              const cleaned = completion.content.replace(/^["']|["']$/g, "").trim();
-              slot.templateText = formatTweetExact300(cleaned, "{{AFFILIATE_CODE}}", 265);
-              slot.lastGeneratedAt = new Date().toISOString();
-              slot.lastGeneratedModel = input.model;
-            }
-          } catch (err) {
-            console.warn(`[regenerateAllTwitterSlots] slot ${i} error:`, err);
-          }
-        }
-
-        config.selectedModel = input.model;
-        await saveTwitterRewardConfig(config, ctx.user.id);
-        return { success: true, slots: config.slots };
       }),
     accounts: adminProcedure.input(adminAccountDirectoryInput).query(({ input }) => listAdminAccounts(input)),
     searchUsersForTier: adminProcedure

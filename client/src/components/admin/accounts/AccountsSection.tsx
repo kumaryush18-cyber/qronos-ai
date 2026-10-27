@@ -309,7 +309,7 @@ export function AccountRow({
 
         <div className="mt-1.5 flex gap-1">
           <Input
-            aria-label={`${creditTarget === "tokens" ? "Tokens" : creditTarget === "payg" ? "PAYG" : "Bundle"} ${creditAction === "set" ? "set" : "add"} amount`}
+            aria-label={`${creditTarget === "tokens" ? "Tokens" : "PAYG"} ${creditAction === "set" ? "set" : "add"} amount`}
             type="number"
             min={creditAction === "set" ? "0" : "0.01"}
             step={creditTarget === "tokens" ? "1" : "0.01"}
@@ -318,8 +318,8 @@ export function AccountRow({
             onChange={(event) => setCreditAmount(event.target.value)}
             placeholder={
               creditAction === "set"
-                ? `Set ${creditTarget === "tokens" ? "Tokens (M)" : creditTarget === "payg" ? "PAYG ($)" : "Bundle ($)"}`
-                : `+ ${creditTarget === "tokens" ? "Tokens (M)" : creditTarget === "payg" ? "PAYG ($)" : "Bundle ($)"}`
+                ? `Set ${creditTarget === "tokens" ? "Tokens (M)" : "PAYG ($)"}`
+                : `+ ${creditTarget === "tokens" ? "Tokens (M)" : "PAYG ($)"}`
             }
             className="h-8 min-w-0 bg-black/60 px-2 text-[10px] font-mono border-white/10 text-white placeholder:text-zinc-500 focus:border-white/30"
             disabled={addCredit.isPending || setCredit.isPending}
@@ -355,9 +355,9 @@ export function AccountRow({
             {addCredit.isPending || setCredit.isPending ? (
               "…"
             ) : creditAction === "set" ? (
-              `Set ${creditTarget === "tokens" ? "Tokens (M)" : creditTarget === "payg" ? "PAYG" : "Bundle"}`
+              `Set ${creditTarget === "tokens" ? "Tokens (M)" : "PAYG"}`
             ) : (
-              `+ Add ${creditTarget === "tokens" ? "Tokens (M)" : creditTarget === "payg" ? "PAYG" : "Bundle"}`
+              `+ Add ${creditTarget === "tokens" ? "Tokens (M)" : "PAYG"}`
             )}
           </Button>
           <Button

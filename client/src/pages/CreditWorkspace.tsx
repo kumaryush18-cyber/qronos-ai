@@ -252,17 +252,12 @@ export function WalletHero({ compact = false }: { compact?: boolean }) {
 }
 
 export function CreditOverview() {
-  const wallet = trpc.developer.wallet.useQuery();
-  const creditsEnabled = useIsCreditsEnabled(wallet.data?.creditsEnabled);
-
   return (
-    <div className={`grid grid-cols-1 ${creditsEnabled ? "md:grid-cols-2 lg:grid-cols-3" : "md:grid-cols-2"} gap-4 mb-6`}>
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
       {/* Tier 1: Pay-As-You-Go */}
       <PaygHero compact />
       {/* Tier 2: Dedicated Coding Plan Tokens */}
       <CodingTokensHero compact />
-      {/* Tier 3: Promotional Credits Wallet (when enabled) */}
-      {creditsEnabled && <WalletHero compact />}
     </div>
   );
 }
@@ -1057,28 +1052,6 @@ export function Profile() {
                   <span className="text-[10px] font-mono text-zinc-400 ml-1">Tokens</span>
                 </div>
               </div>
-
-              {/* Promotional Wallet */}
-              {creditsEnabled && (
-                <div
-                  style={{ backgroundColor: "oklch(0.18 0 0)", borderColor: "oklch(0.26 0 0)" }}
-                  className="rounded-2xl border p-3.5 flex items-center justify-between"
-                >
-                  <div>
-                    <div className="flex items-center gap-1.5 text-zinc-300 font-mono text-xs font-bold">
-                      <Gift size={13} className="text-white" />
-                      <span>Promotional Wallet</span>
-                    </div>
-                    <span className="text-[10px] font-mono text-zinc-500">Community check-in gifts</span>
-                  </div>
-                  <div className="text-right">
-                    <span className="text-base font-bold font-mono text-white">
-                      {formatCreditWhole(bundleBalanceNanos)}
-                    </span>
-                    <span className="text-[10px] font-mono text-zinc-400 ml-1">USD</span>
-                  </div>
-                </div>
-              )}
             </div>
           </div>
 

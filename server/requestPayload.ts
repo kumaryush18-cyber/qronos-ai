@@ -14,7 +14,7 @@ export function isRequestPayloadTooLarge(error: unknown): boolean {
 }
 
 export function requestPayloadTooLargeResponse(path: string) {
-  const message = `Request payload exceeds TokenForge's ${TOKENFORGE_JSON_BODY_LIMIT} limit. Reduce accumulated tool output or conversation history and retry.`;
+  const message = `Request payload exceeds Qronos AI's ${TOKENFORGE_JSON_BODY_LIMIT} limit. Reduce accumulated tool output or conversation history and retry.`;
 
   if (path.startsWith("/v1/messages")) {
     return { type: "error", error: { type: "request_too_large", message } };

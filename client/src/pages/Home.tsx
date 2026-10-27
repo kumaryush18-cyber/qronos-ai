@@ -33,7 +33,6 @@ import {
 } from "lucide-react";
 import "./infergate-landing.css";
 import { QRONOS_LOGOS } from "@/lib/logos";
-import { TwitterXIcon } from "@/components/TwitterShareEarnCard";
 
 const MARQUEE_ITEMS = [
   { label: "Anthropic Claude 3.7", icon: "🟣" },
@@ -519,18 +518,12 @@ export default function Home() {
 
         <div className="relative z-10 w-full max-w-[1400px] mx-auto px-4 py-28 sm:px-8 sm:py-32 lg:px-14 lg:py-40">
           <div className="mx-auto flex max-w-full flex-col items-center text-center">
-            {/* Crypto Top-up & 𝕏 Share Pill */}
+            {/* Crypto Top-up Pill */}
             <div className="mb-6 flex flex-wrap items-center justify-center gap-2.5">
               <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/[0.05] border border-white/10 text-xs font-mono text-zinc-300 backdrop-blur-md">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
                 <span>TOP UP IN USDC OR SOL · SHIP WITH ANY MODEL</span>
               </div>
-              <Link href="/dashboard/referrals">
-                <div className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-white/[0.08] hover:bg-white/[0.15] border border-white/15 text-xs font-mono text-white transition-all cursor-pointer backdrop-blur-md shadow-sm hover:scale-105">
-                  <TwitterXIcon className="h-3.5 w-3.5" />
-                  <span>Share on 𝕏 to Earn +30M Tokens</span>
-                </div>
-              </Link>
             </div>
 
             <div className="mb-5 max-w-4xl">

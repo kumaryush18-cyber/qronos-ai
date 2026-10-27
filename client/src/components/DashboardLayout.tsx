@@ -36,7 +36,6 @@ import { QronosGlyph } from "./QronosGlyph";
 import { PearlAvatar } from "@/components/ui/pearl-avatar";
 import { UserTierBadge } from "@/components/UserTierBadge";
 import { NotificationBell } from "@/components/NotificationBell";
-import { TwitterXIcon } from "@/components/TwitterShareEarnCard";
 import "./dashboard-shell.css";
 
 const menuItems = [

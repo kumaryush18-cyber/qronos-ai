@@ -75,7 +75,6 @@ import VapourAccent from "@/components/ui/vapour-accent";
 import { buildQronosCurl, buildQronosJavaScript, buildQronosPython, QRONOS_API_BASE_URL } from "../../../shared/qronosApi";
 import { clearOneTimeApiKey, getOneTimeApiKey, rememberOneTimeApiKey } from "../../../shared/oneTimeApiKey";
 import { buildReferralInviteUrl } from "../../../shared/referrals";
-import { TwitterShareEarnCard } from "@/components/TwitterShareEarnCard";
 
 export const DASHBOARD_VIDEO_URL = "https://res.cloudinary.com/dhrh8heb5/video/upload/v1792215533/QV_1792214944093_szkkmh.mp4";
 
@@ -1707,9 +1706,6 @@ function Overview({
       {/* 3. Unified Balances & Token Allocation Bento with Traveling Star Beam */}
       <UnifiedBalancesPortfolio />
 
-      {/* 4. 𝕏 Share-to-Earn Rewards Card */}
-      <TwitterShareEarnCard />
-
       {/* 2-Column Command & Performance Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 mb-6">
         {/* Left 7 Columns: Personal Activity & Gateway Status */}
@@ -2282,9 +2278,6 @@ function ReferralWorkspace() {
         </div>
       </section>
 
-      {/* 𝕏 Share-to-Earn Rewards Card */}
-      <TwitterShareEarnCard />
-
       {/* 2. Rotating Star Border Invitation Card + Stats Bento */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
         {/* Left 7 Cols: Rotating Star Border Link Box */}
@@ -2351,15 +2344,6 @@ function ReferralWorkspace() {
                   <Share2 size={13} className="text-zinc-400" /> Share directly:
                 </span>
                 <div className="flex items-center gap-2 flex-wrap">
-                  <a
-                    href={isLoading || !inviteUrl ? "#" : `https://twitter.com/intent/tweet?text=${shareText}&url=${encodeURIComponent(inviteUrl)}`}
-                    target={isLoading || !inviteUrl ? undefined : "_blank"}
-                    rel="noopener noreferrer"
-                    onClick={(e) => { if (isLoading || !inviteUrl) e.preventDefault(); }}
-                    className={`rounded-lg border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs text-zinc-300 hover:text-white hover:bg-white/[0.1] transition-all ${isLoading || !inviteUrl ? "opacity-40 cursor-not-allowed" : "cursor-pointer"}`}
-                  >
-                    Post on 𝕏
-                  </a>
                   <a
                     href={isLoading || !inviteUrl ? "#" : `https://t.me/share/url?url=${encodeURIComponent(inviteUrl)}&text=${shareText}`}
                     target={isLoading || !inviteUrl ? undefined : "_blank"}

@@ -72,7 +72,6 @@ import { AdminPricingSection } from "@/components/admin/pricing/AdminPricingSect
 import { CacheDebuggerTab } from "@/components/admin/CacheDebuggerTab";
 import { AdminNotificationsSection } from "@/components/admin/notifications/AdminNotificationsSection";
 import { AdminInviteTrackerSection } from "@/components/admin/invites/AdminInviteTrackerSection";
-import { AdminTwitterRewardsSection } from "@/components/admin/twitter/AdminTwitterRewardsSection";
 import { AdminDiscordBotSection } from "@/components/admin/discord/AdminDiscordBotSection";
 
 export type AdminSection =
@@ -88,7 +87,6 @@ export type AdminSection =
   | "requests"
   | "campaign"
   | "invite-tracker"
-  | "twitter"
   | "discord-bot"
   | "controls"
   | "providers"
@@ -128,7 +126,6 @@ export default function AdminDashboard({ initialSection }: { initialSection?: Ad
       const tab = urlParams.get("tab") as AdminSection;
       if (tab) {
         if ((tab as string) === "invites" || tab === "invite-tracker") return "invite-tracker";
-        if ((tab as string) === "x" || (tab as string) === "x-rewards" || tab === "twitter") return "twitter";
         return tab;
       }
       if (window.location.pathname.includes("/admin/support") || window.location.pathname.includes("/admin/live-chat")) {
@@ -479,7 +476,6 @@ export default function AdminDashboard({ initialSection }: { initialSection?: Ad
             "requests",
             "campaign",
             "invite-tracker",
-            "twitter",
             "discord-bot",
             "controls",
             "providers",
@@ -526,8 +522,6 @@ export default function AdminDashboard({ initialSection }: { initialSection?: Ad
               ? "Special referral"
               : item === "invite-tracker"
               ? "Invite tracker"
-              : item === "twitter"
-              ? "𝕏 Rewards"
               : item === "discord-bot"
               ? "Discord Bot"
               : item === "controls"
@@ -633,9 +627,6 @@ export default function AdminDashboard({ initialSection }: { initialSection?: Ad
       )}
       {section === "invite-tracker" && (
         <AdminInviteTrackerSection />
-      )}
-      {section === "twitter" && (
-        <AdminTwitterRewardsSection />
       )}
       {section === "discord-bot" && (
         <AdminDiscordBotSection />

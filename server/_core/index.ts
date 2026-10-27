@@ -19,7 +19,6 @@ import { registerUpiPayGateway } from "../upiPayGateway";
 import { registerCashfreeGateway } from "../cashfreeGateway";
 import { registerDodoPaymentsGateway } from "../dodoPaymentsGateway";
 import { registerWhopPaymentGateway } from "../whopPaymentGateway";
-import { registerTwitterOAuthRoutes } from "../twitterOAuth";
 import { startDiscordBotService } from "../discordBotService";
 import { isRequestPayloadTooLarge, requestPayloadTooLargeResponse, TOKENFORGE_JSON_BODY_LIMIT } from "../requestPayload";
 import {
@@ -106,7 +105,6 @@ async function startServer() {
     message: { error: "Too many requests from this IP. Please try again later." },
   });
   app.use("/api/auth", authRateLimit);
-  app.use("/v1/models", authRateLimit);
 
   // Order creation rate limit (10 req/min) across Solana, UPI, and Dodo rails
   app.use(
@@ -143,7 +141,6 @@ async function startServer() {
   registerCashfreeGateway(app);
   registerDodoPaymentsGateway(app);
   registerWhopPaymentGateway(app);
-  registerTwitterOAuthRoutes(app);
   // tRPC API with rate limiting (120 req/min)
   app.use(
     "/api/trpc",

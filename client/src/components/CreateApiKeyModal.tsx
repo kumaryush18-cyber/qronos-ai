@@ -34,7 +34,7 @@ export type NewApiKeyResult = {
     id: number;
     label: string;
     prefix: string;
-    keyGroup?: "payg" | "bundle" | "token_plan" | "tokens" | "coding_plan";
+    keyGroup?: "payg" | "token_plan" | "tokens" | "coding_plan";
     status: "active" | "revoked";
     expiresAt?: Date | string | null;
     spendLimitTokens?: number | null;
