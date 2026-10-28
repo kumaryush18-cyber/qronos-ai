@@ -167,6 +167,10 @@ import {
   stopInviteTrackerSession,
   deleteInviteTrackerHistory,
   clearAllInviteTrackerHistory,
+  getInviteMilestoneCampaignConfig,
+  saveInviteMilestoneCampaignConfig,
+  getUserEventsMilestoneSummary,
+  listAdminInviteMilestoneGrants,
   getOrCreateReferralCode,
   getDiscordBotConfig,
   saveDiscordBotConfig,
@@ -730,6 +734,9 @@ export const appRouter = router({
       if (!gift) throw new TRPCError({ code: "NOT_FOUND", message: "No verified special referral gift is available for this account." });
       return gift;
     }),
+    eventsSummary: protectedProcedure.query(async ({ ctx }) => {
+      return await getUserEventsMilestoneSummary(ctx.user.id);
+    }),
     createApiKey: verifiedDeveloperProcedure
       .input(
         z.object({
@@ -1202,6 +1209,34 @@ ${input.intent ? `Requested Notification Type: ${input.intent}` : ""}`;
     clearInviteTrackerHistory: adminProcedure.mutation(async ({ ctx }) => {
       await clearAllInviteTrackerHistory(ctx.user?.id);
       return { success: true };
+    }),
+    inviteMilestoneConfig: adminProcedure.query(async () => {
+      return await getInviteMilestoneCampaignConfig();
+    }),
+    saveInviteMilestoneConfig: adminProcedure
+      .input(
+        z.object({
+          enabled: z.boolean().optional(),
+          invitesRequired: z.number().int().min(1).max(1000),
+          tokenGrantMillion: z.number().min(0).max(10000),
+          paygGrantDollars: z.number().min(0).max(1000).optional(),
+          expiryHours: z.number().int().min(1).max(8760),
+          resetCampaignTimer: z.boolean().optional(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const config = await saveInviteMilestoneCampaignConfig(input, ctx.user?.id);
+        await writeAuditEvent({
+          actorUserId: ctx.user?.id,
+          action: "invite_milestone.config_updated",
+          entityType: "platform_setting",
+          entityId: "invite_milestone_campaign",
+          metadata: input,
+        });
+        return config;
+      }),
+    inviteMilestoneGrantsOverview: adminProcedure.query(async () => {
+      return await listAdminInviteMilestoneGrants(100);
     }),
     discordBotStatus: adminProcedure.query(async () => {
       return getDiscordBotLiveStatus();

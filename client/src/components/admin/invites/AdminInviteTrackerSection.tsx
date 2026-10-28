@@ -28,6 +28,7 @@ import {
   AlertCircle,
   Copy,
   Download,
+  Zap,
 } from "lucide-react";
 import { toast } from "sonner";
 import { formatDistanceToNow, format } from "date-fns";
@@ -49,6 +50,39 @@ export function AdminInviteTrackerSection() {
 
   const activeSession = data?.activeSession ?? null;
   const history = data?.history ?? [];
+
+  // Automated Milestone Campaign state
+  const milestoneConfigQuery = trpc.admin.inviteMilestoneConfig.useQuery();
+  const milestoneGrantsQuery = trpc.admin.inviteMilestoneGrantsOverview.useQuery();
+
+  const [milestoneInvitesRequired, setMilestoneInvitesRequired] = useState(5);
+  const [milestoneTokenGrantMillion, setMilestoneTokenGrantMillion] = useState(10);
+  const [milestonePaygGrantDollars, setMilestonePaygGrantDollars] = useState(0);
+  const [milestoneExpiryHours, setMilestoneExpiryHours] = useState(48);
+  const [milestoneEnabled, setMilestoneEnabled] = useState(true);
+  const [resetTimerOnSave, setResetTimerOnSave] = useState(true);
+  const [showGrantsHistory, setShowGrantsHistory] = useState(false);
+
+  useEffect(() => {
+    if (milestoneConfigQuery.data) {
+      setMilestoneInvitesRequired(milestoneConfigQuery.data.invitesRequired ?? 5);
+      setMilestoneTokenGrantMillion(milestoneConfigQuery.data.tokenGrantMillion ?? 10);
+      setMilestonePaygGrantDollars(milestoneConfigQuery.data.paygGrantDollars ?? 0);
+      setMilestoneExpiryHours(milestoneConfigQuery.data.expiryHours ?? 48);
+      setMilestoneEnabled(milestoneConfigQuery.data.enabled !== false);
+    }
+  }, [milestoneConfigQuery.data]);
+
+  const saveMilestoneMutation = trpc.admin.saveInviteMilestoneConfig.useMutation({
+    onSuccess: () => {
+      toast.success("Automated invite milestone campaign configuration saved!");
+      utils.admin.inviteMilestoneConfig.invalidate();
+      utils.admin.inviteMilestoneGrantsOverview.invalidate();
+    },
+    onError: (err) => {
+      toast.error(err.message || "Failed to save milestone campaign");
+    },
+  });
 
   // Local form & control state
   const [newSessionName, setNewSessionName] = useState("");
@@ -263,6 +297,252 @@ export function AdminInviteTrackerSection() {
             {isFetching ? "Refreshing..." : "Refresh"}
           </Button>
         </div>
+      </div>
+
+      {/* 1. AUTOMATED INVITE MILESTONE CAMPAIGN CARD (EXPIRING PACKS) */}
+      <div
+        style={{
+          backgroundColor: "oklch(0.14 0 0)",
+          borderColor: milestoneEnabled ? "oklch(0.28 0.05 145)" : "oklch(0.24 0 0)",
+          boxShadow: "0 20px 50px rgba(0,0,0,0.7), inset 0 1px 0 rgba(255,255,255,0.06)",
+        }}
+        className="rounded-3xl border p-6 sm:p-7 space-y-6 relative overflow-hidden"
+      >
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-white/[0.08]">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="flex h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+              <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-400 font-mono flex items-center gap-1.5">
+                <Sparkles size={13} />
+                <span>Automated Milestone Engine</span>
+              </span>
+              <Badge
+                className={`font-mono text-[10px] ${
+                  milestoneEnabled
+                    ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30"
+                    : "bg-zinc-800 text-zinc-400 border border-zinc-700"
+                }`}
+              >
+                {milestoneEnabled ? "● Campaign Active" : "Paused"}
+              </Badge>
+              {milestoneConfigQuery.data?.campaignStartedAt && (
+                <span className="text-[11px] font-mono text-zinc-400">
+                  Tracking since {format(new Date(milestoneConfigQuery.data.campaignStartedAt), "MMM d, h:mm a")}
+                </span>
+              )}
+            </div>
+
+            <h2 className="text-lg sm:text-xl font-bold font-mono text-white tracking-tight">
+              Milestone Reward Packs & Expiring Grants
+            </h2>
+            <p className="text-xs text-zinc-400 max-w-3xl leading-relaxed font-mono">
+              Configure automated reward grants. When any developer reaches the required invite milestone, the system
+              instantly deposits an expiring token pack. Expired unspent tokens are automatically drained by the backend.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2 self-start md:self-auto">
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => setShowGrantsHistory(!showGrantsHistory)}
+              className="h-8 border-white/10 bg-white/[0.04] text-xs font-mono text-zinc-300"
+            >
+              <History size={13} className="mr-1.5" />
+              {showGrantsHistory ? "Hide Grants" : `View Grants (${milestoneGrantsQuery.data?.length ?? 0})`}
+            </Button>
+          </div>
+        </div>
+
+        {/* 4 Configuration Inputs Grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* 1. Invites Required */}
+          <div className="rounded-2xl border border-white/10 bg-black/60 p-4 space-y-1.5">
+            <label className="text-[11px] font-mono font-bold uppercase tracking-wider text-zinc-400 flex items-center gap-1.5">
+              <Users size={12} className="text-emerald-400" />
+              <span>Invites Required</span>
+            </label>
+            <Input
+              type="number"
+              min={1}
+              max={100}
+              value={milestoneInvitesRequired}
+              onChange={(e) => setMilestoneInvitesRequired(Math.max(1, parseInt(e.target.value) || 1))}
+              className="h-10 bg-black/80 font-mono text-base font-bold text-white border-white/10 focus:border-emerald-500"
+              placeholder="5"
+            />
+            <p className="text-[10px] font-mono text-zinc-500">e.g. 5 invites per pack</p>
+          </div>
+
+          {/* 2. Token Grant (M Tokens) */}
+          <div className="rounded-2xl border border-white/10 bg-black/60 p-4 space-y-1.5">
+            <label className="text-[11px] font-mono font-bold uppercase tracking-wider text-zinc-400 flex items-center gap-1.5">
+              <Zap size={12} className="text-emerald-400" />
+              <span>Token Grant (M)</span>
+            </label>
+            <Input
+              type="number"
+              min={0}
+              max={1000}
+              value={milestoneTokenGrantMillion}
+              onChange={(e) => setMilestoneTokenGrantMillion(Math.max(0, parseInt(e.target.value) || 0))}
+              className="h-10 bg-black/80 font-mono text-base font-bold text-white border-white/10 focus:border-emerald-500"
+              placeholder="10"
+            />
+            <p className="text-[10px] font-mono text-zinc-500">
+              = {(milestoneTokenGrantMillion * 1_000_000).toLocaleString()} Coding Tokens
+            </p>
+          </div>
+
+          {/* 3. PAYG Grant ($ USD) */}
+          <div className="rounded-2xl border border-white/10 bg-black/60 p-4 space-y-1.5">
+            <label className="text-[11px] font-mono font-bold uppercase tracking-wider text-zinc-400 flex items-center gap-1.5">
+              <span>PAYG Grant ($ USD)</span>
+            </label>
+            <Input
+              type="number"
+              min={0}
+              max={100}
+              step="0.5"
+              value={milestonePaygGrantDollars}
+              onChange={(e) => setMilestonePaygGrantDollars(Math.max(0, parseFloat(e.target.value) || 0))}
+              className="h-10 bg-black/80 font-mono text-base font-bold text-white border-white/10 focus:border-emerald-500"
+              placeholder="0.00"
+            />
+            <p className="text-[10px] font-mono text-zinc-500">Optional dollar grant (or 0)</p>
+          </div>
+
+          {/* 4. Expiration Window (Hours) */}
+          <div className="rounded-2xl border border-white/10 bg-black/60 p-4 space-y-1.5">
+            <label className="text-[11px] font-mono font-bold uppercase tracking-wider text-zinc-400 flex items-center gap-1.5">
+              <Clock size={12} className="text-emerald-400" />
+              <span>Expiry Window (Hours)</span>
+            </label>
+            <Input
+              type="number"
+              min={1}
+              max={720}
+              value={milestoneExpiryHours}
+              onChange={(e) => setMilestoneExpiryHours(Math.max(1, parseInt(e.target.value) || 1))}
+              className="h-10 bg-black/80 font-mono text-base font-bold text-white border-white/10 focus:border-emerald-500"
+              placeholder="48"
+            />
+            <p className="text-[10px] font-mono text-zinc-500">e.g. 48 hours from unlock</p>
+          </div>
+        </div>
+
+        {/* Controls Row: Status Toggle, Reset Checkbox & Save Button */}
+        <div className="pt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-t border-white/[0.08]">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-4 text-xs font-mono">
+            <label className="flex items-center gap-2 cursor-pointer text-zinc-300">
+              <input
+                type="checkbox"
+                checked={milestoneEnabled}
+                onChange={(e) => setMilestoneEnabled(e.target.checked)}
+                className="rounded border-white/20 bg-black text-emerald-500 focus:ring-emerald-500 h-4 w-4 cursor-pointer"
+              />
+              <span>Campaign Active</span>
+            </label>
+
+            <label className="flex items-center gap-2 cursor-pointer text-zinc-400">
+              <input
+                type="checkbox"
+                checked={resetTimerOnSave}
+                onChange={(e) => setResetTimerOnSave(e.target.checked)}
+                className="rounded border-white/20 bg-black text-emerald-500 focus:ring-emerald-500 h-4 w-4 cursor-pointer"
+              />
+              <span>Start tracking from save time (reset baseline)</span>
+            </label>
+          </div>
+
+          <Button
+            type="button"
+            disabled={saveMilestoneMutation.isPending}
+            onClick={() =>
+              saveMilestoneMutation.mutate({
+                enabled: milestoneEnabled,
+                invitesRequired: milestoneInvitesRequired,
+                tokenGrantMillion: milestoneTokenGrantMillion,
+                paygGrantDollars: milestonePaygGrantDollars,
+                expiryHours: milestoneExpiryHours,
+                resetCampaignTimer: resetTimerOnSave,
+              })
+            }
+            className="bg-emerald-500 hover:bg-emerald-600 text-black font-mono font-bold text-xs h-9 px-6 cursor-pointer shadow-lg shadow-emerald-950/40"
+          >
+            {saveMilestoneMutation.isPending ? "Saving Campaign..." : "Save Milestone Campaign"}
+          </Button>
+        </div>
+
+        {/* Active Rule Explanation Box */}
+        <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.04] p-4 text-xs font-mono space-y-1">
+          <p className="text-emerald-300 font-bold flex items-center gap-1.5">
+            <Sparkles size={13} className="text-emerald-400" />
+            Active Automation Rule:
+          </p>
+          <p className="text-zinc-400 leading-relaxed">
+            Every <strong className="text-white">{milestoneInvitesRequired} developers</strong> who join unlocks an
+            automatic <strong className="text-white">+{milestoneTokenGrantMillion}M Coding Tokens pack</strong>{" "}
+            {milestonePaygGrantDollars > 0 && `(+$${milestonePaygGrantDollars.toFixed(2)} PAYG)`} valid for{" "}
+            <strong className="text-white">{milestoneExpiryHours} hours</strong>. If user invites{" "}
+            {milestoneInvitesRequired * 2} developers, Pack #2 unlocks below Pack #1 with its own independent{" "}
+            {milestoneExpiryHours}h down-counter. Expired tokens are automatically reclaimed.
+          </p>
+        </div>
+
+        {/* Expandable Grants Table */}
+        {showGrantsHistory && (
+          <div className="rounded-2xl border border-white/10 bg-black/60 p-4 space-y-3">
+            <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-zinc-300">
+              Recent Milestone Grants ({milestoneGrantsQuery.data?.length ?? 0})
+            </h3>
+            {milestoneGrantsQuery.data?.length === 0 ? (
+              <p className="text-xs font-mono text-zinc-500">No milestone grants awarded yet in this campaign.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs font-mono">
+                  <thead>
+                    <tr className="border-b border-white/10 text-[10px] text-zinc-500 uppercase">
+                      <th className="pb-2">User</th>
+                      <th className="pb-2">Pack #</th>
+                      <th className="pb-2">Invites</th>
+                      <th className="pb-2">Grant (M)</th>
+                      <th className="pb-2">Remaining</th>
+                      <th className="pb-2">Status</th>
+                      <th className="pb-2">Expires</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-white/5">
+                    {milestoneGrantsQuery.data?.map((g) => (
+                      <tr key={g.id}>
+                        <td className="py-2 text-white">{g.userEmail || `User #${g.userId}`}</td>
+                        <td className="py-2 text-emerald-400 font-bold">#{g.milestoneCycle}</td>
+                        <td className="py-2 text-zinc-400">{g.invitesCountAtGrant}</td>
+                        <td className="py-2 text-white">{(Number(g.grantedTokens) / 1_000_000).toFixed(0)}M</td>
+                        <td className="py-2 text-zinc-300">{(Number(g.remainingTokens) / 1_000_000).toFixed(2)}M</td>
+                        <td className="py-2">
+                          <span
+                            className={`px-2 py-0.5 rounded text-[10px] ${
+                              g.status === "active"
+                                ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30"
+                                : g.status === "consumed"
+                                ? "bg-blue-500/15 text-blue-400 border border-blue-500/30"
+                                : "bg-zinc-800 text-zinc-400"
+                            }`}
+                          >
+                            {g.status}
+                          </span>
+                        </td>
+                        <td className="py-2 text-zinc-500">{format(new Date(g.expiresAt), "MMM d, h:mm a")}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* ACTIVE TRACKING CARD (When running) */}

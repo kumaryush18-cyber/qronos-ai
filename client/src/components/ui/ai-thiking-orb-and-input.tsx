@@ -1,8 +1,70 @@
 // AI Thinking Orb and Morphing Input Component
 import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { Streamdown } from "streamdown";
+import { Streamdown, Block } from "streamdown";
+import { motion } from "framer-motion";
 import { Copy, Check } from "lucide-react";
+import { BlurReveal } from "./blur-reveal";
 import "@/index.css";
+
+/**
+ * Splits markdown into logical visual lines/blocks while preserving code blocks and multi-line structures.
+ */
+function splitMarkdownIntoLinesAndBlocks(markdown: string): string[] {
+  if (!markdown) return [];
+  const rawLines = markdown.split("\n");
+  const result: string[] = [];
+  let inCodeBlock = false;
+  let codeBlockLines: string[] = [];
+
+  for (let i = 0; i < rawLines.length; i++) {
+    const line = rawLines[i];
+    const trimmed = line.trim();
+
+    if (trimmed.startsWith("```")) {
+      if (inCodeBlock) {
+        codeBlockLines.push(line);
+        result.push(codeBlockLines.join("\n"));
+        codeBlockLines = [];
+        inCodeBlock = false;
+      } else {
+        inCodeBlock = true;
+        codeBlockLines.push(line);
+      }
+    } else if (inCodeBlock) {
+      codeBlockLines.push(line);
+    } else {
+      if (trimmed.length > 0) {
+        result.push(line);
+      }
+    }
+  }
+
+  if (codeBlockLines.length > 0) {
+    result.push(codeBlockLines.join("\n"));
+  }
+
+  return result;
+}
+
+/**
+ * Animated block component that blurs and reveals each line slowly as it appears.
+ */
+const AnimatedLineBlock = React.memo(function AnimatedLineBlock(props: any) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, filter: "blur(20px)", y: 16 }}
+      animate={{ opacity: 1, filter: "blur(0px)", y: 0 }}
+      transition={{
+        duration: 0.85,
+        delay: Math.min((props.index ?? 0) * 0.05, 0.4),
+        ease: [0.22, 1, 0.36, 1],
+      }}
+      className="w-full my-1 leading-relaxed"
+    >
+      <Block {...props} />
+    </motion.div>
+  );
+});
 
 /* ───────────────────────────── copy ───────────────────────────── */
 const COPY = {
@@ -667,15 +729,27 @@ export function AIThinkingOrbInput({
         </div>
       </div>
 
-      {/* Answer Card State - Fixed Bounded Scrolling with ChatGPT-style Action Row */}
+      {/* Answer Card State - Fixed Bounded Scrolling with BlurReveal & ChatGPT-style Action Row */}
       {(phase === "unfold" || phase === "answered") && (
-        <div className="w-full max-w-2xl rounded-2xl border border-white/15 bg-[#0e1017]/95 backdrop-blur-2xl p-5 sm:p-7 shadow-[0_0_60px_rgba(255,255,255,0.06)] animate-in fade-in zoom-in-95 duration-500 flex flex-col text-left">
-          <div className="flex items-center justify-between pb-3.5 border-b border-white/10 mb-3.5 flex-wrap gap-2 shrink-0">
+        <div
+          className={`relative w-full max-w-2xl rounded-2xl border transition-all duration-500 bg-[#0e1017]/95 backdrop-blur-2xl p-5 sm:p-7 shadow-[0_0_60px_rgba(255,255,255,0.06)] animate-in fade-in zoom-in-95 duration-500 flex flex-col text-left overflow-hidden ${
+            isStreaming
+              ? "border-cyan-500/40 ring-1 ring-cyan-500/20 shadow-[0_0_50px_rgba(6,182,212,0.15)]"
+              : "border-white/15"
+          }`}
+        >
+          {/* Ambient Blue Reveal Glow behind card during streaming */}
+          {isStreaming && (
+            <div className="pointer-events-none absolute -inset-1 rounded-2xl bg-gradient-to-r from-blue-500/10 via-cyan-500/15 to-indigo-500/10 blur-xl opacity-75 animate-pulse" />
+          )}
+
+          <div className="relative z-10 flex items-center justify-between pb-3.5 border-b border-white/10 mb-3.5 flex-wrap gap-2 shrink-0">
             <div className="flex items-center gap-2.5">
-              <span className={`w-2 h-2 rounded-full ${isStreaming ? "bg-cyan-400 animate-ping" : "bg-emerald-400"}`} />
+              <span className={`w-2 h-2 rounded-full ${isStreaming ? "bg-cyan-400 animate-ping shadow-[0_0_8px_#22d3ee]" : "bg-emerald-400"}`} />
               <span className="text-xs font-mono uppercase tracking-wider text-zinc-300 font-bold">{COPY.answerTitle}</span>
               {isStreaming ? (
-                <span className="text-[10px] font-mono text-cyan-400 bg-cyan-500/10 border border-cyan-500/25 px-2 py-0.5 rounded-full animate-pulse">
+                <span className="text-[10px] font-mono text-cyan-400 bg-cyan-500/10 border border-cyan-500/25 px-2 py-0.5 rounded-full animate-pulse flex items-center gap-1.5 shadow-[0_0_12px_rgba(6,182,212,0.25)]">
+                  <span className="w-1.5 h-1.5 rounded-full bg-cyan-400" />
                   Streaming live…
                 </span>
               ) : (
@@ -692,16 +766,27 @@ export function AIThinkingOrbInput({
             </button>
           </div>
 
-          {/* Bounded Fixed Scrolling Area */}
+          {/* Bounded Fixed Scrolling Area with Line-by-Line Blur Reveal */}
           <div
             ref={answerScrollRef}
-            className="max-h-[min(480px,calc(100vh-320px))] min-h-[140px] overflow-y-auto overscroll-contain pr-2 select-text text-left prose prose-invert prose-sm text-zinc-200 leading-relaxed max-w-none break-words"
+            className="relative z-10 max-h-[min(480px,calc(100vh-320px))] min-h-[140px] overflow-y-auto overscroll-contain pr-2 select-text text-left prose prose-invert prose-sm text-zinc-200 leading-relaxed max-w-none break-words"
             style={{
               scrollbarWidth: "thin",
-              scrollbarColor: "rgba(255, 255, 255, 0.2) transparent",
+              scrollbarColor: isStreaming
+                ? "rgba(6, 182, 212, 0.4) transparent"
+                : "rgba(255, 255, 255, 0.2) transparent",
             }}
           >
-            <Streamdown>{answerText}</Streamdown>
+            <Streamdown
+              mode="streaming"
+              parseMarkdownIntoBlocksFn={splitMarkdownIntoLinesAndBlocks}
+              BlockComponent={AnimatedLineBlock}
+            >
+              {answerText}
+            </Streamdown>
+            {isStreaming && (
+              <span className="inline-block w-2 h-4 ml-1.5 align-middle bg-cyan-400 animate-pulse rounded-sm shadow-[0_0_8px_#22d3ee]" />
+            )}
           </div>
 
           {/* ChatGPT-style Action Row at the bottom */}

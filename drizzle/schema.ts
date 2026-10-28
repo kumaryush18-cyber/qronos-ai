@@ -111,6 +111,31 @@ export const specialReferralClaims = mysqlTable(
   ],
 );
 
+/** Automated Invite Milestone Rewards & Expiring Packs */
+export const inviteMilestoneGrants = mysqlTable(
+  "invite_milestone_grants",
+  {
+    id: bigint("id", { mode: "number" }).autoincrement().primaryKey(),
+    userId: int("userId").notNull().references(() => users.id, { onDelete: "cascade" }),
+    milestoneCycle: int("milestoneCycle").notNull(),
+    invitesCountAtGrant: int("invitesCountAtGrant").notNull(),
+    grantedTokens: bigint("grantedTokens", { mode: "number" }).notNull(),
+    grantedPaygNanos: bigint("grantedPaygNanos", { mode: "number" }).default(0).notNull(),
+    remainingTokens: bigint("remainingTokens", { mode: "number" }).notNull(),
+    remainingPaygNanos: bigint("remainingPaygNanos", { mode: "number" }).default(0).notNull(),
+    expiresAt: timestamp("expiresAt").notNull(),
+    status: mysqlEnum("status", ["active", "consumed", "expired"]).default("active").notNull(),
+    expiredAt: timestamp("expiredAt"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => [
+    index("idx_milestone_user_status_expires").on(table.userId, table.status, table.expiresAt),
+    index("idx_milestone_status_expires").on(table.status, table.expiresAt),
+  ],
+);
+
+export type InviteMilestoneGrant = typeof inviteMilestoneGrants.$inferSelect;
+
 /** Durable record of Twitter (X) Share-to-Earn rewards and 12-hour ephemeral balance tracking. */
 export const twitterShareRewards = mysqlTable(
   "twitter_share_rewards",

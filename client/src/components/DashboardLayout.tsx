@@ -20,7 +20,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { useIsMobile } from "@/hooks/useMobile";
-import { ArrowLeftRight, Boxes, ChartNoAxesCombined, Check, ChevronDown, CreditCard, FlaskConical, Gift, KeyRound, LayoutDashboard, LifeBuoy, LogOut, PanelLeft, Receipt, Settings2, Shield, Terminal, UserRound } from "lucide-react";
+import { ArrowLeftRight, Boxes, ChartNoAxesCombined, Check, ChevronDown, CreditCard, FlaskConical, Gift, KeyRound, LayoutDashboard, LifeBuoy, LogOut, PanelLeft, Receipt, Settings2, Shield, Sparkles, Terminal, Trophy, UserRound } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
@@ -40,6 +40,7 @@ import "./dashboard-shell.css";
 
 const menuItems = [
   { icon: LayoutDashboard, label: "Overview", path: "/dashboard" },
+  { icon: Trophy, label: "Events", path: "/dashboard/events", badge: "Live" },
   { icon: Terminal, label: "Playground", path: "/dashboard/playground" },
   { icon: Boxes, label: "Models", path: "/models" },
   { icon: CreditCard, label: "Pricing", path: "/dashboard/pricing" },
@@ -213,12 +214,19 @@ function DashboardLayoutContent({
                       isActive={isActive}
                       onClick={() => setLocation(item.path)}
                       tooltip={item.label}
-                      className={`h-10 transition-all font-normal`}
+                      className={`h-10 transition-all font-normal flex items-center justify-between w-full`}
                     >
-                      <item.icon
-                        className={`h-4 w-4 ${isActive ? "text-primary" : ""}`}
-                      />
-                      <span>{item.label}</span>
+                      <div className="flex items-center gap-2 min-w-0">
+                        <item.icon
+                          className={`h-4 w-4 shrink-0 ${isActive ? "text-primary" : ""}`}
+                        />
+                        <span className="truncate">{item.label}</span>
+                      </div>
+                      {(item as any).badge && (
+                        <span className="ml-auto text-[9px] font-mono font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                          {(item as any).badge}
+                        </span>
+                      )}
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 );

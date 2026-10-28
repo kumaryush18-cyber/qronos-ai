@@ -75,6 +75,7 @@ import VapourAccent from "@/components/ui/vapour-accent";
 import { buildQronosCurl, buildQronosJavaScript, buildQronosPython, QRONOS_API_BASE_URL } from "../../../shared/qronosApi";
 import { clearOneTimeApiKey, getOneTimeApiKey, rememberOneTimeApiKey } from "../../../shared/oneTimeApiKey";
 import { buildReferralInviteUrl } from "../../../shared/referrals";
+import { EventsWorkspace } from "@/components/events/EventsWorkspace";
 
 export const DASHBOARD_VIDEO_URL = "https://res.cloudinary.com/dhrh8heb5/video/upload/v1792215533/QV_1792214944093_szkkmh.mp4";
 
@@ -170,7 +171,7 @@ export function DashboardVideoLoadingScreen() {
   );
 }
 
-type Section = "overview" | "keys" | "usage" | "playground" | "profile" | "referrals" | "models" | "model" | "transactions" | "payments" | "pricing" | "x-rewards";
+type Section = "overview" | "keys" | "usage" | "playground" | "profile" | "referrals" | "models" | "model" | "transactions" | "payments" | "pricing" | "events" | "x-rewards";
 type UsageData = {
   quota?: { suspended: boolean } | null;
   totalRequests: number;
@@ -2183,6 +2184,8 @@ export default function DeveloperDashboard({ section = "overview", modelId }: { 
         </div>
         <UsageLogs />
       </>
+    ) : section === "events" ? (
+      <EventsWorkspace />
     ) : section === "profile" ? (
       <Profile />
     ) : section === "referrals" || section === "x-rewards" ? (

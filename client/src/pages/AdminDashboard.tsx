@@ -2,6 +2,7 @@ import AdminSupport from "./admin/Support";
 import React, { useState, useEffect, useMemo } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import LiveRequestLog from "./LiveRequestLog";
+import { MotionVideosAdminSection } from "@/components/admin/MotionVideosAdminSection";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -678,7 +679,12 @@ export default function AdminDashboard({ initialSection }: { initialSection?: Ad
         />
 
       )}
-      {section === "live" && <LiveRequestLog />}
+      {section === "live" && (
+        <div className="space-y-6">
+          <LiveRequestLog />
+          <MotionVideosAdminSection />
+        </div>
+      )}
       {section === "live-chat" && <AdminSupport />}
     </div>
   );

@@ -38,6 +38,7 @@ import {
   renderProxyEndpointMetrics,
   referralAttributions,
   referralCodes,
+  inviteMilestoneGrants,
   safetyAuditLogs,
   specialReferralClaims,
   userInteractionLogs,
@@ -79,6 +80,7 @@ export const fallbackPlatformSettings = new Map<string, { value: string; updated
   ["email_allowlist", { value: "[]", updatedAt: new Date(), updatedByUserId: null }],
   ["platform_maintenance_exemptions_v1", { value: "[]", updatedAt: new Date(), updatedByUserId: null }],
   ["gpt6_astra_premium_exemptions_v1", { value: "[]", updatedAt: new Date(), updatedByUserId: null }],
+  ["invite_milestone_campaign_v1", { value: JSON.stringify({ enabled: true, invitesRequired: 5, tokenGrantMillion: 10, paygGrantDollars: 0, expiryHours: 48, campaignStartedAt: new Date().toISOString() }), updatedAt: new Date(), updatedByUserId: null }],
 ]);
 
 export function markDatabaseUnhealthy(reason?: string) {
@@ -118,6 +120,7 @@ const RENDER_NIM_PROXY_SWARM_SETTING_KEY = "render_nim_proxy_swarm_v1";
 const BAILU_WEBSHARE_PROXY_POOL_SETTING_KEY = "bailu_webshare_proxy_pool_v1";
 export const COMPACT_SCALING_SETTING_KEY = "model_compact_scaling_configs_v1";
 export const INVITE_TRACKER_SETTING_KEY = "admin_invite_tracker_sessions_v1";
+export const INVITE_MILESTONE_CAMPAIGN_SETTING_KEY = "invite_milestone_campaign_v1";
 const BAI_REASONING_CONTINUATION_TTL_MS = 10 * 60 * 1_000;
 const BAI_PROVIDER_CIRCUIT_COOLDOWN_MS = 60_000;
 export const BAI_CREDENTIAL_MAX_ACTIVE_REQUESTS = 10;
@@ -1806,6 +1809,39 @@ export async function settleReservedCredit(
             .set({ codingPlanTokens: sql`GREATEST(0, ${creditAccounts.codingPlanTokens} - ${tokensDeducted})` })
             .where(eq(creditAccounts.userId, input.userId));
 
+          // FIFO drain: deduct from active milestone grants in order of earliest expiration
+          try {
+            const activeGrants = await tx
+              .select()
+              .from(inviteMilestoneGrants)
+              .where(
+                and(
+                  eq(inviteMilestoneGrants.userId, input.userId),
+                  eq(inviteMilestoneGrants.status, "active"),
+                ),
+              )
+              .orderBy(asc(inviteMilestoneGrants.expiresAt));
+
+            let tokensToDrain = tokensDeducted;
+            for (const grant of activeGrants) {
+              if (tokensToDrain <= 0) break;
+              const curRem = Number(grant.remainingTokens);
+              if (curRem <= 0) continue;
+              const drain = Math.min(curRem, tokensToDrain);
+              const newRem = curRem - drain;
+              tokensToDrain -= drain;
+              await tx
+                .update(inviteMilestoneGrants)
+                .set({
+                  remainingTokens: newRem,
+                  status: newRem <= 0 ? "consumed" : "active",
+                })
+                .where(eq(inviteMilestoneGrants.id, grant.id));
+            }
+          } catch {
+            // non-blocking FIFO tracker
+          }
+
           const updatedAccount = (await tx.select().from(creditAccounts).where(eq(creditAccounts.userId, input.userId)).limit(1))[0];
           const remainingCodingTokens = Number((updatedAccount as any)?.codingPlanTokens ?? 0);
 
@@ -2089,6 +2125,7 @@ export async function creditAccountFromDodoPay(input: {
 export async function getCreditProfile(userId: number, now = new Date()) {
   const db = await getDb();
   if (!db) return null;
+  await sweepUserExpiredMilestoneGrants(userId);
   const account = await ensureCreditAccount(userId);
   if (!account) return null;
   const today = utcUsageDate(now);
@@ -9365,6 +9402,450 @@ export async function clearAllInviteTrackerHistory(
   const data = await getRawInviteTrackerData();
   data.history = [];
   await saveInviteTrackerData(data, adminUserId);
+}
+
+// ============================================================================
+// Automated Invite Milestone Campaign & Expiring Packs Engine
+// ============================================================================
+
+export interface InviteMilestoneCampaignConfig {
+  enabled: boolean;
+  invitesRequired: number;       // e.g. 5
+  tokenGrantMillion: number;     // e.g. 10 (10M tokens)
+  paygGrantDollars: number;      // e.g. 0 ($0)
+  expiryHours: number;           // e.g. 48 hours
+  campaignStartedAt: string;     // ISO string
+  updatedAt: string;
+  updatedByUserId: number | null;
+}
+
+export const DEFAULT_INVITE_MILESTONE_CONFIG: InviteMilestoneCampaignConfig = {
+  enabled: true,
+  invitesRequired: 5,
+  tokenGrantMillion: 10,
+  paygGrantDollars: 0,
+  expiryHours: 48,
+  campaignStartedAt: new Date().toISOString(),
+  updatedAt: new Date().toISOString(),
+  updatedByUserId: null,
+};
+
+export async function getInviteMilestoneCampaignConfig(): Promise<InviteMilestoneCampaignConfig> {
+  return cached("invite_milestone_config", 10_000, async () => {
+    const db = await getDb();
+    if (!db) {
+      const fallback = fallbackPlatformSettings.get(INVITE_MILESTONE_CAMPAIGN_SETTING_KEY)?.value;
+      if (fallback) {
+        try { return { ...DEFAULT_INVITE_MILESTONE_CONFIG, ...JSON.parse(fallback) }; } catch {}
+      }
+      return DEFAULT_INVITE_MILESTONE_CONFIG;
+    }
+    const row = (await db.select().from(platformSettings).where(eq(platformSettings.settingKey, INVITE_MILESTONE_CAMPAIGN_SETTING_KEY)).limit(1))[0];
+    if (row?.settingValue) {
+      try {
+        const parsed = JSON.parse(row.settingValue);
+        return {
+          ...DEFAULT_INVITE_MILESTONE_CONFIG,
+          ...parsed,
+          updatedAt: row.updatedAt ? new Date(row.updatedAt).toISOString() : new Date().toISOString(),
+        };
+      } catch {}
+    }
+    return DEFAULT_INVITE_MILESTONE_CONFIG;
+  });
+}
+
+export async function saveInviteMilestoneCampaignConfig(
+  input: {
+    enabled?: boolean;
+    invitesRequired: number;
+    tokenGrantMillion: number;
+    paygGrantDollars?: number;
+    expiryHours: number;
+    resetCampaignTimer?: boolean;
+  },
+  adminUserId?: number | null,
+): Promise<InviteMilestoneCampaignConfig> {
+  const current = await getInviteMilestoneCampaignConfig();
+  const now = new Date();
+  const campaignStartedAt = input.resetCampaignTimer || !current.campaignStartedAt
+    ? now.toISOString()
+    : current.campaignStartedAt;
+
+  const config: InviteMilestoneCampaignConfig = {
+    enabled: input.enabled !== undefined ? input.enabled : current.enabled,
+    invitesRequired: Math.max(1, Math.trunc(input.invitesRequired || 5)),
+    tokenGrantMillion: Math.max(0, Math.trunc(input.tokenGrantMillion || 0)),
+    paygGrantDollars: Math.max(0, Number(input.paygGrantDollars || 0)),
+    expiryHours: Math.max(1, Math.trunc(input.expiryHours || 48)),
+    campaignStartedAt,
+    updatedAt: now.toISOString(),
+    updatedByUserId: adminUserId ?? null,
+  };
+
+  bustCache("invite_milestone_config");
+  fallbackPlatformSettings.set(INVITE_MILESTONE_CAMPAIGN_SETTING_KEY, {
+    value: JSON.stringify(config),
+    updatedAt: now,
+    updatedByUserId: adminUserId ?? null,
+  });
+
+  const db = await getDb();
+  if (db) {
+    await db.insert(platformSettings).values({
+      settingKey: INVITE_MILESTONE_CAMPAIGN_SETTING_KEY,
+      settingValue: JSON.stringify(config),
+      updatedByUserId: adminUserId ?? null,
+      updatedAt: now,
+    }).onDuplicateKeyUpdate({
+      set: {
+        settingValue: JSON.stringify(config),
+        updatedByUserId: adminUserId ?? null,
+        updatedAt: now,
+      },
+    });
+  }
+
+  return config;
+}
+
+export async function sweepUserExpiredMilestoneGrants(userId: number): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+  try {
+    const now = new Date();
+    const expiredActive = await db
+      .select()
+      .from(inviteMilestoneGrants)
+      .where(
+        and(
+          eq(inviteMilestoneGrants.userId, userId),
+          eq(inviteMilestoneGrants.status, "active"),
+          lte(inviteMilestoneGrants.expiresAt, now),
+        ),
+      );
+
+    if (expiredActive.length === 0) return 0;
+
+    let totalTokensToDeduct = 0;
+    let totalPaygNanosToDeduct = 0;
+
+    await db.transaction(async tx => {
+      for (const grant of expiredActive) {
+        const remainingTokens = Math.max(0, Number(grant.remainingTokens));
+        const remainingPayg = Math.max(0, Number(grant.remainingPaygNanos));
+
+        await tx
+          .update(inviteMilestoneGrants)
+          .set({
+            status: "expired",
+            expiredAt: now,
+            remainingTokens: 0,
+            remainingPaygNanos: 0,
+          })
+          .where(eq(inviteMilestoneGrants.id, grant.id));
+
+        if (remainingTokens > 0) {
+          totalTokensToDeduct += remainingTokens;
+          await tx
+            .update(creditAccounts)
+            .set({
+              codingPlanTokens: sql`GREATEST(0, ${creditAccounts.codingPlanTokens} - ${remainingTokens})`,
+            })
+            .where(eq(creditAccounts.userId, userId));
+
+          await tx.insert(creditLedger).values({
+            userId,
+            kind: "manual_adjustment",
+            amountNanos: 0,
+            balanceAfterNanos: 0,
+            referenceId: `milestone_grant_expired:${grant.id}`,
+            note: `Invite milestone reward pack #${grant.milestoneCycle} expired after deadline (-${Math.round(remainingTokens / 1_000_000)}M unspent tokens).`,
+          });
+        }
+
+        if (remainingPayg > 0) {
+          totalPaygNanosToDeduct += remainingPayg;
+          await tx
+            .update(creditAccounts)
+            .set({
+              paygBalanceNanos: sql`GREATEST(0, ${creditAccounts.paygBalanceNanos} - ${remainingPayg})`,
+            })
+            .where(eq(creditAccounts.userId, userId));
+        }
+      }
+    });
+
+    return totalTokensToDeduct;
+  } catch (err) {
+    console.error(`[MilestoneCampaign] Error sweeping expired grants for user ${userId}:`, err);
+    return 0;
+  }
+}
+
+export async function sweepAllExpiredMilestoneGrants(): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  try {
+    const now = new Date();
+    const expiredActive = await db
+      .select({ userId: inviteMilestoneGrants.userId })
+      .from(inviteMilestoneGrants)
+      .where(and(eq(inviteMilestoneGrants.status, "active"), lte(inviteMilestoneGrants.expiresAt, now)));
+
+    const uniqueUserIds = Array.from(new Set(expiredActive.map(g => g.userId)));
+    for (const userId of uniqueUserIds) {
+      await sweepUserExpiredMilestoneGrants(userId);
+    }
+  } catch (err) {
+    console.error("[MilestoneCampaign] Error sweeping all expired grants:", err);
+  }
+}
+
+export async function syncUserInviteMilestoneGrants(userId: number) {
+  const db = await getDb();
+  if (!db) return null;
+
+  // 1. First sweep any overdue expired grants
+  await sweepUserExpiredMilestoneGrants(userId);
+
+  const config = await getInviteMilestoneCampaignConfig();
+  if (!config.enabled || config.invitesRequired <= 0) return null;
+
+  const campaignStarted = new Date(config.campaignStartedAt);
+
+  // 2. Count legitimate referral signups for this user since campaignStartedAt
+  const referralRows = await db
+    .select({
+      id: referralAttributions.id,
+      createdAt: referralAttributions.createdAt,
+    })
+    .from(referralAttributions)
+    .where(
+      and(
+        eq(referralAttributions.referrerUserId, userId),
+        gte(referralAttributions.createdAt, campaignStarted),
+      ),
+    )
+    .orderBy(asc(referralAttributions.createdAt));
+
+  const validInvitesCount = referralRows.length;
+  const earnedCycles = Math.floor(validInvitesCount / config.invitesRequired);
+  if (earnedCycles <= 0) return null;
+
+  // 3. Check existing grants awarded to this user
+  const existingGrants = await db
+    .select({ milestoneCycle: inviteMilestoneGrants.milestoneCycle })
+    .from(inviteMilestoneGrants)
+    .where(eq(inviteMilestoneGrants.userId, userId));
+
+  const existingCycles = new Set(existingGrants.map(g => g.milestoneCycle));
+
+  // 4. Award missing cycles sequentially
+  const tokenGrant = config.tokenGrantMillion * 1_000_000;
+  const paygGrantNanos = Math.round(config.paygGrantDollars * NANODOLLARS_PER_DOLLAR);
+  const now = new Date();
+  const expiresAt = new Date(now.getTime() + config.expiryHours * 3600 * 1000);
+
+  for (let cycle = 1; cycle <= earnedCycles; cycle++) {
+    if (existingCycles.has(cycle)) continue;
+
+    const invitesCountAtGrant = cycle * config.invitesRequired;
+
+    try {
+      await db.transaction(async tx => {
+        const insertRes = await tx.insert(inviteMilestoneGrants).values({
+          userId,
+          milestoneCycle: cycle,
+          invitesCountAtGrant,
+          grantedTokens: tokenGrant,
+          grantedPaygNanos: paygGrantNanos,
+          remainingTokens: tokenGrant,
+          remainingPaygNanos: paygGrantNanos,
+          expiresAt,
+          status: "active",
+        });
+        const grantId = Number(insertRes[0].insertId);
+
+        if (tokenGrant > 0) {
+          await tx
+            .update(creditAccounts)
+            .set({
+              codingPlanTokens: sql`${creditAccounts.codingPlanTokens} + ${tokenGrant}`,
+            })
+            .where(eq(creditAccounts.userId, userId));
+
+          await tx.insert(creditLedger).values({
+            userId,
+            kind: "manual_adjustment",
+            amountNanos: 0,
+            balanceAfterNanos: tokenGrant,
+            referenceId: `milestone_grant_awarded:${grantId}`,
+            note: `Invite Milestone Bonus (Pack #${cycle}): +${config.tokenGrantMillion}M Coding Tokens (Valid for ${config.expiryHours}h).`,
+          });
+        }
+
+        if (paygGrantNanos > 0) {
+          await tx
+            .update(creditAccounts)
+            .set({
+              paygBalanceNanos: sql`${creditAccounts.paygBalanceNanos} + ${paygGrantNanos}`,
+            })
+            .where(eq(creditAccounts.userId, userId));
+        }
+
+        // Notification
+        const userEmail = (await tx.select({ email: users.email }).from(users).where(eq(users.id, userId)).limit(1))[0]?.email ?? "";
+        if (userEmail) {
+          await tx.insert(systemNotifications).values({
+            title: `Milestone Unlocked: Pack #${cycle} (+${config.tokenGrantMillion}M Tokens)!`,
+            message: `Congratulations! You referred ${invitesCountAtGrant} developers and unlocked Pack #${cycle}: +${config.tokenGrantMillion}M Coding Tokens. Valid for the next ${config.expiryHours} hours.`,
+            type: "update",
+            targetAudience: "SPECIFIC_EMAILS",
+            targetEmails: userEmail,
+            createdByUserId: userId,
+            createdAt: now,
+          });
+        }
+      });
+      existingCycles.add(cycle);
+    } catch (e: any) {
+      if (e?.code !== "ER_DUP_ENTRY") {
+        console.error(`[MilestoneCampaign] Failed to award cycle ${cycle} for user ${userId}:`, e);
+      }
+    }
+  }
+
+  return true;
+}
+
+export async function getUserEventsMilestoneSummary(userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+
+  // Sync and sweep grants first
+  await syncUserInviteMilestoneGrants(userId);
+
+  const config = await getInviteMilestoneCampaignConfig();
+  const campaignStarted = new Date(config.campaignStartedAt);
+
+  // User referral details
+  const refCodeObj = await getOrCreateReferralCode(userId);
+  const userRefCode = refCodeObj.code || "qr01";
+
+  // Total valid invites in current campaign window
+  const referrals = await db
+    .select({ id: referralAttributions.id, createdAt: referralAttributions.createdAt })
+    .from(referralAttributions)
+    .where(
+      and(
+        eq(referralAttributions.referrerUserId, userId),
+        gte(referralAttributions.createdAt, campaignStarted),
+      ),
+    );
+
+  const totalInvitesInCampaign = referrals.length;
+  const invitesRequired = Math.max(1, config.invitesRequired);
+  const currentCycleProgress = totalInvitesInCampaign % invitesRequired;
+  const invitesNeededForNextCycle = invitesRequired - currentCycleProgress;
+  const completedMilestones = Math.floor(totalInvitesInCampaign / invitesRequired);
+
+  // User's grants
+  const grants = await db
+    .select()
+    .from(inviteMilestoneGrants)
+    .where(eq(inviteMilestoneGrants.userId, userId))
+    .orderBy(desc(inviteMilestoneGrants.milestoneCycle));
+
+  const now = Date.now();
+  const formattedGrants = grants.map(g => {
+    const expiresMs = new Date(g.expiresAt).getTime();
+    const remainingSeconds = Math.max(0, Math.ceil((expiresMs - now) / 1000));
+    const grantedTokens = Number(g.grantedTokens);
+    const remainingTokens = Number(g.remainingTokens);
+    const usedTokens = Math.max(0, grantedTokens - remainingTokens);
+    const usedPercent = grantedTokens > 0 ? Math.min(100, Math.round((usedTokens / grantedTokens) * 100)) : 100;
+
+    return {
+      id: Number(g.id),
+      milestoneCycle: g.milestoneCycle,
+      invitesCountAtGrant: g.invitesCountAtGrant,
+      grantedTokens,
+      remainingTokens,
+      usedTokens,
+      usedPercent,
+      grantedTokensMillion: Math.round(grantedTokens / 1_000_000),
+      remainingTokensMillion: (remainingTokens / 1_000_000).toFixed(2),
+      grantedPaygNanos: Number(g.grantedPaygNanos),
+      remainingPaygNanos: Number(g.remainingPaygNanos),
+      expiresAt: new Date(g.expiresAt).toISOString(),
+      createdAt: new Date(g.createdAt).toISOString(),
+      expiredAt: g.expiredAt ? new Date(g.expiredAt).toISOString() : null,
+      status: g.status,
+      remainingSeconds,
+      isExpired: g.status === "expired" || (remainingSeconds <= 0 && g.status !== "consumed"),
+      isConsumed: g.status === "consumed" || remainingTokens <= 0,
+    };
+  });
+
+  const totalTokensGranted = grants.reduce((sum, g) => sum + Number(g.grantedTokens), 0);
+  const activeTokensAvailable = grants
+    .filter(g => g.status === "active" && new Date(g.expiresAt).getTime() > now)
+    .reduce((sum, g) => sum + Number(g.remainingTokens), 0);
+
+  return {
+    config: {
+      enabled: config.enabled,
+      invitesRequired: config.invitesRequired,
+      tokenGrantMillion: config.tokenGrantMillion,
+      paygGrantDollars: config.paygGrantDollars,
+      expiryHours: config.expiryHours,
+      campaignStartedAt: config.campaignStartedAt,
+    },
+    userRefCode,
+    stats: {
+      totalInvitesInCampaign,
+      invitesRequired: config.invitesRequired,
+      currentCycleProgress,
+      invitesNeededForNextCycle,
+      completedMilestones,
+      totalTokensGranted,
+      activeTokensAvailable,
+    },
+    grants: formattedGrants,
+  };
+}
+
+export async function listAdminInviteMilestoneGrants(limit = 100) {
+  const db = await getDb();
+  if (!db) return [];
+  const rows = await db
+    .select({
+      id: inviteMilestoneGrants.id,
+      userId: inviteMilestoneGrants.userId,
+      userEmail: users.email,
+      userName: users.name,
+      milestoneCycle: inviteMilestoneGrants.milestoneCycle,
+      invitesCountAtGrant: inviteMilestoneGrants.invitesCountAtGrant,
+      grantedTokens: inviteMilestoneGrants.grantedTokens,
+      remainingTokens: inviteMilestoneGrants.remainingTokens,
+      status: inviteMilestoneGrants.status,
+      expiresAt: inviteMilestoneGrants.expiresAt,
+      createdAt: inviteMilestoneGrants.createdAt,
+      expiredAt: inviteMilestoneGrants.expiredAt,
+    })
+    .from(inviteMilestoneGrants)
+    .innerJoin(users, eq(inviteMilestoneGrants.userId, users.id))
+    .orderBy(desc(inviteMilestoneGrants.createdAt))
+    .limit(limit);
+
+  return rows.map(r => ({
+    ...r,
+    id: Number(r.id),
+    expiresAt: new Date(r.expiresAt).toISOString(),
+    createdAt: new Date(r.createdAt).toISOString(),
+    expiredAt: r.expiredAt ? new Date(r.expiredAt).toISOString() : null,
+  }));
 }
 
 export type Gpt6AstraQuotaStatus = {

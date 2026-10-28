@@ -119,6 +119,12 @@ function Router() {
       <Route path={"/dashboard/keys"}>
         <RouteBoundary><DeveloperDashboard section="keys" /></RouteBoundary>
       </Route>
+      <Route path={"/dashboard/events"}>
+        <RouteBoundary><DeveloperDashboard section="events" /></RouteBoundary>
+      </Route>
+      <Route path={"/events"}>
+        <Redirect to="/dashboard/events" />
+      </Route>
       <Route path={"/dashboard/tickets"}>
         <Redirect to="/dashboard" />
       </Route>
