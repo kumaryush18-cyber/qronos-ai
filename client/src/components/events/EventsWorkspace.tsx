@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -28,6 +28,9 @@ import {
 import { toast } from "sonner";
 import { format, formatDistanceToNow } from "date-fns";
 import { StarBorderCard } from "@/components/StarBorderCard";
+import { StarBackgroundSvg, StarButton } from "@/components/StarButton";
+import { cn } from "@/lib/utils";
+import { SwordsmanHero } from "./RoninShowcase";
 
 interface MilestoneGrantItem {
   id: number;
@@ -205,6 +208,79 @@ function MilestonePackCard({
   );
 }
 
+function DoubleBorderStarCard({
+  children,
+  lightColor = "rgba(255, 255, 255, 0.9)",
+  lightWidth = 200,
+  duration = 7,
+  className = "",
+}: {
+  children: React.ReactNode;
+  lightColor?: string;
+  lightWidth?: number;
+  duration?: number;
+  className?: string;
+}) {
+  const cardRef = useRef<HTMLDivElement>(null);
+  const [path, setPath] = useState<string>("");
+
+  useEffect(() => {
+    const updatePath = () => {
+      if (cardRef.current) {
+        const w = cardRef.current.offsetWidth;
+        const h = cardRef.current.offsetHeight;
+        if (w > 0 && h > 0) {
+          setPath(`path('M 0 0 H ${w} V ${h} H 0 V 0')`);
+        }
+      }
+    };
+    updatePath();
+    const ro = new ResizeObserver(updatePath);
+    if (cardRef.current) ro.observe(cardRef.current);
+    return () => ro.disconnect();
+  }, []);
+
+  return (
+    <div
+      ref={cardRef}
+      style={{
+        ["--duration" as any]: duration,
+        ["--light-width" as any]: `${lightWidth}px`,
+        ["--light-color" as any]: lightColor,
+        ["--path" as any]: path,
+        isolation: "isolate",
+      }}
+      className={cn(
+        "relative overflow-hidden rounded-3xl border border-white/20 p-[2px] bg-black shadow-2xl transition-all duration-300 group",
+        className
+      )}
+    >
+      {/* 1. Revolving orbiting star light beam along the perimeter path */}
+      {path && (
+        <div
+          aria-hidden="true"
+          className="absolute aspect-square inset-0 animate-star-btn bg-[radial-gradient(ellipse_at_center,var(--light-color),transparent,transparent)] pointer-events-none z-0"
+          style={{
+            offsetPath: "var(--path)",
+            offsetDistance: "0%",
+            width: "var(--light-width)",
+          }}
+        />
+      )}
+
+      {/* 2. Inner border + Starry background container (Double Border Design) */}
+      <div className="relative z-10 h-full w-full overflow-hidden rounded-[22px] border border-white/15 bg-black p-6 flex flex-col justify-between">
+        <div className="absolute inset-0 pointer-events-none opacity-20">
+          <StarBackgroundSvg color="#000000" starColor="#ffffff" />
+        </div>
+        <div className="relative z-10 flex flex-col justify-between h-full space-y-4">
+          {children}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function EventsWorkspace() {
   const utils = trpc.useUtils();
   const [copied, setCopied] = useState(false);
@@ -278,41 +354,8 @@ export function EventsWorkspace() {
   if (!activeEvent) {
     return (
       <div className="space-y-8 animate-in fade-in-0 duration-200">
-        {/* Header Hero Banner */}
-        <div
-          style={{
-            backgroundColor: "oklch(0.14 0 0)",
-            borderColor: "oklch(0.26 0 0)",
-            boxShadow: "0 25px 60px rgba(0,0,0,0.85), inset 0 1px 0 rgba(255,255,255,0.06)",
-          }}
-          className="relative overflow-hidden rounded-3xl border p-6 sm:p-8"
-        >
-          <div className="pointer-events-none absolute -right-20 -top-20 h-64 w-64 rounded-full bg-emerald-500/[0.04] blur-3xl" />
-          <div className="pointer-events-none absolute -bottom-16 left-1/3 h-48 w-48 rounded-full bg-white/[0.02] blur-2xl" />
-
-          <div className="relative z-10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-5">
-            <div>
-              <div className="flex items-center gap-2.5 flex-wrap">
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-3 py-1 text-[10px] font-mono font-bold uppercase tracking-wider text-emerald-400">
-                  <span className="relative flex h-2 w-2">
-                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-                    <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400" />
-                  </span>
-                  1 Ongoing Event
-                </span>
-                <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[10px] font-mono text-zinc-300">
-                  2 Upcoming Drops
-                </span>
-              </div>
-              <h1 className="mt-3.5 text-2xl sm:text-4xl font-extrabold tracking-tight text-white font-mono">
-                Community Events & Sprints
-              </h1>
-              <p className="mt-2 text-xs sm:text-sm text-zinc-400 max-w-2xl leading-relaxed">
-                Participate in active developer challenges, earn frontier coding compute allocations, and track upcoming community releases.
-              </p>
-            </div>
-          </div>
-        </div>
+        {/* Top Interactive Animated Katana Swordsman Hero Header */}
+        <SwordsmanHero ongoingCount={1} upcomingCount={2} />
 
         {/* 3-Card Grid: Ongoing Event + 2 Skeleton Upcoming Cards */}
         <section className="space-y-4">
@@ -330,17 +373,12 @@ export function EventsWorkspace() {
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {/* 1. ONGOING EVENT CARD */}
-            <div
-              style={{
-                backgroundColor: "oklch(0.14 0 0)",
-                borderColor: "oklch(0.28 0.05 145)",
-                boxShadow: "0 20px 50px rgba(0,0,0,0.7), inset 0 1px 0 rgba(255,255,255,0.06)",
-              }}
-              className="relative flex flex-col justify-between rounded-3xl border p-6 transition-all duration-300 hover:border-emerald-500/50 hover:shadow-[0_20px_50px_rgba(16,185,129,0.15)] group overflow-hidden ring-1 ring-emerald-500/30"
+            <DoubleBorderStarCard
+              lightColor="rgba(52, 211, 153, 0.95)"
+              lightWidth={220}
+              duration={6}
             >
-              <div className="pointer-events-none absolute -right-12 -top-12 h-44 w-44 rounded-full bg-emerald-500/[0.08] blur-3xl group-hover:bg-emerald-500/[0.12] transition-colors" />
-
-              <div className="relative z-10 space-y-4">
+              <div className="space-y-4">
                 {/* Top status */}
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
@@ -357,70 +395,77 @@ export function EventsWorkspace() {
                   </span>
                 </div>
 
-                {/* Title and Icon */}
-                <div className="flex items-center gap-3 pt-1">
-                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 shadow-lg shadow-emerald-950/50">
-                    <Trophy size={22} />
-                  </div>
-                  <div>
-                    <h3 className="text-base font-bold text-white font-mono tracking-tight group-hover:text-emerald-300 transition-colors">
-                      Developer Sprint
-                    </h3>
-                    <p className="text-xs text-zinc-400 font-mono">Invite & Unlock Frontier Compute</p>
-                  </div>
+                {/* Catchy Headline in Big Metallic Silver Design */}
+                <div className="pt-1 space-y-1.5">
+                  <h3
+                    className="text-2xl sm:text-3xl font-black font-mono tracking-tight uppercase select-none leading-none"
+                    style={{
+                      background:
+                        "linear-gradient(180deg, #FFFFFF 0%, #E4E4E7 25%, #A1A1AA 55%, #FFFFFF 80%, #71717A 100%)",
+                      WebkitBackgroundClip: "text",
+                      WebkitTextFillColor: "transparent",
+                      filter: "drop-shadow(0px 2px 14px rgba(255, 255, 255, 0.35))",
+                    }}
+                  >
+                    TITAN APEX SPRINT
+                  </h3>
+                  <p className="text-xs text-zinc-400 font-mono font-medium">
+                    Invite &amp; Unlock Frontier Compute Quotas
+                  </p>
                 </div>
 
                 {/* Highlight Perk Tag */}
-                <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/[0.08] p-3">
+                <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/[0.08] p-3.5 space-y-1.5">
                   <div className="flex items-center gap-2 text-xs font-mono font-bold text-emerald-300">
                     <Gift size={14} className="text-emerald-400 shrink-0" />
                     <span>Every {config?.invitesRequired ?? 5} Invites = +{config?.tokenGrantMillion ?? 10}M Tokens</span>
                   </div>
-                  <p className="mt-1 text-[11px] text-zinc-400 leading-relaxed font-mono">
-                    Each milestone grants +{config?.tokenGrantMillion ?? 10}M Coding Tokens with independent 48-hour live countdown timers.
+                  <p className="text-[11px] text-zinc-400 leading-relaxed font-mono">
+                    Each milestone unlocked immediately grants +{config?.tokenGrantMillion ?? 10}M Coding Tokens with an independent 48-hour live countdown timer.
                   </p>
                 </div>
 
-                {/* Progress Mini Box */}
-                <div className="space-y-2 rounded-xl border border-white/10 bg-black/50 p-3.5">
-                  <div className="flex items-center justify-between text-xs font-mono">
-                    <span className="text-zinc-400">Current Progress</span>
-                    <span className="font-bold text-emerald-400">
-                      {stats?.currentCycleProgress ?? 0} / {config?.invitesRequired ?? 5} Invites ({progressPercent}%)
-                    </span>
+                {/* Clean Stats Overview (Progress bar removed) */}
+                <div className="rounded-xl border border-white/10 bg-black/60 p-3.5 flex items-center justify-between text-xs font-mono">
+                  <div>
+                    <span className="text-zinc-500 text-[10px] block uppercase tracking-wider">Sprint Status</span>
+                    <span className="text-white font-bold">{stats?.currentCycleProgress ?? 0} / {config?.invitesRequired ?? 5} Devs Joined</span>
                   </div>
-                  <Progress
-                    value={progressPercent}
-                    className="h-2 bg-black/60 border border-white/10 [&>div]:bg-emerald-500"
-                  />
-                  <div className="flex items-center justify-between text-[11px] font-mono text-zinc-500 pt-0.5">
-                    <span>{stats?.invitesNeededForNextCycle ?? config?.invitesRequired ?? 5} more needed</span>
-                    <span>{stats?.completedMilestones ?? 0} packs unlocked</span>
+                  <div className="text-right">
+                    <span className="text-zinc-500 text-[10px] block uppercase tracking-wider">Packs Earned</span>
+                    <span className="text-emerald-400 font-bold">{stats?.completedMilestones ?? 0} Packs</span>
                   </div>
                 </div>
               </div>
 
-              {/* Enter Button */}
-              <div className="relative z-10 pt-5 mt-4 border-t border-white/[0.08]">
-                <Button
+              {/* Enter Button with Green Rotating Star Light Design */}
+              <div className="pt-5 mt-4 border-t border-white/[0.08]">
+                <StarButton
+                  type="button"
                   onClick={() => openEvent("sprint")}
-                  className="w-full bg-emerald-500 hover:bg-emerald-400 text-black font-mono font-bold text-xs h-10 shadow-lg shadow-emerald-950/40 cursor-pointer flex items-center justify-center gap-2 group/btn transition-all"
+                  backgroundColor="#000000"
+                  lightColor="rgba(52, 211, 153, 0.95)"
+                  starColor="#10b981"
+                  borderWidth={2}
+                  duration={3}
+                  lightWidth={140}
+                  className="w-full h-11 rounded-full border border-emerald-500/60 hover:border-emerald-400 text-xs font-mono font-bold shadow-[0_0_25px_rgba(16,185,129,0.35)] cursor-pointer"
                 >
-                  <span>Enter Event</span>
-                  <ArrowRight size={14} className="group-hover/btn:translate-x-1 transition-transform" />
-                </Button>
+                  <span className="text-white flex items-center justify-center gap-2">
+                    <span>Enter Event</span>
+                    <ArrowRight size={14} className="text-emerald-400 group-hover/star-button:translate-x-1 transition-transform" />
+                  </span>
+                </StarButton>
               </div>
-            </div>
+            </DoubleBorderStarCard>
 
-            {/* 2. UPCOMING EVENT CARD 1 (WITH SKELETON LOADING) */}
-            <div
-              style={{
-                backgroundColor: "oklch(0.13 0 0)",
-                borderColor: "oklch(0.22 0 0)",
-              }}
-              className="relative flex flex-col justify-between rounded-3xl border p-6 overflow-hidden"
+            {/* 2. UPCOMING EVENT CARD 1 (WITH SKELETON LOADING & METALLIC SILVER HEADLINE) */}
+            <DoubleBorderStarCard
+              lightColor="rgba(255, 255, 255, 0.85)"
+              lightWidth={180}
+              duration={8}
             >
-              <div className="relative z-10 space-y-4">
+              <div className="space-y-4">
                 <div className="flex items-center justify-between gap-2">
                   <Badge className="bg-amber-500/10 text-amber-400 border border-amber-500/25 font-mono text-[10px] font-bold">
                     Upcoming
@@ -431,19 +476,28 @@ export function EventsWorkspace() {
                   </span>
                 </div>
 
-                <div className="flex items-center gap-3 pt-1">
-                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/[0.04] border border-white/10 text-zinc-500">
-                    <Sparkles size={20} className="text-amber-400/70" />
-                  </div>
-                  <div className="flex-1 space-y-2">
-                    <Skeleton className="h-4.5 w-4/5 bg-white/15" />
-                    <Skeleton className="h-3 w-1/2 bg-white/[0.08]" />
-                  </div>
+                {/* Big Metallic Silver Headline */}
+                <div className="pt-1 space-y-1.5">
+                  <h3
+                    className="text-2xl sm:text-3xl font-black font-mono tracking-tight uppercase select-none leading-none"
+                    style={{
+                      background:
+                        "linear-gradient(180deg, #FFFFFF 0%, #E4E4E7 25%, #A1A1AA 55%, #FFFFFF 80%, #71717A 100%)",
+                      WebkitBackgroundClip: "text",
+                      WebkitTextFillColor: "transparent",
+                      filter: "drop-shadow(0px 2px 14px rgba(255, 255, 255, 0.35))",
+                    }}
+                  >
+                    NEURAL FORGE 2026
+                  </h3>
+                  <p className="text-xs text-zinc-400 font-mono font-medium">
+                    Autonomous Multi-Agent Hackathon
+                  </p>
                 </div>
 
-                <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-3 space-y-2">
+                <div className="rounded-xl border border-white/[0.08] bg-black/60 p-3.5 space-y-2">
                   <div className="flex items-center gap-2">
-                    <div className="h-2 w-2 rounded-full bg-amber-400/40 animate-pulse" />
+                    <div className="h-2 w-2 rounded-full bg-amber-400/50 animate-pulse" />
                     <Skeleton className="h-3 w-3/5 bg-white/15" />
                   </div>
                   <Skeleton className="h-3 w-full bg-white/[0.06]" />
@@ -456,33 +510,27 @@ export function EventsWorkspace() {
                     <Skeleton className="h-3 w-16 bg-white/10" />
                   </div>
                   <Skeleton className="h-2 w-full bg-white/[0.06]" />
-                  <div className="flex items-center justify-between pt-0.5">
-                    <Skeleton className="h-2.5 w-20 bg-white/[0.05]" />
-                    <Skeleton className="h-2.5 w-16 bg-white/[0.05]" />
-                  </div>
                 </div>
               </div>
 
-              <div className="relative z-10 pt-5 mt-4 border-t border-white/[0.08]">
+              <div className="pt-5 mt-4 border-t border-white/[0.08]">
                 <Button
                   disabled
-                  className="w-full bg-white/[0.04] border border-white/10 text-zinc-500 font-mono text-xs h-10 cursor-not-allowed flex items-center justify-center gap-2"
+                  className="w-full bg-white/[0.04] border border-white/10 text-zinc-500 font-mono text-xs h-11 rounded-full cursor-not-allowed flex items-center justify-center gap-2"
                 >
                   <Lock size={13} className="text-zinc-500" />
-                  <span>Upcoming · Dropping Soon</span>
+                  <span>Upcoming · Registration Locked</span>
                 </Button>
               </div>
-            </div>
+            </DoubleBorderStarCard>
 
-            {/* 3. UPCOMING EVENT CARD 2 (WITH SKELETON LOADING) */}
-            <div
-              style={{
-                backgroundColor: "oklch(0.13 0 0)",
-                borderColor: "oklch(0.22 0 0)",
-              }}
-              className="relative flex flex-col justify-between rounded-3xl border p-6 overflow-hidden"
+            {/* 3. UPCOMING EVENT CARD 2 (WITH SKELETON LOADING & METALLIC SILVER HEADLINE) */}
+            <DoubleBorderStarCard
+              lightColor="rgba(255, 255, 255, 0.85)"
+              lightWidth={180}
+              duration={8}
             >
-              <div className="relative z-10 space-y-4">
+              <div className="space-y-4">
                 <div className="flex items-center justify-between gap-2">
                   <Badge className="bg-blue-500/10 text-blue-400 border border-blue-500/25 font-mono text-[10px] font-bold">
                     Upcoming
@@ -493,19 +541,28 @@ export function EventsWorkspace() {
                   </span>
                 </div>
 
-                <div className="flex items-center gap-3 pt-1">
-                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/[0.04] border border-white/10 text-zinc-500">
-                    <Zap size={20} className="text-blue-400/70" />
-                  </div>
-                  <div className="flex-1 space-y-2">
-                    <Skeleton className="h-4.5 w-3/4 bg-white/15" />
-                    <Skeleton className="h-3 w-2/5 bg-white/[0.08]" />
-                  </div>
+                {/* Big Metallic Silver Headline */}
+                <div className="pt-1 space-y-1.5">
+                  <h3
+                    className="text-2xl sm:text-3xl font-black font-mono tracking-tight uppercase select-none leading-none"
+                    style={{
+                      background:
+                        "linear-gradient(180deg, #FFFFFF 0%, #E4E4E7 25%, #A1A1AA 55%, #FFFFFF 80%, #71717A 100%)",
+                      WebkitBackgroundClip: "text",
+                      WebkitTextFillColor: "transparent",
+                      filter: "drop-shadow(0px 2px 14px rgba(255, 255, 255, 0.35))",
+                    }}
+                  >
+                    QUANTUM MULTIPLIER
+                  </h3>
+                  <p className="text-xs text-zinc-400 font-mono font-medium">
+                    2X Token Recharge Weekend Boost
+                  </p>
                 </div>
 
-                <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-3 space-y-2">
+                <div className="rounded-xl border border-white/[0.08] bg-black/60 p-3.5 space-y-2">
                   <div className="flex items-center gap-2">
-                    <div className="h-2 w-2 rounded-full bg-blue-400/40 animate-pulse" />
+                    <div className="h-2 w-2 rounded-full bg-blue-400/50 animate-pulse" />
                     <Skeleton className="h-3 w-2/3 bg-white/15" />
                   </div>
                   <Skeleton className="h-3 w-full bg-white/[0.06]" />
@@ -518,23 +575,19 @@ export function EventsWorkspace() {
                     <Skeleton className="h-3 w-14 bg-white/10" />
                   </div>
                   <Skeleton className="h-2 w-full bg-white/[0.06]" />
-                  <div className="flex items-center justify-between pt-0.5">
-                    <Skeleton className="h-2.5 w-16 bg-white/[0.05]" />
-                    <Skeleton className="h-2.5 w-20 bg-white/[0.05]" />
-                  </div>
                 </div>
               </div>
 
-              <div className="relative z-10 pt-5 mt-4 border-t border-white/[0.08]">
+              <div className="pt-5 mt-4 border-t border-white/[0.08]">
                 <Button
                   disabled
-                  className="w-full bg-white/[0.04] border border-white/10 text-zinc-500 font-mono text-xs h-10 cursor-not-allowed flex items-center justify-center gap-2"
+                  className="w-full bg-white/[0.04] border border-white/10 text-zinc-500 font-mono text-xs h-11 rounded-full cursor-not-allowed flex items-center justify-center gap-2"
                 >
                   <Lock size={13} className="text-zinc-500" />
                   <span>Upcoming · In Development</span>
                 </Button>
               </div>
-            </div>
+            </DoubleBorderStarCard>
           </div>
         </section>
       </div>

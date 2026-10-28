@@ -1,0 +1,53 @@
+@import url('https://fonts.googleapis.com/css2?family=Anton&family=Noto+Serif+JP:wght@500;900&family=JetBrains+Mono:wght@400;700&display=swap');
+
+.font-anton {
+  font-family: 'Anton', sans-serif;
+}
+
+.ronin-kanji {
+  position: absolute;
+  left: clamp(16px, 5vw, 80px);
+  top: -60px;
+  font-family: 'Noto Serif JP', serif;
+  font-weight: 900;
+  font-size: clamp(100px, 14vw, 220px);
+  line-height: 1;
+  color: rgba(255, 46, 61, 0.16);
+  z-index: 1;
+  writing-mode: vertical-rl;
+  letter-spacing: -0.04em;
+}
+
+.ronin-title-stroke {
+  -webkit-text-stroke: 2px #f2f4f8;
+  color: transparent;
+}
+
+.ronin-btn-primary {
+  transition: background-color 0.3s, color 0.3s, transform 0.3s;
+}
+
+.ronin-btn-primary:hover {
+  transform: translateY(-2px);
+}
+
+@media (max-width: 860px) {
+  .ronin-nav,
+  .ronin-copy {
+    max-width: none;
+  }
+  .ronin-links {
+    display: none;
+  }
+  .ronin-showcase-container::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    background: linear-gradient(180deg, transparent 30%, rgba(0, 40, 80, 0.85) 62%);
+    pointer-events: none;
+  }
+  .ronin-meta {
+    display: none;
+  }
+}

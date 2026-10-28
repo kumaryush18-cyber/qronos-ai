@@ -150,18 +150,23 @@ export function SignInCard({
       style={{ backgroundColor: "oklch(0 0 0)" }}
       className={cn("min-h-screen w-full relative overflow-hidden flex items-center justify-center p-4 selection:bg-white/20 selection:text-white", className)}
     >
-      {/* Background atmosphere - pure black theme of landing page */}
-      <div className="absolute inset-0 bg-black pointer-events-none" style={{ backgroundColor: "oklch(0 0 0)" }} />
-
-      {/* Landing page style ambient soft radial glow */}
+      {/* Horizontal End-to-End Responsive Video Band at Middle (Behind & Extending Across Viewport) */}
       <div
-        className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[900px] h-[550px] pointer-events-none"
-        style={{
-          background:
-            "radial-gradient(ellipse at center, rgba(255, 255, 255, 0.04) 0%, rgba(255, 255, 255, 0.01) 40%, transparent 70%)",
-          filter: "blur(80px)",
-        }}
-      />
+        className="absolute top-1/2 left-0 right-0 -translate-y-1/2 w-full h-[540px] sm:h-[620px] overflow-hidden pointer-events-none z-0 [mask-image:linear-gradient(to_bottom,transparent,black_12%,black_88%,transparent)] [-webkit-mask-image:linear-gradient(to_bottom,transparent,black_12%,black_88%,transparent)]"
+      >
+        <video
+          src="/videos/mux_background_1080p.mp4"
+          autoPlay
+          loop
+          muted
+          playsInline
+          preload="auto"
+          className="w-full h-full object-cover object-center"
+        />
+        {/* Soft edge gradients so it transitions cleanly into pure black */}
+        <div className="absolute inset-y-0 left-0 w-8 sm:w-16 bg-gradient-to-r from-black to-transparent pointer-events-none" />
+        <div className="absolute inset-y-0 right-0 w-8 sm:w-16 bg-gradient-to-l from-black to-transparent pointer-events-none" />
+      </div>
 
       {/* 3D Perspective Card Container */}
       <motion.div
@@ -287,12 +292,12 @@ export function SignInCard({
               />
             </div>
 
-            {/* Light Black Obsidian Glass Card Surface */}
+            {/* Frosted Obsidian Glass Card Surface Centered Over Motion Video */}
             <div
               style={{
-                backgroundColor: "oklch(0.14 0 0)",
-                borderColor: "oklch(0.26 0 0)",
-                boxShadow: "0 25px 60px rgba(0,0,0,0.85), inset 0 1px 0 rgba(255,255,255,0.06)",
+                backgroundColor: "oklch(0.13 0 0 / 0.88)",
+                borderColor: "oklch(0.28 0 0)",
+                boxShadow: "0 30px 80px rgba(0,0,0,0.95), inset 0 1px 0 rgba(255,255,255,0.12)",
               }}
               className="relative backdrop-blur-2xl rounded-2xl p-7 sm:p-8 border shadow-2xl overflow-hidden z-10"
             >
