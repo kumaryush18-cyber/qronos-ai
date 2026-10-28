@@ -36,6 +36,7 @@ import {
   getModelIsPayg,
   getModelAccess,
   getUserTier,
+  isDiscordVerified,
   isTierSufficient,
   USER_TIER_DISPLAY_NAMES,
   recordUsage,
@@ -4761,6 +4762,16 @@ export function registerOpenAiGateway(app: Express) {
     if (!key) {
       return errorResponse(res, requestId, 401, "The supplied Qronos AI key is missing, invalid, or revoked.", "invalid_api_key");
     }
+
+    if (!(await isDiscordVerified(key.userId))) {
+      return errorResponse(
+        res,
+        requestId,
+        403,
+        "Discord verification is required to use Qronos AI API endpoints. Please connect and verify your Discord membership at https://qronos.me/verify-discord to unlock API access.",
+        "discord_verification_required"
+      );
+    }
     const [profile, tier, quota] = await Promise.all([
       getCreditProfile(key.userId),
       getUserTier(key.userId),
@@ -4804,6 +4815,16 @@ export function registerOpenAiGateway(app: Express) {
 
     const key = await findActiveApiKey(secret);
     if (!key) return errorResponse(res, requestId, 401, "The supplied Qronos AI key is missing, invalid, or revoked.", "invalid_api_key");
+
+    if (!(await isDiscordVerified(key.userId))) {
+      return errorResponse(
+        res,
+        requestId,
+        403,
+        "Discord verification is required to use Qronos AI API endpoints. Please connect and verify your Discord membership at https://qronos.me/verify-discord to unlock API access.",
+        "discord_verification_required"
+      );
+    }
 
     const accountRate = checkAccountRateLimit(key.userId);
     if (!accountRate.allowed) {

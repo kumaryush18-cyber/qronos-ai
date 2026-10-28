@@ -6256,6 +6256,7 @@ export async function markDiscordVerified(userId: number) {
   await db.update(accountControls)
     .set({ discordVerifiedAt: verifiedAt })
     .where(eq(accountControls.userId, userId));
+  bustCache(`discord_verified:${userId}`);
   await writeAuditEvent({
     actorUserId: userId,
     targetUserId: userId,
@@ -6263,7 +6264,7 @@ export async function markDiscordVerified(userId: number) {
     entityType: "account",
     entityId: String(userId),
   });
-  
+
   return verifiedAt;
 }
 
@@ -6307,13 +6308,18 @@ export async function awardDiscordVerificationTokens(userId: number) {
 }
 
 export async function isDiscordVerified(userId: number) {
-  const db = await getDb();
-  if (!db) return false;
-  const record = (await db.select({ discordVerifiedAt: accountControls.discordVerifiedAt })
-    .from(accountControls)
-    .where(eq(accountControls.userId, userId))
-    .limit(1))[0];
-  return Boolean(record?.discordVerifiedAt);
+  if (userId === FALLBACK_ADMIN_SESSION_PRINCIPAL.id) return true;
+  return cached(`discord_verified:${userId}`, 30_000, async () => {
+    const db = await getDb();
+    if (!db) return false;
+    const userRow = (await db.select({ role: users.role, openId: users.openId }).from(users).where(eq(users.id, userId)).limit(1))[0];
+    if (userRow?.role === "admin" || userRow?.openId === ADMIN_SESSION_PRINCIPAL_OPEN_ID) return true;
+    const record = (await db.select({ discordVerifiedAt: accountControls.discordVerifiedAt })
+      .from(accountControls)
+      .where(eq(accountControls.userId, userId))
+      .limit(1))[0];
+    return Boolean(record?.discordVerifiedAt);
+  });
 }
 
 /**
@@ -6336,6 +6342,7 @@ export async function bypassDiscordVerificationByEmail(emailInput: string) {
   await db.update(accountControls)
     .set({ discordVerifiedAt: now })
     .where(eq(accountControls.userId, user.id));
+  bustCache(`discord_verified:${user.id}`);
 
   // Award the 10,000,000 free tokens if not already awarded
   const grantResult = await awardDiscordVerificationTokens(user.id);
@@ -6392,6 +6399,7 @@ export async function resetDiscordVerification(userId: number) {
   await db.update(accountControls)
     .set({ discordVerifiedAt: null })
     .where(eq(accountControls.userId, userId));
+  bustCache(`discord_verified:${userId}`);
   return { reset: wasVerified };
 }
 

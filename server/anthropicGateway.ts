@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { checkAccountRateLimit } from "./rateLimiters";
 import {
   findActiveApiKey,
+  isDiscordVerified,
   getPlatformMaintenanceConfig,
   isUserExemptFromPlatformMaintenance,
   getEffectivePlatformMaintenanceMessage,
@@ -1194,6 +1195,16 @@ export function registerAnthropicMessagesGateway(app: Express) {
     if (!secret) return respondError(res, requestId, 401, "authentication_error", "Send a Qronos AI key using the x-api-key or Bearer authorization header.");
     const key = await findActiveApiKey(secret);
     if (!key) return respondError(res, requestId, 401, "authentication_error", "The supplied Qronos AI key is missing, invalid, or revoked.");
+
+    if (!(await isDiscordVerified(key.userId))) {
+      return respondError(
+        res,
+        requestId,
+        403,
+        "permission_error",
+        "Discord verification is required to use Qronos AI API endpoints. Please connect and verify your Discord membership at https://qronos.me/verify-discord to unlock API access."
+      );
+    }
 
     const accountRate = checkAccountRateLimit(key.userId);
     if (!accountRate.allowed) {
