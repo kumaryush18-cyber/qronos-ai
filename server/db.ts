@@ -6247,6 +6247,18 @@ export async function bindDiscordIdentity(userId: number, discordUserId: string)
   }
 }
 
+/** Looks up a registered Qronos user account bound to a Discord account ID. */
+export async function findUserByDiscordId(discordUserId: string) {
+  const db = await getDb();
+  if (!db || !discordUserId) return null;
+  const identity = (await db.select({ userId: oauthIdentities.userId })
+    .from(oauthIdentities)
+    .where(and(eq(oauthIdentities.provider, "discord"), eq(oauthIdentities.providerUserId, String(discordUserId))))
+    .limit(1))[0];
+  if (!identity) return null;
+  return await getUserById(identity.userId);
+}
+
 export async function markDiscordVerified(userId: number) {
   const db = await getDb();
   const controls = await ensureAccountControl(userId);

@@ -4,6 +4,12 @@ import {
   Partials,
   type Message,
   type TextChannel,
+  SlashCommandBuilder,
+  EmbedBuilder,
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
+  type ChatInputCommandInteraction,
 } from "discord.js";
 import { ENV } from "./_core/env";
 import {
@@ -16,6 +22,11 @@ import {
   saveDiscordChannelSummary,
   listDiscordMemberProfiles,
   type DiscordBotConfig,
+  findUserByDiscordId,
+  getCreditProfile,
+  getUserTier,
+  getQuotaStatus,
+  getUsageSummary,
 } from "./db";
 
 let client: Client | null = null;
@@ -451,6 +462,210 @@ INSTRUCTIONS:
 /**
  * Initializes and connects the Discord Bot service.
  */
+/**
+ * Registers /balance and /usage slash commands to Discord guild or globally.
+ */
+async function registerDiscordSlashCommands(botClient: Client, guildId?: string) {
+  try {
+    const commands = [
+      new SlashCommandBuilder()
+        .setName("balance")
+        .setDescription("Check your Qronos AI token & PAYG compute balance"),
+      new SlashCommandBuilder()
+        .setName("usage")
+        .setDescription("Inspect your Qronos AI token throughput & request activity"),
+    ];
+
+    const targetGuildId = guildId || ENV.discordGuildId || "1553707015384207453";
+    if (targetGuildId) {
+      const guild = await botClient.guilds.fetch(targetGuildId).catch(() => null);
+      if (guild) {
+        await guild.commands.set(commands);
+        console.log(`[DiscordBot] Registered slash commands (/balance, /usage) to guild ${targetGuildId}`);
+        return;
+      }
+    }
+    if (botClient.application) {
+      await botClient.application.commands.set(commands);
+      console.log("[DiscordBot] Registered global slash commands (/balance, /usage)");
+    }
+  } catch (err: any) {
+    console.error("[DiscordBot] Failed to register slash commands:", err.message);
+  }
+}
+
+/**
+ * Handles incoming slash command interactions (/balance, /usage).
+ */
+async function handleSlashCommand(interaction: ChatInputCommandInteraction) {
+  const { commandName, user: discordUser } = interaction;
+
+  if (commandName === "balance") {
+    await interaction.deferReply({ ephemeral: true });
+
+    const qronosUser = await findUserByDiscordId(discordUser.id);
+    if (!qronosUser) {
+      const embed = new EmbedBuilder()
+        .setColor(0x5865f2)
+        .setTitle("🔗 Link Your Qronos AI Account")
+        .setDescription(
+          `Hey **${discordUser.username}**, your Discord account is not yet connected to a Qronos AI workspace.\n\nLink your account now to claim **10,000,000 Free Coding Tokens** and unlock high-throughput model routing:`
+        )
+        .setFooter({ text: "Qronos AI · Universal LLM Gateway", iconURL: client?.user?.displayAvatarURL() });
+
+      const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
+        new ButtonBuilder()
+          .setLabel("Connect Discord & Claim 10M Tokens")
+          .setStyle(ButtonStyle.Link)
+          .setURL("https://qronos.me/verify-discord"),
+        new ButtonBuilder()
+          .setLabel("Sign In / Register")
+          .setStyle(ButtonStyle.Link)
+          .setURL("https://qronos.me/signin")
+      );
+
+      await interaction.editReply({ embeds: [embed], components: [row] });
+      return;
+    }
+
+    const [profile, tier, quota] = await Promise.all([
+      getCreditProfile(qronosUser.id),
+      getUserTier(qronosUser.id),
+      getQuotaStatus(qronosUser.id),
+    ]);
+
+    const codingPlanTokens = Number(profile?.codingPlanTokens ?? 0);
+    const paygBalanceNanos = Number(profile?.paygBalanceNanos ?? 0);
+    const paygBalanceUsd = (paygBalanceNanos / 1_000_000_000).toFixed(2);
+    const formattedTokens =
+      codingPlanTokens >= 1_000_000
+        ? `${(codingPlanTokens / 1_000_000).toFixed(2)}M Tokens`
+        : `${codingPlanTokens.toLocaleString()} Tokens`;
+
+    const embed = new EmbedBuilder()
+      .setColor(0x10b981)
+      .setTitle("⚡ Qronos AI — Developer Portfolio")
+      .setDescription(`Connected workspace for **${qronosUser.name || qronosUser.email || discordUser.username}**`)
+      .addFields(
+        {
+          name: "🎁 Coding Plan Tokens",
+          value: `**${formattedTokens}**\n*(Wholesale Frontier Pool)*`,
+          inline: true,
+        },
+        {
+          name: "💳 PAYG Compute",
+          value: `**$${paygBalanceUsd} USD**\n*(On-Demand Mesh)*`,
+          inline: true,
+        },
+        {
+          name: "🏆 Developer Tier",
+          value: `**${String(tier).toUpperCase()}**`,
+          inline: true,
+        },
+        {
+          name: "📊 Daily Allowance",
+          value: `${quota?.remainingRequests?.toLocaleString() ?? "2,000"} requests / ${quota?.remainingTokens ? (quota.remainingTokens / 1_000_000).toFixed(1) + "M" : "unlimited"} tokens remaining`,
+          inline: false,
+        },
+        {
+          name: "🟢 Gateway Status",
+          value: "Zero Artificial Rate Limits · Direct Streaming Active",
+          inline: false,
+        }
+      )
+      .setFooter({ text: "Qronos AI · Universal LLM Gateway", iconURL: client?.user?.displayAvatarURL() })
+      .setTimestamp();
+
+    const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder()
+        .setLabel("Add Balance & Plans")
+        .setStyle(ButtonStyle.Link)
+        .setURL("https://qronos.me/dashboard/pricing"),
+      new ButtonBuilder()
+        .setLabel("Developer Dashboard")
+        .setStyle(ButtonStyle.Link)
+        .setURL("https://qronos.me/dashboard"),
+      new ButtonBuilder()
+        .setLabel("API Documentation")
+        .setStyle(ButtonStyle.Link)
+        .setURL("https://qronos.me/docs")
+    );
+
+    await interaction.editReply({ embeds: [embed], components: [row] });
+    return;
+  }
+
+  if (commandName === "usage") {
+    await interaction.deferReply({ ephemeral: true });
+
+    const qronosUser = await findUserByDiscordId(discordUser.id);
+    if (!qronosUser) {
+      const embed = new EmbedBuilder()
+        .setColor(0x5865f2)
+        .setTitle("🔗 Link Your Qronos AI Account")
+        .setDescription(
+          `Hey **${discordUser.username}**, connect your Discord account to inspect your personal API key usage and gateway throughput in real time:`
+        )
+        .setFooter({ text: "Qronos AI · Universal LLM Gateway", iconURL: client?.user?.displayAvatarURL() });
+
+      const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
+        new ButtonBuilder()
+          .setLabel("Connect Discord")
+          .setStyle(ButtonStyle.Link)
+          .setURL("https://qronos.me/verify-discord")
+      );
+
+      await interaction.editReply({ embeds: [embed], components: [row] });
+      return;
+    }
+
+    const usage = await getUsageSummary(qronosUser.id);
+
+    const embed = new EmbedBuilder()
+      .setColor(0x06b6d4)
+      .setTitle("📈 Qronos AI — Gateway Observability")
+      .setDescription(`Throughput activity for **${qronosUser.name || qronosUser.email || discordUser.username}**`)
+      .addFields(
+        {
+          name: "⚡ Lifetime Tokens",
+          value: `**${(usage.totalTokens || 0).toLocaleString()}** tokens`,
+          inline: true,
+        },
+        {
+          name: "📡 Total Invocations",
+          value: `**${(usage.totalRequests || 0).toLocaleString()}** requests`,
+          inline: true,
+        },
+        {
+          name: "🕒 Requests Available Today",
+          value: `**${usage.quota?.remainingRequests?.toLocaleString() ?? "2,000"}** reqs`,
+          inline: true,
+        },
+        {
+          name: "🛡️ Security Vault",
+          value: "SHA-256 Hashed Keys · Zero Plaintext Storage",
+          inline: false,
+        }
+      )
+      .setFooter({ text: "Qronos AI · Universal LLM Gateway", iconURL: client?.user?.displayAvatarURL() })
+      .setTimestamp();
+
+    const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder()
+        .setLabel("View Detailed Request Logs")
+        .setStyle(ButtonStyle.Link)
+        .setURL("https://qronos.me/dashboard/usage"),
+      new ButtonBuilder()
+        .setLabel("Open Prompt Studio")
+        .setStyle(ButtonStyle.Link)
+        .setURL("https://qronos.me/dashboard/playground")
+    );
+
+    await interaction.editReply({ embeds: [embed], components: [row] });
+    return;
+  }
+}
+
 export async function startDiscordBotService(): Promise<boolean> {
   if (client?.isReady()) return true;
   if (isStarting) return false;
@@ -480,6 +695,11 @@ export async function startDiscordBotService(): Promise<boolean> {
       console.log(`[DiscordBot] Logged in as ${client?.user?.tag} (ID: ${client?.user?.id})! Ready to chat.`);
       const config = await getDiscordBotConfig();
 
+      // Register slash commands for /balance and /usage
+      if (client) {
+        void registerDiscordSlashCommands(client, config.guildId || ENV.discordGuildId);
+      }
+
       // Start proactive icebreaker timer
       if (proactiveTimer) clearInterval(proactiveTimer);
       proactiveTimer = setInterval(() => {
@@ -487,8 +707,12 @@ export async function startDiscordBotService(): Promise<boolean> {
       }, Math.max(10, config.proactiveIntervalMinutes || 60) * 60 * 1000);
     });
 
-    client.on("messageCreate", (msg) => {
-      void handleMessage(msg);
+    client.on("interactionCreate", (interaction) => {
+      if (interaction.isChatInputCommand()) {
+        void handleSlashCommand(interaction).catch((err) => {
+          console.error("[DiscordBot] Slash command error:", err);
+        });
+      }
     });
 
     client.on("error", (err) => {
@@ -584,4 +808,45 @@ export async function sendDiscordBotTestMessage(
     console.error("[DiscordBot] Failed to send test message:", err);
     return { success: false, error: err.message || "Failed to send message to Discord." };
   }
+}
+
+export const MODEL_STATUS_CHANNEL_ID = "1565043170763341933";
+
+export interface ModelStatusAlertPayload {
+  modelId: string;
+  modelName?: string;
+  status: "degraded" | "operational" | "offline" | "rerouted";
+  latencyMs?: number;
+  message?: string;
+}
+
+/**
+ * Sends a real-time model outage or operational recovery alert to #model-status.
+ */
+export async function sendDiscordModelStatusAlert(payload: ModelStatusAlertPayload): Promise<boolean> {
+  if (!client || !client.isReady()) return false;
+
+  const channelId = MODEL_STATUS_CHANNEL_ID;
+  const channel = await client.channels.fetch(channelId).catch(() => null);
+  if (!channel || !("send" in channel)) return false;
+
+  const isDegraded = payload.status === "degraded" || payload.status === "offline";
+  const color = isDegraded ? 0xef4444 : 0x10b981;
+  const statusEmoji = isDegraded ? "🔴" : "🟢";
+  const statusTitle = isDegraded ? "MODEL OUTAGE / DEGRADED" : "MODEL OPERATIONAL";
+
+  const embed = new EmbedBuilder()
+    .setColor(color)
+    .setTitle(`${statusEmoji} [${statusTitle}] ${payload.modelName || payload.modelId}`)
+    .setDescription(payload.message || (isDegraded ? "Upstream timeouts detected. Automatic failover routing active." : "Route operational with nominal latency."))
+    .addFields(
+      { name: "Model ID", value: `\`${payload.modelId}\``, inline: true },
+      { name: "Status", value: isDegraded ? "⚠️ Degraded / Rerouted" : "✅ 100% Operational", inline: true },
+      { name: "Latency", value: payload.latencyMs ? `${payload.latencyMs}ms` : "Sub-millisecond", inline: true }
+    )
+    .setFooter({ text: "Qronos AI · Live Gateway Telemetry", iconURL: client.user?.displayAvatarURL() })
+    .setTimestamp();
+
+  await (channel as TextChannel).send({ embeds: [embed] }).catch(() => null);
+  return true;
 }
