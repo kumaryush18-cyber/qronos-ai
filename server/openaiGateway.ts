@@ -29,7 +29,6 @@ import {
   PLATFORM_MAINTENANCE_ERROR_MESSAGE,
   PLAYGROUND_MAINTENANCE_ERROR_MESSAGE,
   getQuotaStatus,
-  getGpt6AstraQuotaStatus,
   getModelAvailabilitySnapshot,
   isModelAvailable,
   getModelMinTier,
@@ -4351,13 +4350,6 @@ export async function runPlaygroundCompletion(input: {
   if (!quota) throw new TokenForgePlaygroundError("provider_unavailable", "Account status is temporarily unavailable. Retry shortly.");
   if (quota.suspended) throw new TokenForgePlaygroundError("account_suspended", "This account is currently suspended.");
 
-  if (input.model === "gpt-6-astra") {
-    const gptQuota = await getGpt6AstraQuotaStatus({ id: input.userId });
-    if (!gptQuota.canAccessPlayground) {
-      throw new TokenForgePlaygroundError("paid_tier_required", "You have reached your free monthly limit of 5 messages for GPT-6 Astra. A paid tier is required to continue.");
-    }
-  }
-
   const effectiveReasoningEffort = input.reasoningEffort && input.reasoningEffort !== "default"
     ? input.reasoningEffort
     : (input.model === "qwen3.8-max" || input.model === "claude-fable-5.1" ? "xhigh" : undefined);
@@ -4539,13 +4531,6 @@ async function streamPlaygroundCompletion(input: {
   const quota = await getQuotaStatus(input.userId);
   if (!quota) throw new TokenForgePlaygroundError("provider_unavailable", "Account status is temporarily unavailable. Retry shortly.");
   if (quota.suspended) throw new TokenForgePlaygroundError("account_suspended", "This account is currently suspended.");
-
-  if (input.model === "gpt-6-astra") {
-    const gptQuota = await getGpt6AstraQuotaStatus({ id: input.userId });
-    if (!gptQuota.canAccessPlayground) {
-      throw new TokenForgePlaygroundError("paid_tier_required", "You have reached your free monthly limit of 5 messages for GPT-6 Astra. A paid tier is required to continue.");
-    }
-  }
 
   const effectiveReasoningEffort = input.reasoningEffort && input.reasoningEffort !== "default"
     ? input.reasoningEffort
@@ -4996,12 +4981,6 @@ export function registerOpenAiGateway(app: Express) {
     if (quota.suspended) return errorResponse(res, requestId, 403, "This account is currently suspended.", "account_suspended");
 
     const model = input.model as TokenForgeModelId;
-    if (model === "gpt-6-astra") {
-      const gptQuota = await getGpt6AstraQuotaStatus({ id: key.userId });
-      if (!gptQuota.canAccessApi) {
-        return errorResponse(res, requestId, 403, "A paid tier is required to access GPT-6 Astra via API. Please upgrade to a paid plan.", "paid_tier_required");
-      }
-    }
 
     const upstreamInput: ChatInput = {
       ...input,

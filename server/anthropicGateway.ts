@@ -9,7 +9,6 @@ import {
   getEffectivePlatformMaintenanceMessage,
   PLATFORM_MAINTENANCE_ERROR_MESSAGE,
   getQuotaStatus,
-  getGpt6AstraQuotaStatus,
   isModelAvailable,
   getModelMinTier,
   getModelIsPayg,
@@ -1292,13 +1291,6 @@ export function registerAnthropicMessagesGateway(app: Express) {
     const quota = await getQuotaStatus(key.userId);
     if (!quota) return respondError(res, requestId, 503, "api_error", "Account status is temporarily unavailable. Retry shortly.");
     if (quota.suspended) return respondError(res, requestId, 403, "permission_error", "This account is currently suspended.");
-
-    if (model === "gpt-6-astra") {
-      const gptQuota = await getGpt6AstraQuotaStatus({ id: key.userId });
-      if (!gptQuota.canAccessApi) {
-        return respondError(res, requestId, 403, "permission_error", "A paid tier is required to access GPT-6 Astra via API. Please upgrade to a paid plan.");
-      }
-    }
 
     const userAgent = (req.headers["user-agent"] ?? "") as string;
     const isClaudeCli = isClaudeCodeRequest(req);

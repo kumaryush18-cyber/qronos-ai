@@ -792,20 +792,17 @@ export const appRouter = router({
       if (!quota) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Quota status is temporarily unavailable" });
       return quota;
     }),
-    gpt6AstraQuota: publicProcedure.query(async ({ ctx }) => {
-      if (!ctx.user) {
-        return {
-          isAdmin: false,
-          isPaidUser: false,
-          usedThisMonth: 0,
-          maxFreePerMonth: 5,
-          remainingMessages: 5,
-          isUnlimited: false,
-          canAccessApi: false,
-          canAccessPlayground: true,
-        };
-      }
-      return getGpt6AstraQuotaStatus(ctx.user);
+    gpt6AstraQuota: publicProcedure.query(async () => {
+      return {
+        isAdmin: true,
+        isPaidUser: true,
+        usedThisMonth: 0,
+        maxFreePerMonth: 999999,
+        remainingMessages: Infinity,
+        isUnlimited: true,
+        canAccessApi: true,
+        canAccessPlayground: true,
+      };
     }),
     modelAvailability: protectedProcedure.query(() => getModelAvailabilitySnapshot()),
     usage: protectedProcedure.query(async ({ ctx }) => getUsageSummary(ctx.user.id)),

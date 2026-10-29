@@ -60,7 +60,6 @@ import {
   InferenceControlsSection,
 } from "@/components/admin/overview/OperationsSections";
 import { OperationalControls } from "@/components/admin/controls/OperationalControls";
-import { Gpt6PremiumControls } from "@/components/admin/controls/Gpt6PremiumControls";
 
 import { ManagedProviderSelector } from "@/components/admin/providers/ManagedProviderSelector";
 import { Sonnet46ProviderBalancerPanel } from "@/components/admin/providers/ProvidersSection";
@@ -92,7 +91,6 @@ export type AdminSection =
   | "controls"
   | "providers"
   | "operations"
-  | "gpt6-premium"
   | "announcement"
   | "activity"
   | "live"
@@ -481,7 +479,6 @@ export default function AdminDashboard({ initialSection }: { initialSection?: Ad
             "controls",
             "providers",
             "operations",
-            "gpt6-premium",
             "announcement",
             "activity",
             "live",
@@ -531,8 +528,6 @@ export default function AdminDashboard({ initialSection }: { initialSection?: Ad
               ? "Provider settings"
               : item === "operations"
               ? "Operations"
-              : item === "gpt6-premium"
-              ? "GPT-6 Premium"
               : item === "announcement"
               ? "Announcement"
               : item === "live"
@@ -661,7 +656,6 @@ export default function AdminDashboard({ initialSection }: { initialSection?: Ad
       )}
       {section === "providers" && <ManagedProviderSelector keyMetrics={managedProviderKeyMetrics} />}
       {section === "operations" && <OperationalControls />}
-      {section === "gpt6-premium" && <Gpt6PremiumControls />}
       {section === "announcement" && (
         <AnnouncementSection
           text={announcementText}
