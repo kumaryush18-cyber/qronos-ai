@@ -259,9 +259,10 @@ export function CapacitySection({
 
 const TIER_OPTIONS: Array<{ value: UserTier; label: string; badge: string; color: string }> = [
   { value: "free", label: "Free (All Users)", badge: "Free", color: "border-emerald-500/30 bg-emerald-500/10 text-emerald-300" },
-  { value: "starter", label: "Plus", badge: "Plus", color: "border-sky-500/30 bg-sky-500/10 text-sky-300" },
+  { value: "plus", label: "Plus", badge: "Plus", color: "border-sky-500/30 bg-sky-500/10 text-sky-300" },
   { value: "pro", label: "Pro", badge: "Pro", color: "border-indigo-500/30 bg-indigo-500/10 text-indigo-300" },
   { value: "ultra", label: "Ultra", badge: "Ultra", color: "border-rose-500/30 bg-rose-500/10 text-rose-300" },
+  { value: "enterprise", label: "Enterprise", badge: "Enterprise", color: "border-amber-500/30 bg-amber-500/10 text-amber-300" },
 ];
 
 export function ModelCompactScalingBar({

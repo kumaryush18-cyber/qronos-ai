@@ -37,6 +37,7 @@ DODO_ULTRA_PRD = os.environ.get("DODO_ULTRA_PRD", "")
 # Power: $100 -> 40,000 credits
 # Ultra: $200 -> 100,000 credits
 PLAN_CREDITS_NANOS = {
+    "plus": 3000 * 1_000_000_000,
     "starter": 3000 * 1_000_000_000,
     "pro": 8500 * 1_000_000_000,
     "max": 18000 * 1_000_000_000,
@@ -61,7 +62,7 @@ def resolve_product_id(requested_id: str) -> str:
     power_prd = os.environ.get("DODO_POWER_PRD", DODO_POWER_PRD).strip()
     ultra_prd = os.environ.get("DODO_ULTRA_PRD", DODO_ULTRA_PRD).strip()
 
-    if normalized in ("starter", "starter_plan"):
+    if normalized in ("plus", "plus_plan", "starter", "starter_plan"):
         return starter_prd or requested_id
     if normalized in ("pro", "pro_plan"):
         return pro_prd or requested_id

@@ -7798,22 +7798,26 @@ export async function setModelEnabled(modelId: string, enabled: boolean) {
   return result[0].affectedRows > 0;
 }
 
-export const USER_TIER_RANK: Record<UserTier, number> = {
+export const USER_TIER_RANK: Record<string, number> = {
   free: 0,
+  plus: 1,
   starter: 1,
   pro: 2,
+  ultra: 3,
+  power: 3,
   max: 3,
-  power: 4,
-  ultra: 5,
+  enterprise: 4,
 };
 
-export const USER_TIER_DISPLAY_NAMES: Record<UserTier, string> = {
+export const USER_TIER_DISPLAY_NAMES: Record<string, string> = {
   free: "Free",
   starter: "Plus",
+  plus: "Plus",
   pro: "Pro",
-  max: "Pro",
+  max: "Ultra",
   power: "Ultra",
   ultra: "Ultra",
+  enterprise: "Enterprise",
 };
 
 export function isTierSufficient(userTier: UserTier = "free", minTier: UserTier = "free"): boolean {

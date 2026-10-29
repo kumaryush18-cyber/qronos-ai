@@ -32,7 +32,7 @@ export const users = mysqlTable("users", {
   email: varchar("email", { length: 320 }),
   loginMethod: varchar("loginMethod", { length: 64 }),
   role: mysqlEnum("role", ["user", "admin"]).default("user").notNull(),
-  tier: mysqlEnum("tier", ["free", "starter", "pro", "max", "power", "ultra"]).default("free").notNull(),
+  tier: mysqlEnum("tier", ["free", "plus", "pro", "ultra", "enterprise", "starter", "max", "power"]).default("free").notNull(),
   creditsEnabled: boolean("creditsEnabled").default(false).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
@@ -41,7 +41,7 @@ export const users = mysqlTable("users", {
 
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
-export type UserTier = "free" | "starter" | "pro" | "max" | "power" | "ultra";
+export type UserTier = "free" | "plus" | "pro" | "ultra" | "enterprise" | "starter" | "max" | "power";
 
 /**
  * Administrator-created account reservations. A reservation is activated only after GitHub OAuth
@@ -664,7 +664,7 @@ export const modelConfigs = mysqlTable(
     description: text("description").notNull(),
     capabilities: json("capabilities").$type<string[]>().notNull(),
     enabled: boolean("enabled").default(true).notNull(),
-    minTier: mysqlEnum("minTier", ["free", "starter", "pro", "max", "power", "ultra"]).default("free").notNull(),
+    minTier: mysqlEnum("minTier", ["free", "plus", "pro", "ultra", "enterprise", "starter", "max", "power"]).default("free").notNull(),
     isPayg: boolean("isPayg").default(false).notNull(),
     isBundle: boolean("isBundle").default(true).notNull(),
     isTokenPlan: boolean("isTokenPlan").default(false).notNull(),

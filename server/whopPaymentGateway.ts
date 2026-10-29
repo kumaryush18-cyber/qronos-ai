@@ -1,9 +1,9 @@
 import type { Express, Request, Response } from "express";
 import crypto from "crypto";
-import { sql, eq } from "drizzle-orm";
-import { getDb } from "./db";
+import { sql, eq, desc } from "drizzle-orm";
+import { getDb, applyReferralCommissionForRecharge, setUserTier, type UserTier } from "./db";
 import { users, creditAccounts, creditLedger, processedWebhooks } from "../drizzle/schema";
-import { applyReferralCommissionForRecharge } from "./db";
+import { sdk } from "./_core/sdk";
 
 export const DEFAULT_WHOP_WEBHOOK_SECRET = "ws_2e999f5dc62963e37d850099325994f0740271c4c87ea4275b635e98f60b43a0";
 export const WHOP_10_CREDITS_PRODUCT_ID = "prod_rkBc5ZhKDEuoj";
@@ -16,6 +16,7 @@ export interface WhopProductSpec {
   type: "payg" | "token_plan";
   amountUsd: number;
   tokens?: number;
+  tier?: UserTier;
   checkoutUrl: string;
 }
 
@@ -31,11 +32,11 @@ export const WHOP_PRODUCT_CATALOG: Record<string, WhopProductSpec> = {
   prod_NanmzIYeu3uIo: { productId: "prod_NanmzIYeu3uIo", name: "Qronos $150 API", type: "payg", amountUsd: 150, checkoutUrl: "https://whop.com/qronos/150-credits-19sk/" },
   prod_K0FFsZEoV0fth: { productId: "prod_K0FFsZEoV0fth", name: "Qronos $200 API", type: "payg", amountUsd: 200, checkoutUrl: "https://whop.com/qronos/200-credits-39gh/" },
 
-  // Token plans
-  prod_RunCJULyHjSGZ: { productId: "prod_RunCJULyHjSGZ", name: "Qronos Plus Plan", type: "token_plan", amountUsd: 10, tokens: 600_000_000, checkoutUrl: "https://whop.com/qronos/plus-plan-24sl/" },
-  prod_R6KnsUgI3vA6z: { productId: "prod_R6KnsUgI3vA6z", name: "Qronos Pro Plan", type: "token_plan", amountUsd: 30, tokens: 2_200_000_000, checkoutUrl: "https://whop.com/qronos/pro-plan-40op/" },
-  prod_pNbqUYr7erKsN: { productId: "prod_pNbqUYr7erKsN", name: "Qronos Ultra Plan", type: "token_plan", amountUsd: 60, tokens: 5_000_000_000, checkoutUrl: "https://whop.com/qronos/ultra-plan-67wm/" },
-  prod_4hC8vZztBBGQm: { productId: "prod_4hC8vZztBBGQm", name: "Qronos Enterprise Plan", type: "token_plan", amountUsd: 150, tokens: 14_000_000_000, checkoutUrl: "https://whop.com/qronos/enterprise-plan-29wm/" },
+  // Token plans with automatic tier upgrade mapping
+  prod_RunCJULyHjSGZ: { productId: "prod_RunCJULyHjSGZ", name: "Qronos Plus Plan", type: "token_plan", amountUsd: 10, tokens: 600_000_000, tier: "plus", checkoutUrl: "https://whop.com/qronos/plus-plan-24sl/" },
+  prod_R6KnsUgI3vA6z: { productId: "prod_R6KnsUgI3vA6z", name: "Qronos Pro Plan", type: "token_plan", amountUsd: 30, tokens: 2_200_000_000, tier: "pro", checkoutUrl: "https://whop.com/qronos/pro-plan-40op/" },
+  prod_pNbqUYr7erKsN: { productId: "prod_pNbqUYr7erKsN", name: "Qronos Ultra Plan", type: "token_plan", amountUsd: 60, tokens: 5_000_000_000, tier: "ultra", checkoutUrl: "https://whop.com/qronos/ultra-plan-67wm/" },
+  prod_4hC8vZztBBGQm: { productId: "prod_4hC8vZztBBGQm", name: "Qronos Enterprise Plan", type: "token_plan", amountUsd: 150, tokens: 14_000_000_000, tier: "enterprise", checkoutUrl: "https://whop.com/qronos/enterprise-plan-29wm/" },
 };
 
 export function resolveWhopProduct(
@@ -46,7 +47,9 @@ export function resolveWhopProduct(
 ): {
   type: "token_plan" | "payg";
   name: string;
+  tokens?: number;
   tokensToGrant?: number;
+  tier?: UserTier;
   amountUsd: number;
 } {
   const byId = WHOP_PRODUCT_CATALOG[productId];
@@ -54,7 +57,9 @@ export function resolveWhopProduct(
     return {
       type: byId.type,
       name: byId.name,
+      tokens: byId.tokens,
       tokensToGrant: byId.tokens,
+      tier: byId.tier,
       amountUsd: byId.amountUsd,
     };
   }
@@ -62,16 +67,16 @@ export function resolveWhopProduct(
   const nameCandidate = String(rawData?.product?.name || rawData?.plan?.name || rawData?.title || "").toLowerCase();
 
   if (nameCandidate.includes("plus") || productId === "prod_RunCJULyHjSGZ" || (amountUsd === 10 && nameCandidate.includes("plan"))) {
-    return { type: "token_plan", name: "Qronos Plus Plan", tokensToGrant: 600_000_000, amountUsd: 10 };
+    return { type: "token_plan", name: "Qronos Plus Plan", tokens: 600_000_000, tokensToGrant: 600_000_000, tier: "plus", amountUsd: 10 };
   }
   if (nameCandidate.includes("pro") || productId === "prod_R6KnsUgI3vA6z" || (amountUsd === 30 && nameCandidate.includes("plan"))) {
-    return { type: "token_plan", name: "Qronos Pro Plan", tokensToGrant: 2_200_000_000, amountUsd: 30 };
+    return { type: "token_plan", name: "Qronos Pro Plan", tokens: 2_200_000_000, tokensToGrant: 2_200_000_000, tier: "pro", amountUsd: 30 };
   }
   if (nameCandidate.includes("ultra") || productId === "prod_pNbqUYr7erKsN" || (amountUsd === 60 && nameCandidate.includes("plan"))) {
-    return { type: "token_plan", name: "Qronos Ultra Plan", tokensToGrant: 5_000_000_000, amountUsd: 60 };
+    return { type: "token_plan", name: "Qronos Ultra Plan", tokens: 5_000_000_000, tokensToGrant: 5_000_000_000, tier: "ultra", amountUsd: 60 };
   }
   if (nameCandidate.includes("enterprise") || productId === "prod_4hC8vZztBBGQm" || (amountUsd === 150 && nameCandidate.includes("plan"))) {
-    return { type: "token_plan", name: "Qronos Enterprise Plan", tokensToGrant: 14_000_000_000, amountUsd: 150 };
+    return { type: "token_plan", name: "Qronos Enterprise Plan", tokens: 14_000_000_000, tokensToGrant: 14_000_000_000, tier: "enterprise", amountUsd: 150 };
   }
 
   // Default to PAYG top-up by amount
@@ -399,6 +404,12 @@ export function registerWhopPaymentGateway(app: Express): void {
                 note: `Whop Token Plan Purchase: ${resolved.name} (+${(tokensToAdd / 1_000_000).toFixed(0)}M Tokens, $${amountUsd}). Webhook: ${webhookId}`,
               });
 
+              // Automatically upgrade account tier if a token plan was purchased (e.g. Plus, Pro, Ultra, Enterprise)
+              if (resolved.tier) {
+                await setUserTier(user.id, resolved.tier);
+                console.log(`[Whop Webhook] Automatically upgraded user #${user.id} (${user.email}) to ${resolved.tier.toUpperCase()} tier.`);
+              }
+
               console.log(`[Whop Webhook] Successfully credited +${(tokensToAdd / 1_000_000).toFixed(0)}M Tokens to user #${user.id} (${user.email}).`);
             } else {
               // PAYG top-up
@@ -501,4 +512,102 @@ export function registerWhopPaymentGateway(app: Express): void {
       }
     }
   );
+
+  // Admin endpoint to list all Whop transactions in Settlements workspace
+  app.get("/api/admin/whop/orders", async (req: Request, res: Response) => {
+    try {
+      const user = await sdk.authenticateRequest(req).catch(() => null);
+      if (!user || !user.isAdminSession) {
+        return res.status(403).json({ success: false, error: "Admin authorization required." });
+      }
+
+      const db = await getDb();
+      if (!db) return res.status(503).json({ success: false, error: "Database unavailable." });
+
+      const rows = await db
+        .select()
+        .from(processedWebhooks)
+        .where(eq(processedWebhooks.provider, "whop"))
+        .orderBy(desc(processedWebhooks.processedAt))
+        .limit(100);
+
+      const orders = rows.map((r) => {
+        let parsed: any = {};
+        try {
+          parsed = JSON.parse(r.payload || "{}");
+        } catch {}
+        return {
+          id: r.id,
+          webhookId: r.webhookId,
+          orderId: parsed.paymentId || r.webhookId,
+          paymentId: parsed.paymentId || null,
+          userId: parsed.userId || null,
+          userEmail: parsed.email || null,
+          amountUsd: Number(parsed.amountUsd || 0),
+          productName: parsed.productName || "Qronos Plus Plan",
+          productType: parsed.productType || "token_plan",
+          tokens: parsed.tokens || (parsed.productName?.includes("Plus") ? 600_000_000 : parsed.productName?.includes("Pro") ? 2_200_000_000 : parsed.productName?.includes("Ultra") ? 5_000_000_000 : 0),
+          status: "COMPLETED",
+          processedAt: r.processedAt,
+        };
+      });
+
+      const totalVolumeUsd = orders.reduce((sum, o) => sum + (o.amountUsd || 0), 0);
+      const totalTokensCredited = orders.reduce((sum, o) => sum + (o.tokens || 0), 0);
+
+      return res.json({
+        success: true,
+        total_orders: orders.length,
+        total_volume_usd: Number(totalVolumeUsd.toFixed(2)),
+        total_tokens_credited: totalTokensCredited,
+        orders,
+      });
+    } catch (err: any) {
+      return res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // User endpoint to view own Whop settlements
+  app.get("/api/whop/my-orders", async (req: Request, res: Response) => {
+    try {
+      const user = await sdk.authenticateRequest(req).catch(() => null);
+      if (!user) {
+        return res.status(401).json({ success: false, error: "Authentication required." });
+      }
+
+      const db = await getDb();
+      if (!db) return res.status(503).json({ success: false, error: "Database unavailable." });
+
+      const rows = await db
+        .select()
+        .from(processedWebhooks)
+        .where(eq(processedWebhooks.provider, "whop"))
+        .orderBy(desc(processedWebhooks.processedAt))
+        .limit(50);
+
+      const myOrders = rows
+        .map((r) => {
+          let parsed: any = {};
+          try {
+            parsed = JSON.parse(r.payload || "{}");
+          } catch {}
+          return {
+            id: r.id,
+            orderId: parsed.paymentId || r.webhookId,
+            userId: parsed.userId,
+            userEmail: parsed.email,
+            amountUsd: Number(parsed.amountUsd || 0),
+            productName: parsed.productName || "Qronos Plan",
+            tokens: parsed.tokens || (parsed.productName?.includes("Plus") ? 600_000_000 : 0),
+            status: "COMPLETED",
+            processedAt: r.processedAt,
+          };
+        })
+        .filter((o) => o.userId === user.id || (user.email && o.userEmail === user.email));
+
+      return res.json({ success: true, orders: myOrders });
+    } catch (err: any) {
+      return res.status(500).json({ success: false, error: err.message });
+    }
+  });
 }

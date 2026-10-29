@@ -4,6 +4,7 @@ import { Keypair, Connection, PublicKey, LAMPORTS_PER_SOL } from "@solana/web3.j
 import { getDb, creditAccountFromSolanaPay } from "./db";
 import { sql } from "drizzle-orm";
 import { getCodingPlanTier, CODING_PLAN_TIERS } from "../shared/paymentTiers";
+import { sdk } from "./_core/sdk";
 
 export const MERCHANT_PUBLIC_KEY =
   process.env.SOLANA_MERCHANT_WALLET || "CUiXiA54MjUCxF1acboThD8R2CwLsqfDidiT7RWJsD7w";
@@ -536,20 +537,19 @@ export function registerSolanaPayGateway(app: Express) {
         return res.status(500).json({ error: "Database unavailable" });
       }
 
-      const userId = (req as any).session?.userId;
-      const userRole = (req as any).session?.role;
-      const isAdminRoute = req.path.includes("/api/admin/");
-
-      if (!userId) {
+      const authUser = await sdk.authenticateRequest(req).catch(() => null);
+      if (!authUser) {
         return res.status(401).json({ error: "Unauthorized" });
       }
 
-      const isAdminRequest = isAdminRoute && userRole === "admin";
+      const userId = authUser.id;
+      const isAdminRoute = req.path.includes("/api/admin/");
+      const isAdminRequest = (isAdminRoute || req.query.admin === "true") && Boolean(authUser.isAdminSession);
 
       let query;
       if (isAdminRequest) {
         query = sql`
-          SELECT 
+          SELECT
             so.order_id as orderId,
             so.user_id as userId,
             COALESCE(so.user_email, u.email) as userEmail,
@@ -568,7 +568,7 @@ export function registerSolanaPayGateway(app: Express) {
         `;
       } else {
         query = sql`
-          SELECT 
+          SELECT
             so.order_id as orderId,
             so.user_id as userId,
             COALESCE(so.user_email, u.email) as userEmail,
@@ -582,7 +582,7 @@ export function registerSolanaPayGateway(app: Express) {
             so.status
           FROM solana_orders so
           LEFT JOIN users u ON so.user_id = u.id
-          WHERE so.status IN ("PAID", "COMPLETED") AND so.user_id = ${userId}
+          WHERE so.status IN ("PAID", "COMPLETED") AND (so.user_id = ${userId} OR so.user_email = ${authUser.email || ""})
           ORDER BY so.completed_at DESC, so.created_at DESC
         `;
       }

@@ -362,7 +362,7 @@ export function OrcaRouterCredentialPanel() {
   );
 }
 
-const MAINTENANCE_TIER_LIST: UserTier[] = ["free", "starter", "pro", "ultra"];
+const MAINTENANCE_TIER_LIST: UserTier[] = ["free", "plus", "pro", "ultra", "enterprise"];
 const DEFAULT_HARDCODED_MAINTENANCE_MSG = "Site entered in maintainence mode due to massive request.";
 
 export function PlatformMaintenanceMessagesConfig() {
@@ -372,13 +372,15 @@ export function PlatformMaintenanceMessagesConfig() {
   });
 
   const [defaultMessage, setDefaultMessage] = useState("");
-  const [tierMessages, setTierMessages] = useState<Record<UserTier, string>>({
+  const [tierMessages, setTierMessages] = useState<Record<string, string>>({
     free: "",
+    plus: "",
     starter: "",
     pro: "",
     max: "",
     power: "",
     ultra: "",
+    enterprise: "",
   });
   const [selectedTier, setSelectedTier] = useState<UserTier>("free");
   const [hasChanges, setHasChanges] = useState(false);
@@ -388,11 +390,13 @@ export function PlatformMaintenanceMessagesConfig() {
       setDefaultMessage(messagesQuery.data.defaultMessage ?? "");
       setTierMessages({
         free: messagesQuery.data.free ?? "",
+        plus: (messagesQuery.data as any).plus ?? messagesQuery.data.starter ?? "",
         starter: messagesQuery.data.starter ?? "",
         pro: messagesQuery.data.pro ?? "",
         max: messagesQuery.data.max ?? "",
         power: messagesQuery.data.power ?? "",
         ultra: messagesQuery.data.ultra ?? "",
+        enterprise: (messagesQuery.data as any).enterprise ?? "",
       });
       setHasChanges(false);
     }

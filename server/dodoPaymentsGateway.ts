@@ -88,18 +88,19 @@ export function resolveDodoProductId(
     };
   }
 
-  // 2. Starter Plan ($10 -> 3,000 credits)
+  // 2. Plus Plan ($10 -> 3,000 credits)
   if (
+    normalized === "plus" ||
     normalized === "starter" ||
     normalized === "starter plan" ||
     (starterPrd && normalized === starterPrd.toLowerCase())
   ) {
     return {
       productId: starterPrd || "starter",
-      planName: "Starter Plan",
+      planName: "Plus Plan",
       creditsNanos: CREDITS_STARTER_NANOS,
       amountUsd: 10.0,
-      tier: "starter",
+      tier: "plus",
     };
   }
 
@@ -210,17 +211,17 @@ export function resolveDodoProductId(
       planName: "Custom Plan",
       creditsNanos: CREDITS_STARTER_NANOS,
       amountUsd: 10.0,
-      tier: "starter",
+      tier: "plus",
     };
   }
 
-  // Default safely to Starter only if completely empty
+  // Default safely to Plus only if completely empty
   return {
     productId: starterPrd || "starter",
-    planName: "Starter Plan",
+    planName: "Plus Plan",
     creditsNanos: CREDITS_STARTER_NANOS,
     amountUsd: 10.0,
-    tier: "starter",
+    tier: "plus",
   };
 }
 

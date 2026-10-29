@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import { UserTierBadge, USER_TIER_CONFIGS, UserTier } from "@/components/UserTierBadge";
 import { SectionHeader } from "../common/AdminCommon";
 
-const TIERS: UserTier[] = ["free", "starter", "pro", "ultra"];
+const TIERS: UserTier[] = ["free", "plus", "pro", "ultra", "enterprise"];
 
 export function UserTierAssignmentCard() {
   const [searchQuery, setSearchQuery] = useState("");

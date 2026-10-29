@@ -309,11 +309,66 @@ async function isAuthorizedAdmin(req: Request): Promise<{ authorized: boolean; a
   return { authorized: false, adminIdentifier: "unauthorized" };
 }
 
+/**
+ * Automatically purges abandoned pending payment logs across UPI and Solana.
+ * Cleans up orders where users opened checkout modals but never submitted a payment.
+ * Preserves all PENDING_VERIFICATION (submitted UTRs), COMPLETED, and REJECTED orders.
+ */
+export async function cleanupPendingPaymentLogs(): Promise<{ upiDeleted: number; solanaDeleted: number }> {
+  let upiDeleted = 0;
+  let solanaDeleted = 0;
+  try {
+    const db = await getDb();
+    if (!db) return { upiDeleted: 0, solanaDeleted: 0 };
+
+    // 1. Delete all abandoned UPI orders where status = 'PENDING_PAYMENT' or (EXPIRED with no UTR)
+    const upiRes = await db.execute(sql`
+      DELETE FROM upi_orders
+      WHERE status = 'PENDING_PAYMENT'
+         OR (status = 'EXPIRED' AND (utr IS NULL OR utr = ''))
+    `);
+    upiDeleted = Number((upiRes as any)?.[0]?.affectedRows ?? 0);
+
+    // 2. Delete all abandoned Solana Pay orders where status = 'PENDING' and no transaction signature exists
+    const solRes = await db.execute(sql`
+      DELETE FROM solana_orders
+      WHERE status = 'PENDING' AND (signature IS NULL OR signature = '') AND completed_at IS NULL
+    `);
+    solanaDeleted = Number((solRes as any)?.[0]?.affectedRows ?? 0);
+
+    // 3. Clear from in-memory UPI orders map
+    for (const [id, order] of upiOrders.entries()) {
+      if (order.status === "PENDING_PAYMENT" || (order.status === "EXPIRED" && !order.utr)) {
+        upiOrders.delete(id);
+      }
+    }
+
+    if (upiDeleted > 0 || solanaDeleted > 0) {
+      console.log(`[Payment Cleanup] Successfully purged ${upiDeleted} pending UPI logs and ${solanaDeleted} pending Solana logs.`);
+    }
+  } catch (err) {
+    console.error("[Payment Cleanup] Error pruning pending payment logs:", err);
+  }
+  return { upiDeleted, solanaDeleted };
+}
+
 export function registerUpiPayGateway(app: Express) {
   // Synchronize orders on initialization
   syncUpiOrdersFromDb().catch((err) => {
     console.error("[UPI Gateway] Initial DB sync error:", err);
   });
+
+  // Run initial cleanup on startup
+  cleanupPendingPaymentLogs().catch((err) => {
+    console.error("[Payment Cleanup] Initial cleanup error:", err);
+  });
+
+  // Schedule automated cleanup every 12 hours
+  const TWELVE_HOURS_MS = 12 * 60 * 60 * 1000;
+  const cleanupTimer = setInterval(() => {
+    void cleanupPendingPaymentLogs();
+  }, TWELVE_HOURS_MS);
+  if (cleanupTimer.unref) cleanupTimer.unref();
 
   // Strict CORS policy: blocks arbitrary cross-origin domains and "null" origins
   const upiCors = createStrictCors({ allowCredentials: true });
@@ -638,7 +693,7 @@ export function registerUpiPayGateway(app: Express) {
       await syncUpiOrdersFromDb();
       const allOrders = Array.from(upiOrders.values());
       const userOrders = allOrders
-        .filter(o => o.userId === user.id)
+        .filter(o => o.userId === user.id && o.status !== "PENDING_PAYMENT")
         .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
       return res.json({
@@ -669,7 +724,7 @@ export function registerUpiPayGateway(app: Express) {
     const ordersArray = Array.from(upiOrders.values());
 
     const filtered = ordersArray.filter(o => {
-      if (statusFilter === "ALL") return true;
+      if (statusFilter === "ALL") return o.status !== "PENDING_PAYMENT";
       return o.status === statusFilter;
     });
 
@@ -690,6 +745,16 @@ export function registerUpiPayGateway(app: Express) {
   app.get("/api/admin/upi/orders", handleAdminListOrders);
   app.get("/api/admin/upi/pending", handleAdminListOrders);
   app.get("/api/payments/admin/upi/orders", handleAdminListOrders);
+
+  // Manual admin purge endpoint to delete all abandoned pending payment logs
+  app.post("/api/admin/upi/cleanup-pending", async (req: Request, res: Response) => {
+    const auth = await isAuthorizedAdmin(req);
+    if (!auth.authorized) {
+      return res.status(403).json({ error: "Unauthorized. Admin authentication required." });
+    }
+    const result = await cleanupPendingPaymentLogs();
+    return res.json({ success: true, ...result });
+  });
 
   // Approve order and grant user credits
   const handleAdminApprove = async (req: Request, res: Response) => {

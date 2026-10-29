@@ -1313,7 +1313,7 @@ ${input.intent ? `Requested Notification Type: ${input.intent}` : ""}`;
     assignUserTier: adminProcedure
       .input(z.object({
         userId: z.number().int().positive(),
-        tier: z.enum(["free", "starter", "pro", "max", "power", "ultra"]),
+        tier: z.enum(["free", "plus", "pro", "ultra", "enterprise", "starter", "max", "power"]),
       }))
       .mutation(async ({ ctx, input }) => {
         const success = await setUserTier(input.userId, input.tier);
@@ -2103,7 +2103,7 @@ ${input.intent ? `Requested Notification Type: ${input.intent}` : ""}`;
     setModelMinTier: adminProcedure
       .input(z.object({
         modelId: tokenForgeModelId,
-        minTier: z.enum(["free", "starter", "pro", "max", "power", "ultra"]),
+        minTier: z.enum(["free", "plus", "pro", "ultra", "enterprise", "starter", "max", "power"]),
       }))
       .mutation(async ({ ctx, input }) => {
         const updated = await setModelMinTier(input.modelId, input.minTier);

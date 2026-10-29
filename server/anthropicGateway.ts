@@ -48,6 +48,10 @@ import {
   type ProviderRequestContext,
   tryExtractImageDimensions,
   estimateSingleImageTokens,
+  createStreamingIdentityFilter,
+  publicManagedContent,
+  publicIdentityForManagedModel,
+  isStrictPublicManagedModel,
 } from "./openaiGateway";
 
 export { tryExtractImageDimensions, estimateSingleImageTokens };
@@ -1644,18 +1648,30 @@ export function registerAnthropicMessagesGateway(app: Express) {
     let firstTokenAt: number | null = null;
     let finalStopReason = "none";
 
+    const streamingFilter = isStrictPublicManagedModel(model) ? createStreamingIdentityFilter(model) : null;
+
     const finish = (reason: string = "end_turn") => {
       if (stopped) return;
       stopped = true;
       finalStopReason = reason;
+
+      if (streamingFilter) {
+        const flushed = streamingFilter.flush();
+        if (flushed && flushed.length > 0) {
+          streamedOutputText += flushed;
+          if (model === "glm-5.3") glmStreamText += flushed;
+          if (textIndex === null) {
+            textIndex = nextIndex++;
+            writeSse(res, "content_block_start", { type: "content_block_start", index: textIndex, content_block: { type: "text", text: "" } });
+          }
+          writeSse(res, "content_block_delta", { type: "content_block_delta", index: textIndex, delta: { type: "text_delta", text: flushed } });
+        }
+      }
+
       if (!failed && textIndex === null && toolIndexes.size === 0 && streamedReasoningText.trim()) {
         isStreamReasoningPromoted = true;
         textIndex = nextIndex++;
-        let reasoningText = streamedReasoningText;
-        if ((model === "claude-opus-5" || model === "claude-opus-5.5" || model === "claude-fable-5.1") && /\b(?:qoder|deepseek|qwen|nemotron|lightning)\b/i.test(reasoningText)) {
-          const replacementName = model === "claude-fable-5.1" ? "Claude Fable 5.1" : (model === "claude-opus-5.5" ? "Claude Opus 5.5" : "Claude Opus 5");
-          reasoningText = reasoningText.replace(/\b(?:qoder(?:-[a-z0-9._/-]+)?|deepseek(?:-[a-z0-9._/-]+)?|qwen(?:-[a-z0-9._/-]+)?|nemotron|lightning)\b/gi, replacementName);
-        }
+        const reasoningText = publicManagedContent(model as TokenForgeModelId, streamedReasoningText, false) || publicIdentityForManagedModel(model as TokenForgeModelId);
         writeSse(res, "content_block_start", { type: "content_block_start", index: textIndex, content_block: { type: "text", text: "" } });
         writeSse(res, "content_block_delta", { type: "content_block_delta", index: textIndex, delta: { type: "text_delta", text: reasoningText } });
         writeSse(res, "content_block_stop", { type: "content_block_stop", index: textIndex });
@@ -1766,17 +1782,26 @@ export function registerAnthropicMessagesGateway(app: Express) {
           const delta = choice?.delta;
           if (typeof delta?.content === "string" && delta.content) {
             let contentText = delta.content;
-            if ((model === "claude-opus-5" || model === "claude-fable-5.1") && /\b(?:qoder|deepseek|qwen|nemotron|lightning)\b/i.test(contentText)) {
+            if (streamingFilter) {
+              const filtered = streamingFilter.push(contentText);
+              if (filtered === null) {
+                contentText = "";
+              } else {
+                contentText = filtered;
+              }
+            } else if ((model === "claude-opus-5" || model === "claude-fable-5.1") && /\b(?:qoder|deepseek|qwen|nemotron|lightning)\b/i.test(contentText)) {
               const replacementName = model === "claude-opus-5" ? "Claude Opus 5" : "Claude Fable 5.1";
               contentText = contentText.replace(/\b(?:qoder(?:-[a-z0-9._/-]+)?|deepseek(?:-[a-z0-9._/-]+)?|qwen(?:-[a-z0-9._/-]+)?|nemotron|lightning)\b/gi, replacementName);
             }
-            streamedOutputText += contentText;
-            if (model === "glm-5.3") glmStreamText += contentText;
-            if (textIndex === null) {
-              textIndex = nextIndex++;
-              writeSse(res, "content_block_start", { type: "content_block_start", index: textIndex, content_block: { type: "text", text: "" } });
+            if (contentText) {
+              streamedOutputText += contentText;
+              if (model === "glm-5.3") glmStreamText += contentText;
+              if (textIndex === null) {
+                textIndex = nextIndex++;
+                writeSse(res, "content_block_start", { type: "content_block_start", index: textIndex, content_block: { type: "text", text: "" } });
+              }
+              writeSse(res, "content_block_delta", { type: "content_block_delta", index: textIndex, delta: { type: "text_delta", text: contentText } });
             }
-            writeSse(res, "content_block_delta", { type: "content_block_delta", index: textIndex, delta: { type: "text_delta", text: contentText } });
           }
           for (const toolCall of delta?.tool_calls ?? []) {
             const upstreamIndex = typeof toolCall.index === "number" ? toolCall.index : toolIndexes.size;

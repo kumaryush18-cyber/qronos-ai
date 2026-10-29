@@ -1,4 +1,4 @@
-export type UserTier = "free" | "starter" | "pro" | "max" | "power" | "ultra";
+export type UserTier = "free" | "plus" | "pro" | "ultra" | "enterprise" | "starter" | "power" | "max";
 
 export type AdminAccount = {
   id: number;

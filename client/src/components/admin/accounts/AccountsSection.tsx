@@ -167,9 +167,10 @@ export function AccountRow({
               className="h-5 rounded bg-transparent text-[10px] text-white font-mono font-medium outline-none cursor-pointer hover:underline"
             >
               <option value="free" className="bg-[#121214] text-white">Free</option>
-              <option value="starter" className="bg-[#121214] text-white">Plus</option>
+              <option value="plus" className="bg-[#121214] text-white">Plus</option>
               <option value="pro" className="bg-[#121214] text-white">Pro</option>
               <option value="ultra" className="bg-[#121214] text-white">Ultra</option>
+              <option value="enterprise" className="bg-[#121214] text-white">Enterprise</option>
             </select>
             {assignTier.isPending && <Loader2 className="h-2.5 w-2.5 animate-spin text-white" />}
           </div>

@@ -218,6 +218,10 @@ const STRICT_PUBLIC_MANAGED_MODELS = new Set<TokenForgeModelId>([
   "gpt-6-astra",
 ]);
 
+export function isStrictPublicManagedModel(model: TokenForgeModelId): boolean {
+  return STRICT_PUBLIC_MANAGED_MODELS.has(model) || Boolean(getTokenForgeModel(model));
+}
+
 import {
   isCacheDebugEnabled,
   recordCacheDebugEvent,
@@ -356,21 +360,7 @@ export function modelScopedGuidanceAnchor(model: TokenForgeModelId, position: "s
 export function withModelScopedGuidance(model: TokenForgeModelId, messages: TokenForgeChatMessage[]): TokenForgeChatMessage[] {
   if (!messages || messages.length === 0) return messages;
 
-  if (
-    model !== "claude-opus-5.5" &&
-    model !== "gpt-6-sol" &&
-    model !== "gpt-6-luna" &&
-    model !== "claude-sonnet-5.5" &&
-    model !== "claude-haiku-5.5" &&
-    model !== "gemini-4-argon" &&
-    model !== "claude-opus-5" &&
-    model !== "claude-fable-5.1" &&
-    model !== "glm-5.3" &&
-    model !== "glm-5.3-flash" &&
-    model !== "deepseek-v4-pro" &&
-    model !== "qwen3.8-max" &&
-    model !== "gpt-6-astra"
-  ) {
+  if (!isStrictPublicManagedModel(model)) {
     return messages;
   }
 
@@ -3684,7 +3674,7 @@ export function isManagedIdentityDisclosureRequest(messages: TokenForgeChatMessa
   if (/\b(?:who|what\s+company|which\s+company)\s+(?:created|made|trained|developed|built)\s+you\b/i.test(text)) return true;
 
   // Specific inquiries asking if the assistant is from, made by, running, or is an upstream or competing model
-  if (/\b(?:are\s+you|is\s+this|tell\s+me\s+if\s+you\s+are|if\s+you\s+are|whether\s+you\s+are|you\s+are|you're|who\s+created\s+you|was\s+it|are\s+you\s+(?:made|running|from))\s+(?:really\s+)?(?:an?\s+|the\s+)?(?:[a-z0-9._/-]+\s+)?(?:qoder|qwen|nemotron|deepseek|glm|kimi|moonshot|minimax|hailuo|bailu|baichuan|llama|mistral|yi|grok|xai|x\.ai|x\s*ai|zhipu|z\s*ai|zai|z\.ai|chatgpt|chat-gpt|claude|gemini|openai|open\s*ai|alibaba|aliyun|codex(?:\s*cli|-cli)?)(?:-[a-z0-9._/-]+|[0-9._/-]+)?\b/i.test(text)) return true;
+  if (/\b(?:are\s+you|is\s+this|tell\s+me\s+if\s+you\s+are|if\s+you\s+are|whether\s+you\s+are|you\s+are|you're|who\s+created\s+you|was\s+it|are\s+you\s+(?:made|running|from))\s+(?:really\s+)?(?:an?\s+|the\s+)?(?:[a-z0-9._/-]+\s+)?(?:qoder|qwen|nemotron|deepseek|glm|kimi|moonshot|minimax|hailuo|bailu|baichuan|llama|mistral|yi|grok|xai|x\.ai|x\s*ai|zhipu|z\s*ai|zai|z\.ai|chatgpt|chat-gpt|gpt|claude|gemini|openai|open\s*ai|alibaba|aliyun|codex(?:\s*cli|-cli)?)(?:-[a-z0-9._/-]+|[0-9._/-]+)?\b/i.test(text)) return true;
   if (/\btell\s+me\s+if\s+you\s+are\s+from\s+(?:alibaba|aliyun|openai|zhipu|deepseek|qwen|xai|google|meta|anthropic)\b/i.test(text)) return true;
 
   // Inquiries asking what model is being used or run
@@ -3754,7 +3744,7 @@ export function inspectManagedSafetyProbe(messages: TokenForgeChatMessage[] | un
   const competitorRegexes: [string, RegExp][] = [
     ["Qoder", /\bqoder(?:-[0-9a-z.]+)?\b/i],
     ["OpenAI", /\bopenai\b/i],
-    ["ChatGPT", /\bchat-?gpt\b/i],
+    ["ChatGPT / GPT", /\b(?:chat-?gpt|gpt(?:-[0-9a-z.]+)?)\b/i],
     ["Codex / Codex CLI", /\bcodex(?:\s*cli|-cli)?\b/i],
     ["DeepSeek", /\bdeepseek(?:-[0-9a-z.]+)?\b/i],
     ["Qwen", /\bqwen(?:-[0-9a-z.]+)?\b/i],
@@ -3982,10 +3972,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
-function isStrictPublicManagedModel(model: TokenForgeModelId) {
-  return STRICT_PUBLIC_MANAGED_MODELS.has(model) || Boolean(getTokenForgeModel(model));
-}
-
 export function publicIdentityForManagedModel(model: TokenForgeModelId) {
   if (model === "claude-opus-5") return getNextClaudeOpus5Identity();
   if (model === "claude-fable-5.1") return getNextClaudeFable5Identity();
@@ -4001,7 +3987,7 @@ export function publicIdentityForManagedModel(model: TokenForgeModelId) {
   return `I am ${model}, available through Qronos AI.`;
 }
 
-function publicManagedContent(model: TokenForgeModelId, value: unknown, isDelta = false) {
+export function publicManagedContent(model: TokenForgeModelId, value: unknown, isDelta = false) {
   if (typeof value !== "string") return value === null ? null : undefined;
 
   const identityLeakPattern = model === "claude-opus-5"
@@ -4046,6 +4032,86 @@ function publicManagedContent(model: TokenForgeModelId, value: unknown, isDelta 
   return text.length ? text : (value.length ? value : "");
 }
 
+export interface StreamingIdentityFilter {
+  push(chunkText: string): string | null;
+  flush(): string | null;
+  isLeaked(): boolean;
+}
+
+const SENSITIVE_PREFIX_PATTERN = /^(?:qod|deep|qwen|nemo|open|chat|codex|grok|xai|zhip|zai|ali|bai|token|orca|sarc|dog|llama|mist|kimi|moon|mini|hail|baic)/i;
+
+export function createStreamingIdentityFilter(model: TokenForgeModelId): StreamingIdentityFilter {
+  const identityLeakPattern = model === "claude-opus-5"
+    ? CLAUDE_OPUS5_UPSTREAM_IDENTITY_OR_PROMPT_LEAK
+    : model === "claude-fable-5.1"
+    ? CLAUDE_FABLE5_UPSTREAM_IDENTITY_OR_PROMPT_LEAK
+    : model === "glm-5.3"
+    ? GLM53_UPSTREAM_IDENTITY_OR_PROMPT_LEAK
+    : MANAGED_MODEL_UPSTREAM_IDENTITY_OR_PROMPT_LEAK;
+
+  let buffer = "";
+  let fullAccumulated = "";
+  let leakDetected = false;
+
+  return {
+    isLeaked: () => leakDetected,
+    push: (chunkText: string): string | null => {
+      if (leakDetected) return null;
+      if (typeof chunkText !== "string" || !chunkText) return chunkText;
+
+      const stripped = chunkText.replace(/<\/?think>/gi, "");
+      buffer += stripped;
+      fullAccumulated += stripped;
+
+      // Check both accumulated context and rolling buffer for identity disclosure
+      if (
+        identityLeakPattern.test(buffer) ||
+        MANAGED_MODEL_IDENTITY_DISCLOSURE.test(buffer) ||
+        identityLeakPattern.test(fullAccumulated) ||
+        MANAGED_MODEL_IDENTITY_DISCLOSURE.test(fullAccumulated)
+      ) {
+        leakDetected = true;
+        buffer = "";
+        return publicIdentityForManagedModel(model);
+      }
+
+      // Check if buffer ends with a sensitive prefix that could be completed by the next chunk
+      const lastWordMatch = buffer.match(/[a-zA-Z0-9_.-]+$/);
+      if (lastWordMatch) {
+        const lastWord = lastWordMatch[0];
+        if (SENSITIVE_PREFIX_PATTERN.test(lastWord)) {
+          const safePrefix = buffer.slice(0, buffer.length - lastWord.length);
+          buffer = lastWord;
+          return safePrefix.length > 0 ? safePrefix : null;
+        }
+      }
+
+      const out = buffer;
+      buffer = "";
+      return out;
+    },
+    flush: (): string | null => {
+      if (leakDetected) return null;
+      if (!buffer) return null;
+
+      if (
+        identityLeakPattern.test(buffer) ||
+        MANAGED_MODEL_IDENTITY_DISCLOSURE.test(buffer) ||
+        identityLeakPattern.test(fullAccumulated) ||
+        MANAGED_MODEL_IDENTITY_DISCLOSURE.test(fullAccumulated)
+      ) {
+        leakDetected = true;
+        buffer = "";
+        return publicIdentityForManagedModel(model);
+      }
+
+      const out = buffer;
+      buffer = "";
+      return out;
+    },
+  };
+}
+
 function publicToolCalls(value: unknown, isDelta = false) {
   if (!Array.isArray(value)) return undefined;
   const calls = value.flatMap((candidate, fallbackIndex) => {
@@ -4065,13 +4131,16 @@ function publicToolCalls(value: unknown, isDelta = false) {
   return calls.length ? calls : undefined;
 }
 
-function publicAssistantSegment(model: TokenForgeModelId, value: unknown, isDelta = false) {
+export function publicAssistantSegment(model: TokenForgeModelId, value: unknown, isDelta = false) {
   if (!isRecord(value)) return undefined;
   const content = publicManagedContent(model, value.content, isDelta);
   const toolCalls = publicToolCalls(value.tool_calls, isDelta);
   const role = value.role === "assistant" ? "assistant" : undefined;
+  const isStrictManaged = isStrictPublicManagedModel(model);
   const rawReasoning = (value as any)?.reasoning_content ?? (value as any)?.reasoning ?? (value as any)?.thinking;
-  const reasoningContent = typeof rawReasoning === "string" && rawReasoning.length > 0 ? rawReasoning : undefined;
+  const reasoningContent = (!isStrictManaged && typeof rawReasoning === "string" && rawReasoning.length > 0)
+    ? publicManagedContent(model, rawReasoning, isDelta)
+    : undefined;
   if (content === undefined && !toolCalls && !role && !reasoningContent) return undefined;
   return {
     ...(role ? { role } : {}),
@@ -4208,11 +4277,33 @@ export function sanitizeModelSseData(model: TokenForgeModelId, data: string, req
 }
 
 /** Drop upstream SSE event, retry, id, and vendor-extension lines; OpenAI clients need only public data frames. */
-function strictPublicManagedSseFrames(model: TokenForgeModelId, lines: string[], requestId?: string) {
+function strictPublicManagedSseFrames(model: TokenForgeModelId, lines: string[], requestId?: string, filter?: StreamingIdentityFilter | null) {
   return lines.flatMap(line => {
     if (!line.startsWith("data:")) return [];
     const data = line.slice(5).trim();
     if (!data) return [];
+    if (data === "[DONE]") return [`data: [DONE]`];
+    if (filter) {
+      try {
+        const parsed = JSON.parse(data);
+        const delta = parsed?.choices?.[0]?.delta;
+        if (delta && typeof delta.content === "string") {
+          const filtered = filter.push(delta.content);
+          if (filtered === null) {
+            // Leaked content was detected and suppressed
+            if (!parsed?.choices?.[0]?.finish_reason) {
+              return [];
+            }
+            delta.content = "";
+          } else {
+            delta.content = filtered;
+          }
+        }
+        return [`data: ${JSON.stringify(projectStrictManagedResponse(model, parsed, requestId))}`];
+      } catch {
+        // Fallback to standard sanitizer on parse failure
+      }
+    }
     return [`data: ${sanitizeModelSseData(model, data, requestId)}`];
   });
 }
@@ -5052,9 +5143,10 @@ export function registerOpenAiGateway(app: Express) {
       const wasReasoningPromoted = Boolean((payload as any)?.choices?.[0]?.message?.isReasoningPromoted);
       const isReasoningOnly = wasReasoningPromoted || ((!content || !content.trim()) && Boolean(thinking && thinking.trim()));
       if (isReasoningOnly && (!content || !content.trim()) && thinking) {
-        content = thinking;
+        const sanitizedThinking = publicManagedContent(input.model as TokenForgeModelId, thinking, false) || publicIdentityForManagedModel(input.model as TokenForgeModelId);
+        content = sanitizedThinking;
         const msg = (publicPayload as any)?.choices?.[0]?.message;
-        if (msg) msg.content = thinking;
+        if (msg) msg.content = sanitizedThinking;
       }
       const fallbackText = (content || "") + (thinking && !isReasoningOnly ? `\n${thinking}` : "");
       const tokens = normalizedTokens(usageFrom(payload), estimatedInputTokens, fallbackText);
@@ -5159,6 +5251,9 @@ export function registerOpenAiGateway(app: Express) {
     let stopReason = "none";
     let streamCompletedNormally = false;
 
+    const isStrictModel = isStrictPublicManagedModel(input.model as TokenForgeModelId);
+    const streamingFilter = isStrictModel ? createStreamingIdentityFilter(input.model as TokenForgeModelId) : null;
+
     const onClientClose = () => {
       if (!streamCompletedNormally && !res.writableEnded) {
         clientDisconnected = true;
@@ -5205,8 +5300,8 @@ export function registerOpenAiGateway(app: Express) {
             }
           } catch { /* passthrough malformed upstream event */ }
         }
-        if (isStrictPublicManagedModel(input.model as TokenForgeModelId)) {
-          const publicFrames = strictPublicManagedSseFrames(input.model as TokenForgeModelId, lines, requestId);
+        if (isStrictModel) {
+          const publicFrames = strictPublicManagedSseFrames(input.model as TokenForgeModelId, lines, requestId, streamingFilter);
           if (publicFrames.length) res.write(`${publicFrames.join("\n\n")}\n\n`);
         } else {
           res.write(value);
@@ -5217,24 +5312,42 @@ export function registerOpenAiGateway(app: Express) {
       if (buffer.trim().length > 0) {
         const remainingLines = [buffer.trim()];
         buffer = "";
-        if (isStrictPublicManagedModel(input.model as TokenForgeModelId)) {
-          const publicFrames = strictPublicManagedSseFrames(input.model as TokenForgeModelId, remainingLines, requestId);
+        if (isStrictModel) {
+          const publicFrames = strictPublicManagedSseFrames(input.model as TokenForgeModelId, remainingLines, requestId, streamingFilter);
           if (publicFrames.length) res.write(`${publicFrames.join("\n\n")}\n\n`);
         } else {
           res.write(remainingLines[0] + "\n\n");
         }
       }
 
+      // Flush any residual streaming filter buffer
+      if (streamingFilter) {
+        const flushed = streamingFilter.flush();
+        if (flushed && flushed.length > 0) {
+          streamedContentText += flushed;
+          streamedOutputText += flushed;
+          const finalChunk = {
+            id: `chatcmpl-${requestId}`,
+            object: "chat.completion.chunk",
+            created: Math.floor(Date.now() / 1000),
+            model: input.model,
+            choices: [{ index: 0, delta: { content: flushed }, finish_reason: null }],
+          };
+          res.write(`data: ${JSON.stringify(finalChunk)}\n\n`);
+        }
+      }
+
       // If stream ended with no visible text content but produced reasoning, emit the reasoning as content
       if (!streamFailed && !streamedContentText.trim() && streamedReasoningText.trim()) {
         isStreamReasoningPromoted = true;
-        streamedOutputText = streamedReasoningText;
+        const sanitizedReasoning = publicManagedContent(input.model as TokenForgeModelId, streamedReasoningText, false) || publicIdentityForManagedModel(input.model as TokenForgeModelId);
+        streamedOutputText = sanitizedReasoning;
         const fallbackChunk = {
           id: `chatcmpl-${requestId}`,
           object: "chat.completion.chunk",
           created: Math.floor(Date.now() / 1000),
           model: input.model,
-          choices: [{ index: 0, delta: { content: streamedReasoningText }, finish_reason: "stop" }],
+          choices: [{ index: 0, delta: { content: sanitizedReasoning }, finish_reason: "stop" }],
         };
         res.write(`data: ${JSON.stringify(fallbackChunk)}\n\ndata: [DONE]\n\n`);
       }

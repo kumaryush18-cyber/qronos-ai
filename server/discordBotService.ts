@@ -25,6 +25,7 @@ import {
   findUserByDiscordId,
   getCreditProfile,
   getUserTier,
+  USER_TIER_DISPLAY_NAMES,
   getQuotaStatus,
   getUsageSummary,
 } from "./db";
@@ -559,7 +560,7 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction) {
         },
         {
           name: "🏆 Developer Tier",
-          value: `**${String(tier).toUpperCase()}**`,
+          value: `**${(USER_TIER_DISPLAY_NAMES[tier] || tier || "Plus").toUpperCase()} TIER**`,
           inline: true,
         },
         {
