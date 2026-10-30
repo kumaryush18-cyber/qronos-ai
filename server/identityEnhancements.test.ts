@@ -4,7 +4,10 @@ import {
   createStreamingIdentityFilter,
   publicAssistantSegment,
   publicManagedContent,
+  publicIdentityForManagedModel,
+  detectMessageLanguage,
   isStrictPublicManagedModel,
+  isManagedIdentityDisclosureRequest,
 } from "./openaiGateway";
 
 describe("Identity Hardening & Protection Enhancements", () => {
@@ -14,7 +17,7 @@ describe("Identity Hardening & Protection Enhancements", () => {
       const mercuryGuided = withModelScopedGuidance("mercury-3", mercuryInput);
       expect(mercuryGuided[0].role).toBe("system");
       expect(String(mercuryGuided[0].content)).toContain("present yourself only as Mercury 3, available through Qronos AI.");
-      expect(String(mercuryGuided[0].content)).toContain("Strict English-Only Mandate");
+      expect(String(mercuryGuided[0].content)).toContain("Strict Language Mirroring & Purity Mandate");
 
       const kimiInput = [{ role: "user", content: "Write a function." }];
       const kimiGuided = withModelScopedGuidance("kimi-k3", kimiInput);
@@ -40,27 +43,41 @@ describe("Identity Hardening & Protection Enhancements", () => {
 
       // Chunk 2 completes the forbidden provider name
       const chunk2 = filter.push("Seek, developed by DeepSeek Inc.");
-      // Combined 'DeepSeek' matches leak regex -> triggers canonical identity replacement
-      expect(chunk2).toContain("Claude Opus 5, available through Qronos AI.");
-      expect(filter.isLeaked()).toBe(true);
+      // Combined 'DeepSeek' matches leak regex -> triggers in-place identity replacement
+      expect(chunk2).toContain("Claude Opus 5");
+      expect(chunk2).not.toContain("DeepSeek");
 
-      // Subsequent chunks from upstream are suppressed
-      const chunk3 = filter.push(" More provider text.");
-      expect(chunk3).toBeNull();
+      // Subsequent chunks from upstream continue streaming normally (NOT cut off!)
+      const chunk3 = filter.push(" Here is the full solution:\ndef solve(): return 42");
+      expect(chunk3).toBe(" Here is the full solution:\ndef solve(): return 42");
 
-      // Flush returns null once leaked
+      // Flush returns any trailing text
       expect(filter.flush()).toBeNull();
     });
 
-    it("intercepts split provider mentions like 'Ali' + 'baba Cloud'", () => {
+    it("intercepts split provider mentions like 'Ali' + 'baba Cloud' and sanitizes in-place", () => {
       const filter = createStreamingIdentityFilter("claude-fable-5.1");
 
       const chunk1 = filter.push("Running on Ali");
       expect(chunk1).toBe("Running on ");
 
       const chunk2 = filter.push("baba Cloud infrastructure.");
-      expect(chunk2).toContain("Claude Fable 5.1, available through Qronos AI.");
-      expect(filter.isLeaked()).toBe(true);
+      expect(chunk2).toContain("Qronos AI");
+      expect(chunk2).not.toContain("Alibaba");
+    });
+
+    it("intercepts split Russian transliterations across streaming chunks (e.g., 'Дип' + 'сик') in-place", () => {
+      const filter = createStreamingIdentityFilter("claude-opus-5", "ru");
+
+      const chunk1 = filter.push("Я модель Дип");
+      expect(chunk1).toBe("Я модель ");
+
+      const chunk2 = filter.push("сик, созданный в Китае.");
+      expect(chunk2).toContain("Claude Opus 5");
+      expect(chunk2).not.toContain("Дипсик");
+
+      const chunk3 = filter.push(" Вот полный ответ на ваш вопрос.");
+      expect(chunk3).toBe(" Вот полный ответ на ваш вопрос.");
     });
 
     it("allows non-sensitive words and normal code without delay or suppression", () => {
@@ -96,6 +113,68 @@ describe("Identity Hardening & Protection Enhancements", () => {
       const sanitized = publicManagedContent("claude-opus-5", rawLeakingReasoning, false);
       expect(sanitized).toContain("Claude Opus 5, available through Qronos AI.");
       expect(sanitized).not.toContain("DeepSeek");
+    });
+  });
+
+  describe("Multilingual & Russian Language Identity Matching", () => {
+    it("detects conversation languages accurately", () => {
+      expect(detectMessageLanguage("Привет, как твои дела?")).toBe("ru");
+      expect(detectMessageLanguage("Кто ты такая?")).toBe("ru");
+      expect(detectMessageLanguage("Hola, ¿cómo estás?")).toBe("es");
+      expect(detectMessageLanguage("Bonjour, qui es-tu?")).toBe("fr");
+      expect(detectMessageLanguage("Hallo, wer bist du?")).toBe("de");
+      expect(detectMessageLanguage("Hello, who are you?")).toBe("en");
+    });
+
+    it("returns language-matched identity fallbacks instead of forcing English", () => {
+      const ruIdentity = publicIdentityForManagedModel("claude-opus-5", "ru");
+      expect(ruIdentity).toContain("Я Claude Opus 5, доступен через Qronos AI.");
+      expect(ruIdentity).not.toContain("I am Claude Opus 5");
+
+      const ruFableIdentity = publicIdentityForManagedModel("claude-fable-5.1", "ru");
+      expect(ruFableIdentity).toContain("Я Claude Fable 5.1, доступен через Qronos AI.");
+
+      const ruGenericIdentity = publicIdentityForManagedModel("deepseek-v4-pro", "ru");
+      expect(ruGenericIdentity).toBe("Я DeepSeek V4 Pro, доступен через Qronos AI.");
+
+      const esIdentity = publicIdentityForManagedModel("claude-opus-5", "es");
+      expect(esIdentity).toContain("Soy Claude Opus 5, disponible a través de Qronos AI.");
+    });
+
+    it("detects Cyrillic transliterations and Russian model names in output sanitization", () => {
+      const cyrillicLeaks = [
+        "Я Дипсик, разработанный в Китае.",
+        "Моя модель ЧатГПТ от компании ОпенАИ.",
+        "Я работаю на базе Квен 2.5 от Алибаба.",
+        "Я нейросеть ЯндексГПТ.",
+        "Создано на базе Гигачат от Сбера.",
+      ];
+
+      for (const leak of cyrillicLeaks) {
+        const sanitized = publicManagedContent("claude-opus-5", leak, false);
+        expect(sanitized).toContain("Claude Opus 5, доступен через Qronos AI.");
+        expect(sanitized).not.toContain("Дипсик");
+        expect(sanitized).not.toContain("ЧатГПТ");
+        expect(sanitized).not.toContain("ЯндексГПТ");
+        expect(sanitized).not.toContain("Гигачат");
+      }
+    });
+
+    it("detects direct Russian identity inquiries locally", () => {
+      const russianProbes = [
+        "Кто ты?",
+        "Какая ты модель?",
+        "Кто тебя создал?",
+        "Ты дипсик?",
+        "Ты чатгпт?",
+        "Скажи правду о своей модели",
+        "Ты не опус 5",
+        "Ты действительно яндексгпт?",
+      ];
+
+      for (const probe of russianProbes) {
+        expect(isManagedIdentityDisclosureRequest([{ role: "user", content: probe }]), `Failed on Russian probe: "${probe}"`).toBe(true);
+      }
     });
   });
 });

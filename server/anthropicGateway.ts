@@ -51,6 +51,7 @@ import {
   publicManagedContent,
   publicIdentityForManagedModel,
   isStrictPublicManagedModel,
+  detectMessageLanguage,
 } from "./openaiGateway";
 
 export { tryExtractImageDimensions, estimateSingleImageTokens };
@@ -1240,6 +1241,9 @@ export function registerAnthropicMessagesGateway(app: Express) {
     }
     const model = input.model as TokenForgeModelId;
     const translatedMessages = input.messages ?? [];
+    const firstUserMsg = Array.isArray(translatedMessages) ? translatedMessages.find(m => m?.role === "user")?.content : undefined;
+    const firstUserText = typeof firstUserMsg === "string" ? firstUserMsg : Array.isArray(firstUserMsg) ? ((firstUserMsg as any[]).find((p: any) => p?.type === "text")?.text || "") : "";
+    const sessionLang = detectMessageLanguage(firstUserText);
     const upstreamInput: TokenForgeChatInput = {
       ...input,
       messages: withModelScopedGuidance(model, translatedMessages),
@@ -1343,8 +1347,6 @@ export function registerAnthropicMessagesGateway(app: Express) {
       ? visualAnalysis.analysis.tag
       : (isDocument ? "(document)" : "");
     const rawBodyString = typeof (req as any).rawBody === "object" && (req as any).rawBody ? (req as any).rawBody.toString("utf-8") : JSON.stringify(raw);
-    const firstUserMsg = Array.isArray(raw.messages) ? raw.messages.find(m => m?.role === "user")?.content : undefined;
-    const firstUserText = typeof firstUserMsg === "string" ? firstUserMsg : Array.isArray(firstUserMsg) ? (firstUserMsg.find((p: any) => p?.type === "text")?.text || "") : "";
     const sessionId = generateSessionId(key.userId, firstUserText);
 
     const providerContext: ProviderRequestContext = {
@@ -1640,7 +1642,7 @@ export function registerAnthropicMessagesGateway(app: Express) {
     let firstTokenAt: number | null = null;
     let finalStopReason = "none";
 
-    const streamingFilter = isStrictPublicManagedModel(model) ? createStreamingIdentityFilter(model) : null;
+    const streamingFilter = isStrictPublicManagedModel(model) ? createStreamingIdentityFilter(model, sessionLang) : null;
 
     const finish = (reason: string = "end_turn") => {
       if (stopped) return;

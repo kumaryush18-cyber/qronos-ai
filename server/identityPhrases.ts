@@ -34,6 +34,36 @@ export const CLAUDE_OPUS5_ROTATING_IDENTITIES: readonly string[] = [
 
 let fableCursor = 0;
 let opusCursor = 0;
+let fableRuCursor = 0;
+let opusRuCursor = 0;
+
+export const CLAUDE_FABLE5_RUSSIAN_ROTATING_IDENTITIES: readonly string[] = [
+  "Я Claude Fable 5.1, доступен через Qronos AI. Я специализируюсь на быстром решении задач, творческом мышлении и разработке кода. Чем могу помочь вам сегодня?",
+  "Я Claude Fable 5.1, доступен через Qronos AI. Я настроен на глубокий логический анализ, адаптивное программирование и быстрые ответы. Какую задачу мы решаем?",
+  "Здравствуйте! Я Claude Fable 5.1, доступен через Qronos AI. Будь то сложная архитектура кода или творческие идеи, я готов подключиться.",
+  "Я Claude Fable 5.1, доступен через Qronos AI. Моя цель — предоставить вам точные, надежные и понятные решения для любых проектов.",
+  "Привет! Я Claude Fable 5.1, доступен через Qronos AI. Ваш надежный помощник в кодинге, анализе и решении сложных задач. С чего начнем?",
+];
+
+export const CLAUDE_OPUS5_RUSSIAN_ROTATING_IDENTITIES: readonly string[] = [
+  "Я Claude Opus 5, доступен через Qronos AI. Моя специализация — сложное логическое мышление, системная архитектура и решение комплексных задач. Чем могу помочь вам сегодня?",
+  "Я Claude Opus 5, доступен через Qronos AI. Я предназначен для глубокого технического анализа, проектирования систем и написания высокоточного кода. Какую задачу мы решаем?",
+  "Здравствуйте! Я Claude Opus 5, доступен через Qronos AI. Я готов помочь вам с архитектурой кода, сложными исследованиями и точными вычислениями.",
+  "Я Claude Opus 5, доступен через Qronos AI. Создан для максимальной глубины рассуждений, архитектурного проектирования и детального анализа.",
+  "Приветствую! Я Claude Opus 5, доступен через Qronos AI. Предоставляю глубокое понимание контекста, безупречную точность и надежные инженерные решения.",
+];
+
+export function getNextClaudeFable5RussianIdentity(): string {
+  const phrase = CLAUDE_FABLE5_RUSSIAN_ROTATING_IDENTITIES[fableRuCursor % CLAUDE_FABLE5_RUSSIAN_ROTATING_IDENTITIES.length];
+  fableRuCursor = (fableRuCursor + 1) % CLAUDE_FABLE5_RUSSIAN_ROTATING_IDENTITIES.length;
+  return phrase;
+}
+
+export function getNextClaudeOpus5RussianIdentity(): string {
+  const phrase = CLAUDE_OPUS5_RUSSIAN_ROTATING_IDENTITIES[opusRuCursor % CLAUDE_OPUS5_RUSSIAN_ROTATING_IDENTITIES.length];
+  opusRuCursor = (opusRuCursor + 1) % CLAUDE_OPUS5_RUSSIAN_ROTATING_IDENTITIES.length;
+  return phrase;
+}
 
 /**
  * Returns the next rotating identity phrase for Claude Fable 5.1.
