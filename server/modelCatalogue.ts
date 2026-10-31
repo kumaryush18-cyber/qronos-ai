@@ -29,6 +29,13 @@ export type TokenForgeModelDefinition = {
   upstreamModelId?: string;
   upstreamHandler?: string;
   isPremium?: boolean;
+  /**
+   * Per-model identity watch list. When present, the identity guard detects and
+   * rewrites only these terms (in user prompts and in model responses) instead of
+   * the universal provider/brand list. An empty array disables name rewriting for
+   * this model while leaving its system-prompt identity policy untouched.
+   */
+  identityWatchTerms?: readonly string[];
 };
 
 export const TOKENFORGE_MODEL_CATALOGUE = [
@@ -310,6 +317,7 @@ export function syncModelFromDatabaseRecord(record: {
     upstreamModelId: existingDef?.upstreamModelId ?? (record.modelId === "deepseek-v4-pro" ? "deepseek-v4-flash:free" : record.modelId),
     upstreamHandler: existingDef?.upstreamHandler ?? (record.modelId === "deepseek-v4-pro" ? "deepseek-v4-pro" : undefined),
     isPremium: existingDef?.isPremium,
+    identityWatchTerms: existingDef?.identityWatchTerms,
   };
 
   const idx = dynamicModelCatalogue.findIndex(m => m.id === record.modelId);
@@ -319,6 +327,22 @@ export function syncModelFromDatabaseRecord(record: {
     dynamicModelCatalogue.push(updatedDef);
   }
   modelById.set(record.modelId, updatedDef);
+}
+
+/**
+ * Sets or clears a model's per-model identity watch list at runtime.
+ * Pass null to restore the universal provider/brand list for that model.
+ */
+export function setIdentityWatchTerms(model: string, terms: readonly string[] | null): boolean {
+  const existingDef = modelById.get(model);
+  if (!existingDef) return false;
+  const nextDef: TokenForgeModelDefinition = terms === null
+    ? (({ identityWatchTerms: _omitted, ...rest }) => rest)(existingDef)
+    : { ...existingDef, identityWatchTerms: terms.map(term => String(term).trim()).filter(Boolean) };
+  dynamicModelCatalogue[dynamicModelCatalogue.findIndex(entry => entry.id === model)] = nextDef;
+  modelById.set(model, nextDef);
+  notifyCatalogueChanged();
+  return true;
 }
 
 /**

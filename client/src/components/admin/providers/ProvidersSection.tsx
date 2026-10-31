@@ -1,3 +1,4 @@
+import { IdentityWatchListCard } from "./IdentityWatchListCard";
 import React, { useState, useEffect, useRef } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -1681,6 +1682,7 @@ export function ClaudeFable5ProviderBalancerPanel({ metrics }: { metrics?: Manag
 
   return (
     <>
+      <IdentityWatchListCard modelId="claude-fable-5.1" displayName="Claude Fable 5.1" />
       <ClaudeOpus5ProviderBalancerPanel
         providerName="Claude Fable 5.1"
         modelId="claude-fable-5.1"
@@ -1777,6 +1779,7 @@ export function Sonnet46ProviderBalancerPanel({ metrics }: { metrics?: ManagedPr
 
   return (
     <>
+      <IdentityWatchListCard modelId="claude-sonnet-4.6" displayName="Claude Sonnet 4.6" />
       <ClaudeOpus5ProviderBalancerPanel
         providerName="Claude Sonnet 4.6"
         modelId="claude-sonnet-4.6"
@@ -1872,6 +1875,7 @@ export function Qwen38MaxProviderBalancerPanel({ metrics }: { metrics?: ManagedP
 
   return (
     <>
+      <IdentityWatchListCard modelId="qwen3.8-max" displayName="Qwen 3.8 Max" />
       <ClaudeOpus5ProviderBalancerPanel
         providerName="Qwen 3.8 Max"
         modelId="qwen3.8-max"
@@ -1969,6 +1973,7 @@ export function Gpt6AstraProviderBalancerPanel({ metrics }: { metrics?: ManagedP
 
   return (
     <>
+      <IdentityWatchListCard modelId="gpt-6-astra" displayName="GPT-6 Astra" />
       <ClaudeOpus5ProviderBalancerPanel
         providerName="GPT-6 Astra"
         modelId="gpt-6-astra"
@@ -2066,6 +2071,7 @@ export function KimiK3ProviderBalancerPanel({ metrics }: { metrics?: ManagedProv
 
   return (
     <>
+      <IdentityWatchListCard modelId="kimi-k3" displayName="Kimi K3" />
       <ClaudeOpus5ProviderBalancerPanel
         providerName="Kimi K3"
         modelId="kimi-k3"
@@ -2155,6 +2161,7 @@ export function DeepseekV4ProProviderBalancerPanel({ metrics }: { metrics?: Mana
 
   return (
     <>
+      <IdentityWatchListCard modelId="deepseek-v4-pro" displayName="DeepSeek V4 Pro" />
       <ClaudeOpus5ProviderBalancerPanel
         providerName="DeepSeek V4 Pro"
         modelId="deepseek-v4-pro"
@@ -2986,6 +2993,7 @@ export function ClaudeOpus5ProviderBalancerPanelWrapper({
 
   return (
     <>
+      <IdentityWatchListCard modelId="claude-opus-5" displayName="Claude Opus 5" />
       <ClaudeOpus5ProviderBalancerPanel
         providerName="Claude Opus 5"
         modelId="claude-opus-5"
@@ -3107,6 +3115,7 @@ export function Glm53ProviderSettingsPanel({
 
   return (
     <>
+      <IdentityWatchListCard modelId="glm-5.3" displayName="GLM 5.3" />
       <ClaudeOpus5ProviderBalancerPanel
         providerName="GLM 5.3"
         modelId="glm-5.3"

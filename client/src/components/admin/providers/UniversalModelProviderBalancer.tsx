@@ -19,6 +19,7 @@ import {
   ClaudeOpus5ProviderBalancerPanel,
 } from "./ProvidersSection";
 import { ProviderScopedFailureHistory } from "../diagnostics/FailureHistory";
+import { IdentityWatchListCard } from "./IdentityWatchListCard";
 import {
   ClaudeOpus5ProviderDraft,
   ClaudeOpus5SettingsData,
@@ -465,6 +466,7 @@ export function UniversalModelProviderBalancer({
       </div>
 
       {/* Universal Provider Balancer Panel */}
+      <IdentityWatchListCard modelId={selectedModelId} displayName={currentModelDisplayName} />
       <ClaudeOpus5ProviderBalancerPanel
         providerName={currentModelDisplayName}
         modelId={selectedModelId}

@@ -201,6 +201,8 @@ import {
   updateUniversalModelProviderSettings,
   listUniversalConfiguredModels,
   getUniversalModelKeyMetricGroup,
+  getModelIdentityWatchListSettings,
+  updateModelIdentityWatchListSettings,
 } from "./universalModelProviders";
 
 const apiKeyLabel = z
@@ -1898,6 +1900,32 @@ ${input.intent ? `Requested Notification Type: ${input.intent}` : ""}`;
         }
       }),
     listUniversalModels: adminProcedure.query(async () => listUniversalConfiguredModels()),
+    modelIdentityWatchTerms: adminProcedure
+      .input(z.object({ modelId: z.string().trim().min(1, "Enter a valid model ID").max(64) }))
+      .query(async ({ input }) => getModelIdentityWatchListSettings(input.modelId)),
+    updateModelIdentityWatchTerms: adminProcedure
+      .input(z.object({
+        modelId: z.string().trim().min(1, "Enter a valid model ID").max(64),
+        terms: z.array(z.string().trim().min(1).max(60)).min(1, "Keep at least one watched name").max(100, "At most 100 watched names"),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        try {
+          const settings = await updateModelIdentityWatchListSettings(input, ctx.user.id);
+          await writeAuditEvent({
+            actorUserId: ctx.user.id,
+            action: "model_identity_watch_list_updated",
+            entityType: "provider",
+            entityId: input.modelId,
+            metadata: { modelId: settings.modelId, termCount: settings.terms.length, terms: settings.terms },
+          });
+          return settings;
+        } catch (error) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: error instanceof Error ? error.message : "Qronos AI could not save this identity watch list",
+          });
+        }
+      }),
     modelCompactScaling: adminProcedure
       .input(z.object({ modelId: z.string().trim().min(1) }))
       .query(async ({ input }) => getModelCompactScalingConfig(input.modelId)),

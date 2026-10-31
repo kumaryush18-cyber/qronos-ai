@@ -30,6 +30,7 @@ import {
 } from "../rateLimiters";
 import { appRouter } from "../routers";
 import { clearLegacyAdministratorRoles, ensureCatalogue, loadAndCacheModelPricingOverrides } from "../db";
+import { hydrateIdentityWatchTerms } from "../universalModelProviders";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 
@@ -191,7 +192,16 @@ async function startServer() {
   process.on("SIGTERM", shutdown);
   process.on("SIGINT", shutdown);
 
-  Promise.all([ensureCatalogue(), clearLegacyAdministratorRoles(), loadAndCacheModelPricingOverrides()]).catch(error => {
+  // Saved per-model identity watch lists must be active from the first request,
+  // not only after an administrator opens the Providers page.
+  Promise.all([
+    ensureCatalogue(),
+    clearLegacyAdministratorRoles(),
+    loadAndCacheModelPricingOverrides(),
+    hydrateIdentityWatchTerms().catch(error => {
+      console.error("[Qronos AI] Identity watch list warmup failed; lists reload when an administrator opens Providers", error);
+    }),
+  ]).catch(error => {
     console.error("[Qronos AI] Startup access and catalogue warmup failed; requests will retry catalogue initialization on demand", error);
   });
 

@@ -25,6 +25,13 @@ import {
   TOKENROUTER_PROVIDER_SLUG,
 } from "./modelCatalogue";
 import {
+  DEFAULT_IDENTITY_WATCH_TERMS,
+  applyIdentityWatchTerms,
+  effectiveIdentityWatchTerms,
+  normalizeIdentityWatchTerms,
+  type IdentityWatchSource,
+} from "./identityWatchList";
+import {
   getProviderCredentialTelemetry,
   getCredentialSlotTelemetry,
   type CredentialTelemetryProvider,
@@ -482,6 +489,138 @@ export async function getUniversalModelKeyMetricGroup(modelId: string) {
     providers,
   };
 }
+
+export const IDENTITY_WATCH_TERMS_SETTING_PREFIX = "identity_watch_terms:";
+
+export interface ModelIdentityWatchListSettings {
+  modelId: string;
+  modelDisplayName: string;
+  terms: string[];
+  source: IdentityWatchSource;
+  defaults: string[];
+  updatedAt: Date | null;
+  updatedByUserId: number | null;
+}
+
+export function identityWatchTermsSettingKey(modelId: string) {
+  return `${IDENTITY_WATCH_TERMS_SETTING_PREFIX}${modelId.trim().toLowerCase()}`;
+}
+
+function parseIdentityWatchTerms(raw: string | undefined | null): string[] | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return null;
+    const terms = normalizeIdentityWatchTerms(parsed.map(term => String(term ?? "")));
+    return terms.length ? terms : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Loads every saved per-model watch list into the runtime resolver. */
+export async function hydrateIdentityWatchTerms(): Promise<void> {
+  try {
+    const db = await getDb();
+    const rows = db
+      ? await db
+          .select()
+          .from(platformSettings)
+          .where(like(platformSettings.settingKey, `${IDENTITY_WATCH_TERMS_SETTING_PREFIX}%`))
+          .catch(() => [])
+      : [];
+
+    for (const row of rows) {
+      const modelId = row.settingKey.slice(IDENTITY_WATCH_TERMS_SETTING_PREFIX.length);
+      const terms = parseIdentityWatchTerms(row.value);
+      if (terms) applyIdentityWatchTerms(modelId, terms);
+    }
+
+    for (const [key, record] of Array.from(fallbackPlatformSettings.entries())) {
+      if (!key.startsWith(IDENTITY_WATCH_TERMS_SETTING_PREFIX)) continue;
+      const modelId = key.slice(IDENTITY_WATCH_TERMS_SETTING_PREFIX.length);
+      const terms = parseIdentityWatchTerms(record.value);
+      if (terms) applyIdentityWatchTerms(modelId, terms);
+    }
+  } catch (error) {
+    console.warn("[IdentityWatchList] could not load saved per-model watch lists", error);
+  }
+}
+
+let identityWatchHydration: Promise<void> | null = null;
+
+function ensureIdentityWatchTermsHydrated() {
+  identityWatchHydration ??= hydrateIdentityWatchTerms();
+  return identityWatchHydration;
+}
+
+export async function getModelIdentityWatchListSettings(modelId: string): Promise<ModelIdentityWatchListSettings> {
+  await ensureIdentityWatchTermsHydrated();
+  const normalized = modelId.trim().toLowerCase();
+  const { terms, source } = effectiveIdentityWatchTerms(normalized);
+  const settingKey = identityWatchTermsSettingKey(normalized);
+  const db = await getDb();
+
+  let record: { value: string; updatedAt?: Date | null; updatedByUserId?: number | null } | undefined;
+  if (db) {
+    record = (await db.select().from(platformSettings).where(eq(platformSettings.settingKey, settingKey)).limit(1).catch(() => []))[0];
+  }
+  if (!record) record = fallbackPlatformSettings.get(settingKey);
+
+  return {
+    modelId: normalized,
+    modelDisplayName: getTokenForgeModel(normalized)?.displayName || normalized,
+    terms: [...terms],
+    source,
+    defaults: [...DEFAULT_IDENTITY_WATCH_TERMS],
+    updatedAt: record?.updatedAt ?? null,
+    updatedByUserId: record?.updatedByUserId ?? null,
+  };
+}
+
+export async function updateModelIdentityWatchListSettings(
+  input: { modelId: string; terms: string[] },
+  updatedByUserId: number
+): Promise<ModelIdentityWatchListSettings> {
+  const normalized = input.modelId.trim().toLowerCase();
+  if (!normalized) throw new Error("A valid model ID is required");
+
+  const settingKey = identityWatchTermsSettingKey(normalized);
+  if (settingKey.length > 96) throw new Error("This model ID is too long to save an identity watch list");
+
+  const terms = normalizeIdentityWatchTerms(input.terms);
+  if (!terms.length) throw new Error("Keep at least one watched name — an empty watch list is not supported");
+  if (terms.length > 100) throw new Error("An identity watch list can contain at most 100 names");
+  if (terms.some(term => term.length > 60)) throw new Error("Each watched name must be 60 characters or fewer");
+
+  applyIdentityWatchTerms(normalized, terms);
+
+  const value = JSON.stringify(terms);
+  fallbackPlatformSettings.set(settingKey, { value, updatedAt: new Date(), updatedByUserId });
+
+  const db = await getDb();
+  if (db) {
+    try {
+      await db.transaction(async tx => {
+        let validUserId: number | null = null;
+        if (typeof updatedByUserId === "number" && updatedByUserId > 0) {
+          const found = await tx.select({ id: users.id }).from(users).where(eq(users.id, updatedByUserId)).limit(1).catch(() => []);
+          if (found.length) validUserId = updatedByUserId;
+        }
+        await tx
+          .insert(platformSettings)
+          .values({ settingKey, value, updatedByUserId: validUserId })
+          .onDuplicateKeyUpdate({ set: { value, updatedByUserId: validUserId, updatedAt: new Date() } });
+      });
+    } catch (err) {
+      console.warn(`[IdentityWatchList] could not persist the watch list for ${normalized}`, err);
+    }
+  }
+
+  return getModelIdentityWatchListSettings(normalized);
+}
+
+void ensureIdentityWatchTermsHydrated();
 
 export async function listAllUniversalKeyMetricGroups() {
   const models = await listUniversalConfiguredModels();
