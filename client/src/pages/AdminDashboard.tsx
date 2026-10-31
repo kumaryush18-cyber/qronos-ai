@@ -2,7 +2,6 @@ import AdminSupport from "./admin/Support";
 import React, { useState, useEffect, useMemo } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import LiveRequestLog from "./LiveRequestLog";
-import { MotionVideosAdminSection } from "@/components/admin/MotionVideosAdminSection";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -51,6 +50,7 @@ import { AdminUsageChart, EmailProviderChart } from "@/components/admin/overview
 import { AccountsSection } from "@/components/admin/accounts/AccountsSection";
 import { DiscordBypassSection } from "@/components/admin/overview/DiscordBypassSection";
 import { UnoRouterToggleCard } from "@/components/admin/overview/UnoRouterToggleCard";
+import { RefundPolicyToggleCard } from "@/components/admin/overview/RefundPolicyToggleCard";
 import { SpecialReferralCampaignSection } from "@/components/admin/campaign/SpecialReferralSection";
 import {
   AuditTimeline,
@@ -571,6 +571,9 @@ export default function AdminDashboard({ initialSection }: { initialSection?: Ad
             <UnoRouterToggleCard />
           </div>
           <div className="xl:col-span-2">
+            <RefundPolicyToggleCard />
+          </div>
+          <div className="xl:col-span-2">
             <DiscordBypassSection />
           </div>
           <AccountsSection activeAdminId={user?.id ?? -1} />
@@ -676,7 +679,6 @@ export default function AdminDashboard({ initialSection }: { initialSection?: Ad
       {section === "live" && (
         <div className="space-y-6">
           <LiveRequestLog />
-          <MotionVideosAdminSection />
         </div>
       )}
       {section === "live-chat" && <AdminSupport />}

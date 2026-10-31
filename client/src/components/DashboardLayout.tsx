@@ -33,6 +33,7 @@ import { DiscordVerifyModal, openDiscordVerifyModal } from "./DiscordVerifyModal
 import { AnnouncementBanner } from "./AnnouncementBanner";
 import { MaintenanceCountdownBanner } from "./MaintenanceCountdownBanner";
 import { QronosGlyph } from "./QronosGlyph";
+import { trpc } from "@/lib/trpc";
 import { PearlAvatar } from "@/components/ui/pearl-avatar";
 import { UserTierBadge } from "@/components/UserTierBadge";
 import { NotificationBell } from "@/components/NotificationBell";
@@ -132,6 +133,10 @@ function DashboardLayoutContent({
   const sidebarRef = useRef<HTMLDivElement>(null);
   const activeMenuItem = menuItems.find(item => item.path === location);
   const isMobile = useIsMobile();
+  const refundPolicy = trpc.public.refundPolicyStatus.useQuery(undefined, {
+    staleTime: 30_000,
+  });
+  const showRefundPolicy = refundPolicy.data?.enabled ?? true;
 
   const handleSignOut = async () => {
     await logout();
@@ -355,7 +360,7 @@ function DashboardLayoutContent({
             <Link href="/docs">Docs</Link>
             <Link href="/legal/terms">Terms of Service</Link>
             <Link href="/legal/privacy">Privacy Policy</Link>
-            <Link href="/legal/refund">Refund Policy</Link>
+            {showRefundPolicy && <Link href="/legal/refund">Refund Policy</Link>}
             <a
               href="https://discord.gg/PGVmBGht7r"
               target="_blank"

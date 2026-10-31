@@ -12,7 +12,8 @@ import {
   Clock,
   ArrowRight
 } from "lucide-react";
-import { useLocation, Link } from "wouter";
+import { useLocation, Link, Redirect } from "wouter";
+import { trpc } from "@/lib/trpc";
 import "./infergate-docs-legal.css";
 
 export type LegalVariant = "terms" | "privacy" | "refund" | "acceptable-use" | "security";
@@ -75,7 +76,7 @@ const legalContent: Record<LegalVariant, LegalPolicy> = {
         body: "Qronos AI provisions compute capacity through pay-as-you-go balances and developer packages. Requests routed through our gateway are metered according to the exact input and output token counts reported by underlying inference endpoints, priced in nanodollars ($10⁻⁹ USD) to prevent rounding discrepancies.",
         bullets: [
           "Two-Phase Reservation: Estimated maximum request cost is temporarily reserved before upstream dispatch and settled precisely against returned tokens post-completion. Interrupted or failed requests release 100% of the reserved amount.",
-          "Accepted Payment Rails: Major international credit/debit cards, domestic UPI (INR), and cryptocurrency settlement (Solana Pay / USDC).",
+          "Accepted Payment Rails: Major international credit/debit cards, domestic UPI (INR), and cryptocurrency settlement (Solana Pay / USDC). All cryptocurrency payments are decentralized, final, and strictly non-refundable at any cost.",
           "Merchant of Record & Tax Compliance: Card transactions are processed in accordance with global merchant of record standards, statutory tax obligations (VAT, GST, sales tax), and PCI-DSS Level 1 specifications.",
         ],
       },
@@ -201,32 +202,33 @@ const legalContent: Record<LegalVariant, LegalPolicy> = {
     sections: [
       {
         heading: "1. Our Commitment to Developer Trust",
-        body: "At Qronos AI, we want developers and engineering teams to build with confidence. We maintain an open, fair, and straightforward refund policy across all supported payment rails—including international credit cards, domestic UPI (INR), and cryptocurrency (Solana Pay / USDC).",
+        body: "At Qronos AI, we want developers and engineering teams to build with confidence. We maintain an open, fair, and straightforward refund policy for eligible fiat payment transactions (including international credit/debit cards and domestic UPI). Please note: all cryptocurrency transactions (including Solana Pay, SOL, USDC, and on-chain deposits) are decentralized, final, and strictly non-refundable at any cost under all circumstances.",
       },
       {
-        heading: "2. Instant Digital Delivery & 30-Day Unused Refund Window",
-        body: "API usage capacity is an electronic digital product delivered instantly to your account upon transaction confirmation. In alignment with global Merchant of Record compliance guidelines, Qronos AI provides a 30-day refund window from the date of purchase for any unconsumed usage capacity balance.",
-        callout: "Capacity is delivered instantly upon checkout. If you purchase a developer package or top up your balance and have unconsumed credit remaining, you may request a 100% refund of your unused capacity balance within thirty (30) calendar days of transaction completion.",
+        heading: "2. Instant Digital Delivery & 30-Day Unused Refund Window (Fiat Only)",
+        body: "API usage capacity is an electronic digital product delivered instantly to your account upon transaction confirmation. In alignment with global Merchant of Record compliance guidelines, Qronos AI provides a 30-day refund window from the date of purchase for any unconsumed usage capacity balance purchased via eligible fiat payment rails (Cards and Domestic UPI). All cryptocurrency transactions are strictly excluded and non-refundable at any cost.",
+        callout: "Capacity is delivered instantly upon checkout. If you purchase capacity via eligible fiat payment methods (Card or UPI) and have unconsumed credit remaining, you may request a 100% refund of your unused capacity balance within thirty (30) calendar days of transaction completion. Cryptocurrency payments are final and strictly non-refundable at any cost.",
         calloutType: "emerald",
       },
       {
-        heading: "3. Qualifying Scenarios for Refunds",
-        body: "You are entitled to a full or pro-rated refund under any of the following circumstances:",
+        heading: "3. Qualifying Scenarios for Refunds (Fiat Payments Only)",
+        body: "For eligible purchases completed via fiat payment rails (Credit/Debit Cards and Domestic UPI), you are entitled to a full or pro-rated refund under any of the following circumstances:",
         bullets: [
-          "Unused Balance Returns: You purchased an API package or balance top-up within the last 30 days and have unused quota remaining in your account.",
+          "Unused Balance Returns: You purchased an API package or balance top-up via Card or UPI within the last 30 days and have unused quota remaining in your account.",
           "Service Outages: Verified prolonged platform downtime or persistent routing failures that prevented Qronos AI from fulfilling your API requests within reasonable SLA expectations.",
-          "Duplicate Charges: Multiple charges generated due to network latency, gateway timeouts, or accidental duplicate submissions.",
-          "Allocation Discrepancies: Any technical fault where purchased capacity was not properly credited to your account balance.",
+          "Duplicate Charges: Multiple charges generated due to network latency, gateway timeouts, or accidental duplicate submissions on fiat rails.",
+          "Allocation Discrepancies: Any technical fault where purchased fiat capacity was not properly credited to your account balance.",
         ],
       },
       {
-        heading: "4. Non-Refundable Scenarios",
-        body: "Refunds cannot be issued under the following conditions:",
+        heading: "4. Non-Refundable Scenarios & Cryptocurrency Policy",
+        body: "Refunds cannot be issued under any of the following conditions:",
         bullets: [
+          "Cryptocurrency Payments (Strictly Non-Refundable at Any Cost): All cryptocurrency payments and on-chain deposits (including Solana Pay, SOL, USDC, and digital token transfers) are 100% final and strictly non-refundable at any cost under all circumstances. Due to the immutable, decentralized nature of blockchain transactions and immediate computational token provisioning, crypto payments cannot be refunded, reversed, charged back, or exchanged under any scenario.",
           "Consumed Compute: Capacity is delivered electronically and is non-refundable once consumed for completed model inference requests (where tokens were successfully computed and returned).",
           "Acceptable Use Violations: Accounts suspended or terminated due to verified violations of our Acceptable Use Policy (such as abusive attacks, malware generation, automated scraping, or illegal activities).",
           "Expired Eligibility Window: Refund requests submitted more than thirty (30) calendar days after the original transaction date.",
-          "On-Chain Network Gas Fees: For cryptocurrency payments via Solana, network transaction fees (~$0.00025) paid to network validators are inherently non-recoverable.",
+          "On-Chain Network Gas Fees: For cryptocurrency payments via Solana, all network validator and gas fees (~$0.00025) are inherently non-recoverable.",
         ],
       },
       {
@@ -241,11 +243,11 @@ const legalContent: Record<LegalVariant, LegalPolicy> = {
       },
       {
         heading: "6. Processing Timeframes by Payment Rail",
-        body: "Once approved by our billing desk, the timeframe for funds to reflect in your account depends on the payment rail utilized:",
+        body: "Once approved by our billing desk, the timeframe for eligible fiat refunds depends on the payment rail utilized:",
         bullets: [
           "Credit & Debit Cards: Processed via certified merchant gateways. Funds typically reflect on your card statement within 5 to 10 business days depending on your bank's clearing cycle.",
           "Domestic UPI (INR): Processed directly back to the originating bank VPA or bank account via IMPS/NEFT within 24 to 48 business hours.",
-          "Solana Pay (USDC): Re-deposited as USDC directly to your originating Solana wallet address within 1 business day.",
+          "Cryptocurrency (Solana Pay / SOL / USDC): Strictly Non-Refundable at Any Cost. All on-chain cryptocurrency payments are final and non-reversible upon transaction confirmation; no refunds, returns, or wallet re-deposits are issued for crypto payments under any scenario.",
         ],
       },
       {
@@ -353,9 +355,29 @@ function parseLegalVariant(pathname: string): LegalVariant {
 
 export default function Legal() {
   const [location] = useLocation();
+  const refundStatus = trpc.public.refundPolicyStatus.useQuery(undefined, {
+    staleTime: 15_000,
+    refetchOnWindowFocus: true,
+  });
+  const isRefundEnabled = refundStatus.data?.enabled ?? true;
+
   const variant = parseLegalVariant(location);
+
+  // If the refund policy is toggled OFF and a user visits any refund URL, redirect cleanly to terms
+  if (variant === "refund" && !isRefundEnabled) {
+    return <Redirect to="/legal/terms" replace />;
+  }
+
   const content = legalContent[variant] ?? legalContent.terms;
   const ActiveIcon = content.icon;
+
+  const navItems = [
+    { id: "terms", href: "/legal/terms", label: "Terms of Service" },
+    { id: "privacy", href: "/legal/privacy", label: "Privacy Policy" },
+    ...(isRefundEnabled ? [{ id: "refund", href: "/legal/refund", label: "Refund Policy" }] : []),
+    { id: "acceptable-use", href: "/legal/acceptable-use", label: "Acceptable Use" },
+    { id: "security", href: "/legal/security", label: "Security & Governance" },
+  ];
 
   return (
     <div className="min-h-screen bg-[#08090d] text-white flex flex-col font-sans selection:bg-white/20 selection:text-white relative overflow-x-hidden">
@@ -412,13 +434,7 @@ export default function Legal() {
                 Legal & Governance
               </div>
               <div className="space-y-1">
-                {[
-                  { id: "terms", href: "/legal/terms", label: "Terms of Service" },
-                  { id: "privacy", href: "/legal/privacy", label: "Privacy Policy" },
-                  { id: "refund", href: "/legal/refund", label: "Refund Policy" },
-                  { id: "acceptable-use", href: "/legal/acceptable-use", label: "Acceptable Use" },
-                  { id: "security", href: "/legal/security", label: "Security & Governance" },
-                ].map((item) => (
+                {navItems.map((item) => (
                   <Link
                     key={item.id}
                     href={item.href}
@@ -463,7 +479,9 @@ export default function Legal() {
                   {section.heading}
                 </h2>
                 <p className="text-sm text-zinc-300 leading-relaxed font-sans">
-                  {section.body}
+                  {!isRefundEnabled && section.body.includes("Refund Policy, and ")
+                    ? section.body.replace("Refund Policy, and ", "")
+                    : section.body}
                 </p>
 
                 {section.bullets && section.bullets.length > 0 && (

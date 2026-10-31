@@ -193,7 +193,7 @@ export function PaygPaymentModal({
                       </span>
                     </div>
                     <p className="text-xs text-zinc-400 mt-0.5 leading-snug">
-                      Decentralized on-chain transfer via SOL or Phantom/Solflare with immediate ledger settlement.
+                      Decentralized on-chain transfer via SOL or Phantom/Solflare with immediate ledger settlement. Crypto payments are final and strictly non-refundable at any cost.
                     </p>
                   </div>
                 </div>

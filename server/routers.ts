@@ -80,6 +80,8 @@ import {
   setAnnouncementText,
   getUnoRouterBadgeEnabled,
   setUnoRouterBadgeEnabled,
+  getRefundPolicyEnabled,
+  setRefundPolicyEnabled,
   getModelTokenMultipliers,
   setModelTokenMultiplier,
   getModelPricingOverrides,
@@ -574,6 +576,10 @@ export const appRouter = router({
     maintenanceCountdown: publicProcedure.query(() => getMaintenanceCountdown()),
     unorouterBadge: publicProcedure.query(async () => {
       const enabled = await getUnoRouterBadgeEnabled();
+      return { enabled };
+    }),
+    refundPolicyStatus: publicProcedure.query(async () => {
+      const enabled = await getRefundPolicyEnabled();
       return { enabled };
     }),
     modelTokenMultipliers: publicProcedure.query(async () => {
@@ -2094,6 +2100,23 @@ ${input.intent ? `Requested Notification Type: ${input.intent}` : ""}`;
           action: "unorouter_badge.updated",
           entityType: "platform_setting",
           entityId: "unorouter_badge_enabled",
+          metadata: { enabled },
+        });
+        return { success: true, enabled };
+      }),
+    refundPolicyStatus: adminProcedure.query(async () => {
+      const enabled = await getRefundPolicyEnabled();
+      return { enabled };
+    }),
+    setRefundPolicyStatus: adminProcedure
+      .input(z.object({ enabled: z.boolean() }))
+      .mutation(async ({ ctx, input }) => {
+        const enabled = await setRefundPolicyEnabled(input.enabled, ctx.user.id);
+        await writeAuditEvent({
+          actorUserId: ctx.user.id,
+          action: "refund_policy_visibility.updated",
+          entityType: "platform_setting",
+          entityId: "refund_policy_enabled",
           metadata: { enabled },
         });
         return { success: true, enabled };

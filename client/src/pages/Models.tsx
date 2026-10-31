@@ -466,6 +466,11 @@ export default function Models() {
 }
 
 export function PublicFooter() {
+  const refundPolicy = trpc.public.refundPolicyStatus.useQuery(undefined, {
+    staleTime: 30_000,
+  });
+  const showRefundLink = refundPolicy.data?.enabled ?? true;
+
   return (
     <footer className="relative bg-black border-t border-white/10 mt-auto">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-14">
@@ -507,7 +512,7 @@ export function PublicFooter() {
               <ul className="mt-4 space-y-2 text-zinc-300 text-xs">
                 <li><Link href="/legal/privacy">Privacy Policy</Link></li>
                 <li><Link href="/legal/terms">Terms of Service</Link></li>
-                <li><Link href="/legal/refund">Refund Policy</Link></li>
+                {showRefundLink && <li><Link href="/legal/refund">Refund Policy</Link></li>}
               </ul>
             </div>
           </div>

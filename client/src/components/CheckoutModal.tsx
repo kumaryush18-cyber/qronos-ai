@@ -747,6 +747,9 @@ export function CheckoutModal({
                     </span>
                     <span>Monitoring Solana Mainnet-Beta confirmations...</span>
                   </div>
+                  <p className="text-[10px] text-zinc-500 font-mono text-center pt-0.5">
+                    On-chain cryptocurrency transfers are final and strictly non-refundable at any cost.
+                  </p>
                 </>
               )}
             </div>

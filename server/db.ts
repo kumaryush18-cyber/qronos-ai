@@ -99,6 +99,7 @@ const EMAIL_ALLOWLIST_SETTING_KEY = "email_allowlist";
 const PLATFORM_MAINTENANCE_EXEMPTIONS_SETTING_KEY = "platform_maintenance_exemptions_v1";
 const ANNOUNCEMENT_TEXT_SETTING_KEY = "announcement_text";
 export const UNOROUTER_BADGE_ENABLED_SETTING_KEY = "unorouter_badge_enabled";
+export const REFUND_POLICY_ENABLED_SETTING_KEY = "refund_policy_enabled";
 export const MODEL_TOKEN_MULTIPLIERS_SETTING_KEY = "model_token_multipliers_v1";
 const SESSION_VERSION_SETTING_KEY = "auth_session_version";
 const PLATFORM_MAINTENANCE_SETTING_KEY = "platform_maintenance";
@@ -3224,6 +3225,55 @@ export async function setUnoRouterBadgeEnabled(enabled: boolean, updatedByUserId
     if (db) {
       await db.insert(platformSettings).values({
         settingKey: UNOROUTER_BADGE_ENABLED_SETTING_KEY,
+        value,
+        updatedByUserId: updatedByUserId ?? null,
+      }).onDuplicateKeyUpdate({ set: { value, updatedByUserId: updatedByUserId ?? null, updatedAt: new Date() } });
+    }
+  } catch (error: any) {
+    markDatabaseUnhealthy(error?.message ?? String(error));
+  }
+  return enabled;
+}
+
+/**
+ * Returns whether the Refund Policy is visible to the public and across platform navigation/routes.
+ * Defaults to true unless explicitly toggled off by an administrator.
+ */
+export async function getRefundPolicyEnabled(): Promise<boolean> {
+  return cached("refund_policy_enabled", 15_000, async () => {
+    try {
+      const db = await getDb();
+      if (!db) {
+        const fallback = fallbackPlatformSettings.get(REFUND_POLICY_ENABLED_SETTING_KEY)?.value?.trim();
+        return fallback === undefined ? true : fallback !== "false" && fallback !== "0";
+      }
+      const record = (await db.select({ value: platformSettings.value })
+        .from(platformSettings)
+        .where(eq(platformSettings.settingKey, REFUND_POLICY_ENABLED_SETTING_KEY))
+        .limit(1))[0];
+      if (!record) return true; // Default ON (true)
+      const val = record.value.trim().toLowerCase();
+      return val !== "false" && val !== "0" && val !== "disabled" && val !== "off";
+    } catch (error: any) {
+      markDatabaseUnhealthy(error?.message ?? String(error));
+      const fallback = fallbackPlatformSettings.get(REFUND_POLICY_ENABLED_SETTING_KEY)?.value?.trim();
+      return fallback === undefined ? true : fallback !== "false" && fallback !== "0";
+    }
+  });
+}
+
+/**
+ * Persists an administrator toggle to show/hide the Refund Policy on the platform.
+ */
+export async function setRefundPolicyEnabled(enabled: boolean, updatedByUserId?: number): Promise<boolean> {
+  const value = enabled ? "true" : "false";
+  fallbackPlatformSettings.set(REFUND_POLICY_ENABLED_SETTING_KEY, { value, updatedAt: new Date(), updatedByUserId: updatedByUserId ?? null });
+  bustCache("refund_policy_enabled");
+  try {
+    const db = await getDb();
+    if (db) {
+      await db.insert(platformSettings).values({
+        settingKey: REFUND_POLICY_ENABLED_SETTING_KEY,
         value,
         updatedByUserId: updatedByUserId ?? null,
       }).onDuplicateKeyUpdate({ set: { value, updatedByUserId: updatedByUserId ?? null, updatedAt: new Date() } });
