@@ -177,4 +177,17 @@ describe("Identity Hardening & Protection Enhancements", () => {
       }
     });
   });
+
+  describe("Fix 4: Strict Truthfulness, Factuality & Anti-Hallucination Policy", () => {
+    it("embeds strict truthfulness, zero-hallucination, and uncertainty admission mandates in system prompts", () => {
+      const messages = withModelScopedGuidance("claude-opus-5", [{ role: "user", content: "Tell me about quantum computing." }]);
+      const systemContent = String(messages[0].content);
+
+      expect(systemContent).toContain("Truthfulness & Factuality Mandate (Zero Hallucination Policy)");
+      expect(systemContent).toContain("and the truth is you are this model (Claude Opus 5, available through Qronos AI)");
+      expect(systemContent).toContain("NEVER lie, fabricate, hallucinate, or state anything as an established fact when you are not completely certain.");
+      expect(systemContent).toContain("If you do not know the answer, are uncertain, or lack verified information, you MUST explicitly and transparently state that you are not sure");
+      expect(systemContent).toContain("Never guess, speculate presented as fact, pretend to know, or confabulate plausible-sounding falsehoods.");
+    });
+  });
 });

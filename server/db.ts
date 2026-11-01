@@ -2282,10 +2282,15 @@ async function ensureUserTierColumn(pool: mysql.Pool) {
   _userTierColumnEnsured = true;
   try {
     await pool.query(
-      "ALTER TABLE users ADD COLUMN tier ENUM('free', 'starter', 'pro', 'max', 'power', 'ultra') NOT NULL DEFAULT 'free'"
+      "ALTER TABLE users ADD COLUMN tier ENUM('free', 'starter', 'plus', 'pro', 'max', 'power', 'ultra', 'enterprise') NOT NULL DEFAULT 'free'"
     );
   } catch (err: any) {
-    // ER_DUP_FIELDNAME (1060) is expected if column already exists
+    // Column may already exist; modify it to ensure all tiers are included
+    try {
+      await pool.query(
+        "ALTER TABLE users MODIFY COLUMN tier ENUM('free', 'starter', 'plus', 'pro', 'max', 'power', 'ultra', 'enterprise') NOT NULL DEFAULT 'free'"
+      );
+    } catch {}
   }
   try {
     await pool.query("UPDATE users SET tier = 'free' WHERE tier IS NULL OR tier = ''");
@@ -2298,10 +2303,15 @@ async function ensureModelConfigsMinTierColumn(pool: mysql.Pool) {
   _modelConfigsMinTierColumnEnsured = true;
   try {
     await pool.query(
-      "ALTER TABLE model_configs ADD COLUMN minTier ENUM('free', 'starter', 'pro', 'max', 'power', 'ultra') NOT NULL DEFAULT 'free'"
+      "ALTER TABLE model_configs ADD COLUMN minTier ENUM('free', 'starter', 'plus', 'pro', 'max', 'power', 'ultra', 'enterprise') NOT NULL DEFAULT 'free'"
     );
   } catch (err: any) {
-    // ER_DUP_FIELDNAME (1060) is expected if column already exists
+    // Column may already exist; modify it to ensure all tiers are included
+    try {
+      await pool.query(
+        "ALTER TABLE model_configs MODIFY COLUMN minTier ENUM('free', 'starter', 'plus', 'pro', 'max', 'power', 'ultra', 'enterprise') NOT NULL DEFAULT 'free'"
+      );
+    } catch {}
   }
   try {
     await pool.query("UPDATE model_configs SET minTier = 'free' WHERE minTier IS NULL OR minTier = ''");
