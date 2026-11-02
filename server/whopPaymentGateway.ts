@@ -34,9 +34,9 @@ export const WHOP_PRODUCT_CATALOG: Record<string, WhopProductSpec> = {
 
   // Token plans with automatic tier upgrade mapping
   prod_RunCJULyHjSGZ: { productId: "prod_RunCJULyHjSGZ", name: "Qronos Plus Plan", type: "token_plan", amountUsd: 10, tokens: 600_000_000, tier: "plus", checkoutUrl: "https://whop.com/qronos/plus-plan-24sl/" },
-  prod_R6KnsUgI3vA6z: { productId: "prod_R6KnsUgI3vA6z", name: "Qronos Pro Plan", type: "token_plan", amountUsd: 30, tokens: 2_200_000_000, tier: "pro", checkoutUrl: "https://whop.com/qronos/pro-plan-40op/" },
-  prod_pNbqUYr7erKsN: { productId: "prod_pNbqUYr7erKsN", name: "Qronos Ultra Plan", type: "token_plan", amountUsd: 60, tokens: 5_000_000_000, tier: "ultra", checkoutUrl: "https://whop.com/qronos/ultra-plan-67wm/" },
-  prod_4hC8vZztBBGQm: { productId: "prod_4hC8vZztBBGQm", name: "Qronos Enterprise Plan", type: "token_plan", amountUsd: 150, tokens: 14_000_000_000, tier: "enterprise", checkoutUrl: "https://whop.com/qronos/enterprise-plan-29wm/" },
+  prod_R6KnsUgI3vA6z: { productId: "prod_R6KnsUgI3vA6z", name: "Qronos Pro Plan", type: "token_plan", amountUsd: 30, tokens: 2_000_000_000, tier: "pro", checkoutUrl: "https://whop.com/qronos/pro-plan-40op/" },
+  prod_pNbqUYr7erKsN: { productId: "prod_pNbqUYr7erKsN", name: "Qronos Ultra Plan", type: "token_plan", amountUsd: 60, tokens: 4_600_000_000, tier: "ultra", checkoutUrl: "https://whop.com/qronos/ultra-plan-67wm/" },
+  prod_4hC8vZztBBGQm: { productId: "prod_4hC8vZztBBGQm", name: "Qronos Enterprise Plan", type: "token_plan", amountUsd: 150, tokens: 13_000_000_000, tier: "enterprise", checkoutUrl: "https://whop.com/qronos/enterprise-plan-29wm/" },
 };
 
 export function resolveWhopProduct(
@@ -70,13 +70,13 @@ export function resolveWhopProduct(
     return { type: "token_plan", name: "Qronos Plus Plan", tokens: 600_000_000, tokensToGrant: 600_000_000, tier: "plus", amountUsd: 10 };
   }
   if (nameCandidate.includes("pro") || productId === "prod_R6KnsUgI3vA6z" || (amountUsd === 30 && nameCandidate.includes("plan"))) {
-    return { type: "token_plan", name: "Qronos Pro Plan", tokens: 2_200_000_000, tokensToGrant: 2_200_000_000, tier: "pro", amountUsd: 30 };
+    return { type: "token_plan", name: "Qronos Pro Plan", tokens: 2_000_000_000, tokensToGrant: 2_000_000_000, tier: "pro", amountUsd: 30 };
   }
   if (nameCandidate.includes("ultra") || productId === "prod_pNbqUYr7erKsN" || (amountUsd === 60 && nameCandidate.includes("plan"))) {
-    return { type: "token_plan", name: "Qronos Ultra Plan", tokens: 5_000_000_000, tokensToGrant: 5_000_000_000, tier: "ultra", amountUsd: 60 };
+    return { type: "token_plan", name: "Qronos Ultra Plan", tokens: 4_600_000_000, tokensToGrant: 4_600_000_000, tier: "ultra", amountUsd: 60 };
   }
   if (nameCandidate.includes("enterprise") || productId === "prod_4hC8vZztBBGQm" || (amountUsd === 150 && nameCandidate.includes("plan"))) {
-    return { type: "token_plan", name: "Qronos Enterprise Plan", tokens: 14_000_000_000, tokensToGrant: 14_000_000_000, tier: "enterprise", amountUsd: 150 };
+    return { type: "token_plan", name: "Qronos Enterprise Plan", tokens: 13_000_000_000, tokensToGrant: 13_000_000_000, tier: "enterprise", amountUsd: 150 };
   }
 
   // Default to PAYG top-up by amount

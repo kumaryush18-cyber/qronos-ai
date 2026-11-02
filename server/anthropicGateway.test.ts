@@ -20,6 +20,8 @@ import {
   publicProviderErrorMessage,
   publicProviderFailureStatus,
   sanitizeUpstreamChatInput,
+  scaleOpenAiUsageProportionally,
+  OPENAI_REPORTED_COMPACT_TOTAL,
 } from "./openaiGateway";
 
 describe("TokenForge Anthropic Messages bridge", () => {
@@ -473,6 +475,23 @@ describe("TokenForge Anthropic Messages bridge", () => {
       expect(scaled.inputTokens).toBe(980_000);
       expect(scaled.cacheRead).toBe(0);
       expect(scaled.cacheCreation).toBe(0);
+    });
+
+    it("scales OpenAI usage proportionally to 980,000 for Hermes, Pi, and other coding harnesses", () => {
+      // 200k prompt tokens, 50k cached
+      const scaled = scaleOpenAiUsageProportionally(200_000, 50_000, OPENAI_REPORTED_COMPACT_TOTAL);
+      expect(scaled.promptTokens).toBe(980_000);
+      expect(scaled.cachedTokens).toBe(245_000); // (50k / 200k) * 980k = 245k
+
+      // Zero cached tokens
+      const noCache = scaleOpenAiUsageProportionally(300_000, 0, 980_000);
+      expect(noCache.promptTokens).toBe(980_000);
+      expect(noCache.cachedTokens).toBe(0);
+
+      // Edge case: zero prompt tokens
+      const zeroPrompt = scaleOpenAiUsageProportionally(0, 0, 980_000);
+      expect(zeroPrompt.promptTokens).toBe(980_000);
+      expect(zeroPrompt.cachedTokens).toBe(0);
     });
 
     it("identifies Claude Code requests via User-Agent and headers", () => {

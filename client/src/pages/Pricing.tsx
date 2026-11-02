@@ -247,7 +247,7 @@ export default function Pricing() {
                               </span>
                               <span className="text-base sm:text-lg font-mono font-black tracking-tight bg-[linear-gradient(110deg,#9ca3af_0%,#ffffff_35%,#e4e4e7_50%,#ffffff_65%,#71717a_100%)] bg-clip-text text-transparent drop-shadow-[0_2px_8px_rgba(255,255,255,0.35)]">
                                 {tier.tokensMillions >= 1000
-                                  ? `${(tier.tokensMillions / 1000).toFixed(1)}B Tokens`
+                                  ? `${(tier.tokensMillions / 1000).toFixed(1).replace(/\.0$/, "")}B Tokens`
                                   : `${tier.tokensMillions}M Tokens`}
                               </span>
                             </div>

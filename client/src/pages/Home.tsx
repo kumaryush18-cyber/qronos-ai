@@ -752,7 +752,7 @@ export default function Home() {
               Pay per token, settled to the nanodollar.
             </h2>
             <p className="mt-6 max-w-2xl text-base leading-relaxed text-zinc-400">
-              Start with free starter tokens, or scale your production workloads with dedicated high-throughput token plans — Plus ($10 for 600M tokens), Pro ($30 for 1.4B tokens), or Ultra ($60 for 3.2B tokens). Every charge is settled transparently with zero platform markup.
+              Start with free starter tokens, or scale your production workloads with dedicated high-throughput token plans — Plus ($10 for 600M tokens), Pro ($30 for 2B tokens), Ultra ($60 for 4.6B tokens), or Enterprise ($150 for 13B tokens). Every charge is settled transparently with zero platform markup.
             </p>
           </div>
           <div className="mt-14 grid gap-4 md:grid-cols-3">

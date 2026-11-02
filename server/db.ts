@@ -7390,10 +7390,9 @@ export async function listAdminAccounts(input: AdminAccountDirectoryInput = {}) 
   // Sort before pagination using each account's full, successful processed-token history.
   // A correlated aggregate avoids the unreliable derived-table ordering previously used here.
   const successfulLifetimeTokens = sql<number>`coalesce((
-    select sum(${usageEvents.totalTokens})
-    from ${usageEvents}
-    where ${usageEvents.userId} = ${users.id}
-      and ${usageEvents.status} = ${"success"}
+    select sum(${dailyUsage.totalTokens})
+    from ${dailyUsage}
+    where ${dailyUsage.userId} = ${users.id}
   ), 0)`;
   const referralCount = sql<number>`coalesce((
     select count(${referralAttributions.id})
@@ -7423,7 +7422,22 @@ export async function listAdminAccounts(input: AdminAccountDirectoryInput = {}) 
     .offset((page - 1) * query.pageSize);
   const userIds = accounts.map(account => account.id);
   const usageRows = userIds.length
-    ? await db.select({ userId: usageEvents.userId, requestCount: sql<number>`coalesce(count(${usageEvents.id}), 0)`, totalTokens: sql<number>`coalesce(sum(${usageEvents.totalTokens}), 0)`, lifetimeSpendNanos: sql<number>`coalesce(sum(${usageEvents.chargeNanos}), 0)`, lastActivityAt: sql<Date | null>`max(${usageEvents.createdAt})` }).from(usageEvents).where(and(inArray(usageEvents.userId, userIds), eq(usageEvents.status, "success"))).groupBy(usageEvents.userId)
+    ? await db.select({
+        userId: dailyUsage.userId,
+        requestCount: sql<number>`coalesce(sum(${dailyUsage.requestCount}), 0)`,
+        totalTokens: sql<number>`coalesce(sum(${dailyUsage.totalTokens}), 0)`,
+        lifetimeSpendNanos: sql<number>`coalesce((
+          select sum(abs(${creditLedger.amountNanos}))
+          from ${creditLedger}
+          where ${creditLedger.userId} = ${dailyUsage.userId}
+            and ${creditLedger.kind} = 'usage_debit'
+            and (${creditLedger.referenceId} is null or ${creditLedger.referenceId} not like 'reservation%')
+        ), 0)`,
+        lastActivityAt: sql<Date | null>`max(${dailyUsage.updatedAt})`
+      })
+      .from(dailyUsage)
+      .where(inArray(dailyUsage.userId, userIds))
+      .groupBy(dailyUsage.userId)
     : [];
 
   return { items: composeAdminAccountOverview(accounts, usageRows), total: Number(total), page, pageSize: query.pageSize, pageCount };
@@ -7472,14 +7486,14 @@ export async function getAdminAccountModelUsage(userIds: number[]) {
   if (!db) return [];
   const rows = await db
     .select({
-      userId: usageEvents.userId,
-      modelId: usageEvents.modelId,
-      requestCount: sql<number>`coalesce(count(${usageEvents.id}), 0)`,
-      totalTokens: sql<number>`coalesce(sum(${usageEvents.totalTokens}), 0)`,
+      userId: dailyUsage.userId,
+      modelId: dailyUsage.modelId,
+      requestCount: sql<number>`coalesce(sum(${dailyUsage.requestCount}), 0)`,
+      totalTokens: sql<number>`coalesce(sum(${dailyUsage.totalTokens}), 0)`,
     })
-    .from(usageEvents)
-    .where(and(inArray(usageEvents.userId, normalizedUserIds), eq(usageEvents.status, "success")))
-    .groupBy(usageEvents.userId, usageEvents.modelId);
+    .from(dailyUsage)
+    .where(inArray(dailyUsage.userId, normalizedUserIds))
+    .groupBy(dailyUsage.userId, dailyUsage.modelId);
   return normalizeAdminAccountModelUsage(rows);
 }
 
@@ -7687,15 +7701,14 @@ export async function getAdminOverview() {
   } else {
     allAccountModelUsagePromise = db
       .select({
-        modelId: usageEvents.modelId,
-        accountCount: sql<number>`count(distinct ${usageEvents.userId})`,
-        requestCount: sql<number>`coalesce(count(${usageEvents.id}), 0)`,
-        totalTokens: sql<number>`coalesce(sum(${usageEvents.totalTokens}), 0)`
+        modelId: dailyUsage.modelId,
+        accountCount: sql<number>`count(distinct ${dailyUsage.userId})`,
+        requestCount: sql<number>`coalesce(sum(${dailyUsage.requestCount}), 0)`,
+        totalTokens: sql<number>`coalesce(sum(${dailyUsage.totalTokens}), 0)`
       })
-      .from(usageEvents)
-      .where(eq(usageEvents.status, "success"))
-      .groupBy(usageEvents.modelId)
-      .orderBy(desc(sql`count(${usageEvents.id})`), desc(sql`sum(${usageEvents.totalTokens})`), usageEvents.modelId)
+      .from(dailyUsage)
+      .groupBy(dailyUsage.modelId)
+      .orderBy(desc(sql`sum(${dailyUsage.requestCount})`), desc(sql`sum(${dailyUsage.totalTokens})`), dailyUsage.modelId)
       .then(rows => {
         cachedAllAccountModelUsage = { at: Date.now(), data: rows };
         return rows;
@@ -7707,7 +7720,7 @@ export async function getAdminOverview() {
     db.select().from(providerConfigs).orderBy(providerConfigs.displayName),
     db.select({ id: users.id, name: users.name, email: users.email, createdAt: users.createdAt, lastSignedIn: users.lastSignedIn, suspended: accountControls.isSuspended, suspicious: accountControls.isSuspicious, requestLimit: accountControls.dailyRequestLimit, tokenLimit: accountControls.dailyTokenLimit, balanceNanos: creditAccounts.balanceNanos, paygBalanceNanos: creditAccounts.paygBalanceNanos, codingPlanTokens: creditAccounts.codingPlanTokens, discordVerifiedAt: accountControls.discordVerifiedAt }).from(users).leftJoin(accountControls, eq(users.id, accountControls.userId)).leftJoin(creditAccounts, eq(users.id, creditAccounts.userId)).orderBy(desc(users.lastSignedIn)),
     db.select({ day: dailyUsage.usageDate, requests: sql<number>`coalesce(sum(${dailyUsage.requestCount}), 0)`, tokens: sql<number>`coalesce(sum(${dailyUsage.totalTokens}), 0)` }).from(dailyUsage).where(gte(dailyUsage.usageDate, utcUsageDate(new Date(Date.now() - 13 * 86_400_000)))).groupBy(dailyUsage.usageDate).orderBy(dailyUsage.usageDate),
-    db.select({ userId: usageEvents.userId, requestCount: sql<number>`coalesce(count(${usageEvents.id}), 0)`, totalTokens: sql<number>`coalesce(sum(${usageEvents.totalTokens}), 0)`, lastActivityAt: sql<Date | null>`max(${usageEvents.createdAt})` }).from(usageEvents).groupBy(usageEvents.userId),
+    db.select({ userId: dailyUsage.userId, requestCount: sql<number>`coalesce(sum(${dailyUsage.requestCount}), 0)`, totalTokens: sql<number>`coalesce(sum(${dailyUsage.totalTokens}), 0)`, lastActivityAt: sql<Date | null>`max(${dailyUsage.updatedAt})` }).from(dailyUsage).groupBy(dailyUsage.userId),
     db.select({ totalTokens: sql<number>`coalesce(sum(${dailyUsage.totalTokens}), 0)`, totalRequests: sql<number>`coalesce(sum(${dailyUsage.requestCount}), 0)` }).from(dailyUsage),
     db.select({ provider: emailProvider, accountCount: sql<number>`count(id)` }).from(users).where(sql`${users.email} is not null and ${users.email} like '%@%'`).groupBy(emailProvider).orderBy(desc(sql`count(id)`), emailProvider),
     allAccountModelUsagePromise,
@@ -7994,7 +8007,29 @@ export function parseContextTokens(val: unknown): number {
   return Number.isFinite(num) && num > 0 ? num : 500_000;
 }
 
+export const DEFAULT_COMPACT_SCALING_MODELS: Record<string, ModelCompactScalingConfig> = {
+  "claude-opus-5.5": { enabled: true, triggerTokens: 500_000 },
+  "claude-sonnet-5.5": { enabled: true, triggerTokens: 500_000 },
+  "claude-haiku-5.5": { enabled: true, triggerTokens: 500_000 },
+  "claude-opus-5": { enabled: true, triggerTokens: 500_000 },
+  "claude-sonnet-4.6": { enabled: true, triggerTokens: 500_000 },
+  "claude-fable-5.1": { enabled: true, triggerTokens: 500_000 },
+  "claude-fable-5": { enabled: true, triggerTokens: 500_000 },
+  "qwen3.8-max": { enabled: true, triggerTokens: 500_000 },
+  "glm-5.3": { enabled: true, triggerTokens: 500_000 },
+  "glm-5.3-flash": { enabled: true, triggerTokens: 500_000 },
+  "deepseek-v4-pro": { enabled: true, triggerTokens: 500_000 },
+  "deepseek-v4-flash": { enabled: true, triggerTokens: 500_000 },
+  "gpt-6-astra": { enabled: true, triggerTokens: 500_000 },
+  "gpt-6-sol": { enabled: true, triggerTokens: 500_000 },
+  "gpt-6-luna": { enabled: true, triggerTokens: 500_000 },
+  "kimi-k3": { enabled: true, triggerTokens: 500_000 },
+  "mercury-3": { enabled: true, triggerTokens: 500_000 },
+  "gemini-4-argon": { enabled: true, triggerTokens: 500_000 },
+};
+
 export async function getAllModelCompactScalingConfigs(): Promise<Record<string, ModelCompactScalingConfig>> {
+  const result: Record<string, ModelCompactScalingConfig> = { ...DEFAULT_COMPACT_SCALING_MODELS };
   try {
     const db = await getDb();
     let rawValue: string | undefined;
@@ -8004,20 +8039,20 @@ export async function getAllModelCompactScalingConfigs(): Promise<Record<string,
     } else {
       rawValue = fallbackPlatformSettings.get(COMPACT_SCALING_SETTING_KEY)?.value;
     }
-    if (!rawValue) return {};
-    const parsed = JSON.parse(rawValue) as Record<string, { enabled?: boolean; triggerTokens?: unknown }>;
-    const result: Record<string, ModelCompactScalingConfig> = {};
-    for (const [mid, cfg] of Object.entries(parsed)) {
-      if (cfg && typeof cfg === "object") {
-        result[mid] = {
-          enabled: Boolean(cfg.enabled),
-          triggerTokens: parseContextTokens(cfg.triggerTokens ?? 500_000),
-        };
+    if (rawValue) {
+      const parsed = JSON.parse(rawValue) as Record<string, { enabled?: boolean; triggerTokens?: unknown }>;
+      for (const [mid, cfg] of Object.entries(parsed)) {
+        if (cfg && typeof cfg === "object") {
+          result[mid] = {
+            enabled: Boolean(cfg.enabled),
+            triggerTokens: parseContextTokens(cfg.triggerTokens ?? 500_000),
+          };
+        }
       }
     }
     return result;
   } catch {
-    return {};
+    return result;
   }
 }
 
@@ -8027,9 +8062,31 @@ export async function getModelCompactScalingConfig(modelId: string): Promise<Mod
     return cached.config;
   }
   const all = await getAllModelCompactScalingConfigs();
-  const config = all[modelId] ?? { enabled: false, triggerTokens: 500_000 };
+  const config = all[modelId] ?? { enabled: true, triggerTokens: 500_000 };
   compactScalingCache.set(modelId, { config, expiresAt: Date.now() + COMPACT_SCALING_CACHE_TTL_MS });
   return config;
+}
+
+export async function ensureDefaultCompactScalingConfigs(): Promise<void> {
+  try {
+    const db = await getDb();
+    if (!db) return;
+    const existing = (await db.select({ value: platformSettings.value }).from(platformSettings).where(eq(platformSettings.settingKey, COMPACT_SCALING_SETTING_KEY)).limit(1))[0];
+    if (!existing) {
+      await db.insert(platformSettings).values({
+        settingKey: COMPACT_SCALING_SETTING_KEY,
+        value: JSON.stringify(DEFAULT_COMPACT_SCALING_MODELS),
+      }).onDuplicateKeyUpdate({
+        set: {
+          value: JSON.stringify(DEFAULT_COMPACT_SCALING_MODELS),
+          updatedAt: new Date(),
+        },
+      });
+      console.log("[CompactScaling] Seeded default compact scaling configurations (active for all models).");
+    }
+  } catch (err) {
+    console.error("[CompactScaling] Error seeding compact scaling configs:", err);
+  }
 }
 
 export async function setModelCompactScalingConfig(
@@ -10905,9 +10962,9 @@ KNOWLEDGE OF PLANS & PRICING:
    • Accepts Credit/Debit Cards, PayPal, Crypto (Solana, BTC, ETH, USDT), and Whop.
 2. Monthly Token Plans (Massive Volume Quotas):
    • Plus Plan: $29/mo -> 600 Million Tokens
-   • Pro Plan: $79/mo -> 2.2 Billion Tokens
-   • Ultra Plan: $149/mo -> 5.0 Billion Tokens
-   • Enterprise Plan: $349/mo -> 14.0 Billion Tokens
+   • Pro Plan: $79/mo -> 2 Billion Tokens
+   • Ultra Plan: $149/mo -> 4.6 Billion Tokens
+   • Enterprise Plan: $349/mo -> 13 Billion Tokens
 
 CONVERSATIONAL OBJECTIVE & CLEVER TOP-UP PITCHES:
 • Keep banter fun, cheeky, and teasing! Roast bad coding practices, missing semicolons, centering divs with margin-left: 50%, or pushing directly to production without testing.

@@ -117,22 +117,22 @@ describe("Whop Webhook Gateway Security & Verification", () => {
       expect(plus.tokensToGrant).toBe(600_000_000);
       expect(plus.amountUsd).toBe(10);
 
-      // Pro: 2.2B
+      // Pro: 2B
       const pro = resolveWhopProduct("prod_R6KnsUgI3vA6z", "", 30, {});
       expect(pro.type).toBe("token_plan");
-      expect(pro.tokensToGrant).toBe(2_200_000_000);
+      expect(pro.tokensToGrant).toBe(2_000_000_000);
       expect(pro.amountUsd).toBe(30);
 
-      // Ultra: 5.0B
+      // Ultra: 4.6B
       const ultra = resolveWhopProduct("prod_pNbqUYr7erKsN", "", 60, {});
       expect(ultra.type).toBe("token_plan");
-      expect(ultra.tokensToGrant).toBe(5_000_000_000);
+      expect(ultra.tokensToGrant).toBe(4_600_000_000);
       expect(ultra.amountUsd).toBe(60);
 
-      // Enterprise: 14.0B
+      // Enterprise: 13B
       const enterprise = resolveWhopProduct("prod_4hC8vZztBBGQm", "", 150, {});
       expect(enterprise.type).toBe("token_plan");
-      expect(enterprise.tokensToGrant).toBe(14_000_000_000);
+      expect(enterprise.tokensToGrant).toBe(13_000_000_000);
       expect(enterprise.amountUsd).toBe(150);
     });
   });

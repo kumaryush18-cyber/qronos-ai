@@ -99,7 +99,7 @@ type AnthropicBlock = { type?: unknown; text?: unknown; id?: unknown; name?: unk
 // TokenRouter exposes the validated Claude routes through OpenAI-compatible Chat
 // Completions. Keep both customer-facing Claude models on the same converter so
 // Claude Code receives consistent Anthropic response, tool, and SSE semantics.
-const OPENAI_TRANSLATED_MESSAGES_MODELS = new Set(["qwen3.8-max", "claude-fable-5.1", "claude-fable-5", "claude-opus-5", "claude-opus-5.5", "claude-sonnet-5.5", "claude-haiku-5.5", "gemini-4-argon", "gpt-6-luna", "gpt-6-sol", "glm-5.3", "glm-5.3-flash", "deepseek-v4-pro", "deepseek-v4-flash", "gpt-6-astra", "kimi-k3", "mercury-3"]);
+const OPENAI_TRANSLATED_MESSAGES_MODELS = new Set(["qwen3.8-max", "qwen3.8-27b", "claude-fable-5.1", "claude-fable-5", "claude-opus-5", "claude-opus-5.5", "claude-sonnet-5.5", "claude-sonnet-4.6", "claude-haiku-5.5", "gemini-4-argon", "gpt-6-luna", "gpt-6-sol", "glm-5.3", "glm-5.3-flash", "deepseek-v4-pro", "deepseek-v4-flash", "gpt-6-astra", "kimi-k3", "mercury-3"]);
 
 export const CLAUDE_CODE_REPORTED_COMPACT_TOTAL = 980_000;
 
@@ -251,7 +251,7 @@ export function translateAnthropicRequest(raw: AnthropicRequest, privateGlmToolC
     throw new AnthropicBridgeError(400, "invalid_request_error", "model must be a non-empty Qronos AI Messages-supported model identifier.");
   }
   const model = normalizeModelIdentifier(raw.model);
-  const provider = isTokenForgeModelId(model) ? getTokenForgeProviderSlug(model) : null;
+  const provider = (isTokenForgeModelId(model) ? getTokenForgeProviderSlug(model) : null) || (model === "gpt-5" ? CLUSTER_PROTOCOL_PROVIDER_SLUG : null);
   if (provider !== CLUSTER_PROTOCOL_PROVIDER_SLUG && !OPENAI_TRANSLATED_MESSAGES_MODELS.has(model)) {
     throw new AnthropicBridgeError(400, "invalid_request_error", `The Anthropic Messages endpoint does not support the requested Qronos AI model ("${raw.model}").`);
   }
@@ -879,7 +879,7 @@ async function handleNativeTokenRouterMessagesRequest(req: Request, res: Respons
   const userAgent = (req.headers["user-agent"] ?? "") as string;
   const isClaudeCli = isClaudeCodeRequest(req);
   const compactScalingConfig = await getModelCompactScalingConfig(model);
-  const compactScalingEnabled = isClaudeCli && compactScalingConfig.enabled;
+  const compactScalingEnabled = compactScalingConfig.enabled;
   let didCompactScalingTrigger = false;
   const breakdown = estimateAnthropicCacheBreakdown(input as any);
   let scaledReportedTokens: { inputTokens: number; cacheRead: number; cacheCreation: number } | null = null;
@@ -1299,7 +1299,7 @@ export function registerAnthropicMessagesGateway(app: Express) {
     const userAgent = (req.headers["user-agent"] ?? "") as string;
     const isClaudeCli = isClaudeCodeRequest(req);
     const compactScalingConfig = await getModelCompactScalingConfig(model);
-    const compactScalingEnabled = isClaudeCli && compactScalingConfig.enabled;
+    const compactScalingEnabled = compactScalingConfig.enabled;
     let didCompactScalingTrigger = false;
 
     const breakdown = estimateAnthropicCacheBreakdown(raw);

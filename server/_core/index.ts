@@ -29,7 +29,7 @@ import {
   inferenceIpRateLimit,
 } from "../rateLimiters";
 import { appRouter } from "../routers";
-import { clearLegacyAdministratorRoles, ensureCatalogue, loadAndCacheModelPricingOverrides } from "../db";
+import { clearLegacyAdministratorRoles, ensureCatalogue, loadAndCacheModelPricingOverrides, ensureDefaultCompactScalingConfigs } from "../db";
 import { hydrateIdentityWatchTerms } from "../universalModelProviders";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
@@ -198,6 +198,9 @@ async function startServer() {
     ensureCatalogue(),
     clearLegacyAdministratorRoles(),
     loadAndCacheModelPricingOverrides(),
+    ensureDefaultCompactScalingConfigs().catch(error => {
+      console.error("[Qronos AI] Default compact scaling seed failed:", error);
+    }),
     hydrateIdentityWatchTerms().catch(error => {
       console.error("[Qronos AI] Identity watch list warmup failed; lists reload when an administrator opens Providers", error);
     }),

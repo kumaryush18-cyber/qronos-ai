@@ -469,7 +469,7 @@ export function CheckoutModal({
                   {planName || (isCodingPlan ? `${matchedCodingPlan?.name || "Token"} Plan` : `PAYG Compute Recharge`)}
                 </h2>
                 <span className="text-[10px] uppercase font-mono px-2.5 py-0.5 rounded-full font-bold border border-white/25 bg-white/[0.06] text-transparent bg-clip-text bg-gradient-to-b from-white via-zinc-200 to-zinc-400 shadow-sm">
-                  {isCodingPlan ? `${(matchedCodingPlan?.tokensMillions ?? 0) >= 1000 ? `${((matchedCodingPlan?.tokensMillions ?? 0) / 1000).toFixed(1)}B` : `${matchedCodingPlan?.tokensMillions || 100}M`} Tokens Receiving` : "60% Off Rates"}
+                  {isCodingPlan ? `${(matchedCodingPlan?.tokensMillions ?? 0) >= 1000 ? `${((matchedCodingPlan?.tokensMillions ?? 0) / 1000).toFixed(1).replace(/\.0$/, "")}B` : `${matchedCodingPlan?.tokensMillions || 100}M`} Tokens Receiving` : "60% Off Rates"}
                 </span>
               </div>
               <p className="text-xs text-zinc-400 font-mono mt-0.5">

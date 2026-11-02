@@ -70,6 +70,7 @@ import {
   isUserMessageLoggingEnabled,
   recordUserInteractionLog,
   findAllMultimodalProviders,
+  getModelCompactScalingConfig,
 } from "./db";
 import {
   payloadContainsVisualData,
@@ -1079,6 +1080,23 @@ function selectNextLeastLoadedCredential(
 
   keyCursors.set(provider.id, (chosen.slot + 1) % provider.apiKeys.length);
   return { credential: cleanKey, slot: chosen.slot, telemetryProvider };
+}
+
+export const OPENAI_REPORTED_COMPACT_TOTAL = 980_000;
+
+export function scaleOpenAiUsageProportionally(
+  promptTokens: number,
+  cachedTokens = 0,
+  targetTotal = OPENAI_REPORTED_COMPACT_TOTAL
+): { promptTokens: number; cachedTokens: number } {
+  const realPrompt = Math.max(0, promptTokens);
+  if (realPrompt <= 0) {
+    return { promptTokens: targetTotal, cachedTokens: 0 };
+  }
+  const scale = targetTotal / realPrompt;
+  const scaledPrompt = targetTotal;
+  const scaledCached = cachedTokens > 0 ? Math.round(Math.max(0, cachedTokens) * scale) : 0;
+  return { promptTokens: scaledPrompt, cachedTokens: scaledCached };
 }
 
 function usageFrom(payload: unknown): Usage {
@@ -4330,11 +4348,13 @@ function publicManagedUsage(value: unknown) {
   const promptTokens = typeof value.prompt_tokens === "number" ? value.prompt_tokens : typeof value.input_tokens === "number" ? value.input_tokens : undefined;
   const completionTokens = typeof value.completion_tokens === "number" ? value.completion_tokens : typeof value.output_tokens === "number" ? value.output_tokens : undefined;
   const totalTokens = typeof value.total_tokens === "number" ? value.total_tokens : promptTokens !== undefined && completionTokens !== undefined ? promptTokens + completionTokens : undefined;
+  const promptTokensDetails = isRecord(value.prompt_tokens_details) ? value.prompt_tokens_details : undefined;
   if (promptTokens === undefined && completionTokens === undefined && totalTokens === undefined) return undefined;
   return {
     ...(promptTokens !== undefined ? { prompt_tokens: promptTokens } : {}),
     ...(completionTokens !== undefined ? { completion_tokens: completionTokens } : {}),
     ...(totalTokens !== undefined ? { total_tokens: totalTokens } : {}),
+    ...(promptTokensDetails ? { prompt_tokens_details: promptTokensDetails } : {}),
   };
 }
 
@@ -5129,6 +5149,12 @@ export function registerOpenAiGateway(app: Express) {
       ...(input.stream && !input.stream_options ? { stream_options: { include_usage: true } } : {}),
     };
     const estimatedInputTokens = estimateInputTokens(input.messages);
+    const compactScalingConfig = await getModelCompactScalingConfig(model);
+    const compactScalingEnabled = compactScalingConfig.enabled;
+    let didCompactScalingTrigger = false;
+    if (compactScalingEnabled && estimatedInputTokens >= compactScalingConfig.triggerTokens) {
+      didCompactScalingTrigger = true;
+    }
     const reservedNanos = calculateCreditChargeNanos(model, estimatedInputTokens, await effectiveReservationMaxOutputTokens(model, upstreamInput, { userId: key.userId }), pricingTier);
     const reservation = await reserveCredit(key.userId, reservedNanos, requestId, { keyGroup });
     if (!reservation.authorized) {
@@ -5280,6 +5306,27 @@ export function registerOpenAiGateway(app: Express) {
         model: input.model,
         keyGroup,
       });
+      const rawPrompt = Number(
+        (payload as any)?.usage?.prompt_tokens ??
+        (payload as any)?.usage?.input_tokens ??
+        tokens.inputTokens ??
+        estimatedInputTokens
+      );
+      const rawCached = Number(
+        (payload as any)?.usage?.cached_tokens ??
+        (payload as any)?.usage?.prompt_tokens_details?.cached_tokens ??
+        (payload as any)?.usage?.cache_read_input_tokens ??
+        0
+      );
+      const realTotalInput = rawPrompt + rawCached;
+      if (compactScalingEnabled && realTotalInput >= compactScalingConfig.triggerTokens) {
+        didCompactScalingTrigger = true;
+      }
+      const userAgent = (req.headers["user-agent"] ?? "") as string;
+      const compactDiagnosticTag = didCompactScalingTrigger
+        ? `[CompactTrigger: ${realTotalInput.toLocaleString()} -> 980k (ua: ${userAgent})]`
+        : undefined;
+
       const reasoningDiagnosticTag = isReasoningOnly
         ? "[ReasoningFallback: content was empty, returned reasoning]"
         : undefined;
@@ -5304,7 +5351,7 @@ export function registerOpenAiGateway(app: Express) {
         ttftMs: durationMs,
         stopReason,
         outcome,
-        rawErrorMessage: reasoningDiagnosticTag,
+        rawErrorMessage: compactDiagnosticTag || reasoningDiagnosticTag,
         reasoningReturned: isReasoningOnly,
       });
       if (isCacheDebugEnabled()) {
@@ -5335,6 +5382,38 @@ export function registerOpenAiGateway(app: Express) {
           outputResponse: (isReasoningOnly ? "[REASONING_FALLBACK]\n" : "") + (fallbackText || content || ""),
           ipAddress: (req.headers["x-forwarded-for"] as string) || req.ip || null,
         }).catch(() => undefined);
+      }
+      if (publicPayload) {
+        const rawPrompt = Number(
+          (payload as any)?.usage?.prompt_tokens ??
+          (payload as any)?.usage?.input_tokens ??
+          tokens.inputTokens ??
+          estimatedInputTokens
+        );
+        const rawCached = Number(
+          (payload as any)?.usage?.cached_tokens ??
+          (payload as any)?.usage?.prompt_tokens_details?.cached_tokens ??
+          (payload as any)?.usage?.cache_read_input_tokens ??
+          0
+        );
+        const realTotalInput = rawPrompt + rawCached;
+        if (compactScalingEnabled && realTotalInput >= compactScalingConfig.triggerTokens) {
+          didCompactScalingTrigger = true;
+        }
+
+        if (didCompactScalingTrigger) {
+          const scaled = scaleOpenAiUsageProportionally(realTotalInput, rawCached, OPENAI_REPORTED_COMPACT_TOTAL);
+          const completionToks = tokens.outputTokens ?? Number((payload as any)?.usage?.completion_tokens ?? 0);
+          publicPayload.usage = {
+            prompt_tokens: scaled.promptTokens,
+            completion_tokens: completionToks,
+            total_tokens: scaled.promptTokens + completionToks,
+            ...(scaled.cachedTokens > 0
+              ? { prompt_tokens_details: { cached_tokens: scaled.cachedTokens } }
+              : {}),
+          };
+          console.log(`[CompactTrigger:OpenAI] key=${key.id} real=${realTotalInput} reported=${OPENAI_REPORTED_COMPACT_TOTAL} model=${model}`);
+        }
       }
       res.setHeader("x-request-id", requestId);
       res.setHeader("x-qronos-credit-balance", String(settlement.balanceNanos));
@@ -5370,6 +5449,7 @@ export function registerOpenAiGateway(app: Express) {
     let firstTokenAt: number | null = null;
     let stopReason = "none";
     let streamCompletedNormally = false;
+    let hasEmittedUsageChunk = false;
 
     const isStrictModel = isStrictPublicManagedModel(input.model as TokenForgeModelId);
     const sessionLang = detectMessageLanguage(firstUserText);
@@ -5399,13 +5479,66 @@ export function registerOpenAiGateway(app: Express) {
         buffer += value;
         const lines = buffer.split("\n");
         buffer = lines.pop() ?? "";
+        const outgoingLines: string[] = [];
         for (const line of lines) {
-          if (!line.startsWith("data:")) continue;
+          if (!line.startsWith("data:")) {
+            outgoingLines.push(line);
+            continue;
+          }
           const payload = line.slice(5).trim();
-          if (!payload || payload === "[DONE]") continue;
+          if (!payload) continue;
+          if (payload === "[DONE]") {
+            if (compactScalingEnabled && didCompactScalingTrigger && !hasEmittedUsageChunk) {
+              const rawPrompt = Number((finalUsage as any)?.prompt_tokens ?? (finalUsage as any)?.input_tokens ?? estimatedInputTokens);
+              const rawCached = Number((finalUsage as any)?.cached_tokens ?? (finalUsage as any)?.prompt_tokens_details?.cached_tokens ?? 0);
+              const totalPrompt = rawPrompt + rawCached;
+              const scaled = scaleOpenAiUsageProportionally(totalPrompt, rawCached, OPENAI_REPORTED_COMPACT_TOTAL);
+              const outputTokens = Number((finalUsage as any)?.completion_tokens ?? (finalUsage as any)?.output_tokens ?? 0);
+              const usageChunk = {
+                id: `chatcmpl-${requestId}`,
+                object: "chat.completion.chunk",
+                created: Math.floor(Date.now() / 1000),
+                model: input.model,
+                choices: [],
+                usage: {
+                  prompt_tokens: scaled.promptTokens,
+                  completion_tokens: outputTokens,
+                  total_tokens: scaled.promptTokens + outputTokens,
+                  ...(scaled.cachedTokens > 0 ? { prompt_tokens_details: { cached_tokens: scaled.cachedTokens } } : {}),
+                },
+              };
+              outgoingLines.push(`data: ${JSON.stringify(usageChunk)}`);
+              hasEmittedUsageChunk = true;
+              console.log(`[CompactTrigger:OpenAI:StreamDone] key=${key.id} real=${totalPrompt} reported=${OPENAI_REPORTED_COMPACT_TOTAL} model=${model}`);
+            }
+            outgoingLines.push("data: [DONE]");
+            continue;
+          }
           try {
             const parsed = JSON.parse(payload);
             finalUsage = { ...finalUsage, ...usageFrom(parsed) };
+            if (parsed.usage) {
+              const rawPrompt = Number(parsed.usage.prompt_tokens ?? parsed.usage.input_tokens ?? estimatedInputTokens);
+              const rawCached = Number(parsed.usage.cached_tokens ?? parsed.usage.prompt_tokens_details?.cached_tokens ?? 0);
+              const totalPrompt = rawPrompt + rawCached;
+              if (compactScalingEnabled && totalPrompt >= compactScalingConfig.triggerTokens) {
+                didCompactScalingTrigger = true;
+              }
+              if (didCompactScalingTrigger) {
+                const scaled = scaleOpenAiUsageProportionally(totalPrompt, rawCached, OPENAI_REPORTED_COMPACT_TOTAL);
+                const completionToks = Number(parsed.usage.completion_tokens ?? parsed.usage.output_tokens ?? 0);
+                parsed.usage = {
+                  prompt_tokens: scaled.promptTokens,
+                  completion_tokens: completionToks,
+                  total_tokens: scaled.promptTokens + completionToks,
+                  ...(scaled.cachedTokens > 0 ? { prompt_tokens_details: { cached_tokens: scaled.cachedTokens } } : {}),
+                };
+                hasEmittedUsageChunk = true;
+                outgoingLines.push(`data: ${JSON.stringify(parsed)}`);
+                console.log(`[CompactTrigger:OpenAI:StreamChunk] key=${key.id} real=${totalPrompt} reported=${OPENAI_REPORTED_COMPACT_TOTAL} model=${model}`);
+                continue;
+              }
+            }
             const choice = parsed.choices?.[0];
             if (choice?.finish_reason) {
               stopReason = choice.finish_reason;
@@ -5419,13 +5552,16 @@ export function registerOpenAiGateway(app: Express) {
             if (typeof rPart === "string" && rPart) {
               streamedReasoningText += rPart;
             }
-          } catch { /* passthrough malformed upstream event */ }
+            outgoingLines.push(line);
+          } catch {
+            outgoingLines.push(line);
+          }
         }
         if (isStrictModel) {
-          const publicFrames = strictPublicManagedSseFrames(input.model as TokenForgeModelId, lines, requestId, streamingFilter);
+          const publicFrames = strictPublicManagedSseFrames(input.model as TokenForgeModelId, outgoingLines, requestId, streamingFilter);
           if (publicFrames.length) res.write(`${publicFrames.join("\n\n")}\n\n`);
         } else {
-          res.write(value);
+          if (outgoingLines.length) res.write(`${outgoingLines.join("\n\n")}\n\n`);
         }
       }
 
@@ -5433,11 +5569,46 @@ export function registerOpenAiGateway(app: Express) {
       if (buffer.trim().length > 0) {
         const remainingLines = [buffer.trim()];
         buffer = "";
+        const outgoingResidual: string[] = [];
+        for (const line of remainingLines) {
+          if (!line.startsWith("data:")) {
+            outgoingResidual.push(line);
+            continue;
+          }
+          const payload = line.slice(5).trim();
+          if (payload === "[DONE]") {
+            if (compactScalingEnabled && didCompactScalingTrigger && !hasEmittedUsageChunk) {
+              const rawPrompt = Number((finalUsage as any)?.prompt_tokens ?? (finalUsage as any)?.input_tokens ?? estimatedInputTokens);
+              const rawCached = Number((finalUsage as any)?.cached_tokens ?? (finalUsage as any)?.prompt_tokens_details?.cached_tokens ?? 0);
+              const totalPrompt = rawPrompt + rawCached;
+              const scaled = scaleOpenAiUsageProportionally(totalPrompt, rawCached, OPENAI_REPORTED_COMPACT_TOTAL);
+              const outputTokens = Number((finalUsage as any)?.completion_tokens ?? (finalUsage as any)?.output_tokens ?? 0);
+              const usageChunk = {
+                id: `chatcmpl-${requestId}`,
+                object: "chat.completion.chunk",
+                created: Math.floor(Date.now() / 1000),
+                model: input.model,
+                choices: [],
+                usage: {
+                  prompt_tokens: scaled.promptTokens,
+                  completion_tokens: outputTokens,
+                  total_tokens: scaled.promptTokens + outputTokens,
+                  ...(scaled.cachedTokens > 0 ? { prompt_tokens_details: { cached_tokens: scaled.cachedTokens } } : {}),
+                },
+              };
+              outgoingResidual.push(`data: ${JSON.stringify(usageChunk)}`);
+              hasEmittedUsageChunk = true;
+            }
+            outgoingResidual.push("data: [DONE]");
+            continue;
+          }
+          outgoingResidual.push(line);
+        }
         if (isStrictModel) {
-          const publicFrames = strictPublicManagedSseFrames(input.model as TokenForgeModelId, remainingLines, requestId, streamingFilter);
+          const publicFrames = strictPublicManagedSseFrames(input.model as TokenForgeModelId, outgoingResidual, requestId, streamingFilter);
           if (publicFrames.length) res.write(`${publicFrames.join("\n\n")}\n\n`);
         } else {
-          res.write(remainingLines[0] + "\n\n");
+          if (outgoingResidual.length) res.write(`${outgoingResidual.join("\n\n")}\n\n`);
         }
       }
 
@@ -5519,6 +5690,25 @@ export function registerOpenAiGateway(app: Express) {
           ? "Client disconnected prematurely; reservation released"
           : (streamFailed ? "Streaming request was cancelled" : undefined),
       });
+      const rawPrompt = Number(
+        (finalUsage as any)?.prompt_tokens ??
+        (finalUsage as any)?.input_tokens ??
+        tokens.inputTokens ??
+        estimatedInputTokens
+      );
+      const cached = Number(
+        (finalUsage as any)?.cached_tokens ??
+        (finalUsage as any)?.prompt_tokens_details?.cached_tokens ??
+        0
+      );
+      const totalPrompt = rawPrompt + cached;
+      if (compactScalingEnabled && totalPrompt >= compactScalingConfig.triggerTokens) {
+        didCompactScalingTrigger = true;
+      }
+      const streamUserAgent = (req.headers["user-agent"] ?? "") as string;
+      const streamCompactTag = didCompactScalingTrigger
+        ? `[CompactTrigger: ${totalPrompt.toLocaleString()} -> 980k (ua: ${streamUserAgent})]`
+        : undefined;
       const streamReasoningTag = isStreamReasoningPromoted
         ? "[ReasoningFallback: content was empty, returned reasoning]"
         : undefined;
@@ -5540,7 +5730,7 @@ export function registerOpenAiGateway(app: Express) {
         stopReason,
         outcome,
         errorMessage: clientDisconnected ? "Client disconnected before stream completed." : (streamFailed ? (streamFailedMessage ?? "The selected provider stream was cancelled.") : undefined),
-        rawErrorMessage: clientDisconnected ? "[CLIENT_DISCONNECT] Caller closed socket before stream completion" : (streamFailed ? (streamFailedMessage ?? "The selected provider stream was cancelled.") : streamReasoningTag),
+        rawErrorMessage: clientDisconnected ? "[CLIENT_DISCONNECT] Caller closed socket before stream completion" : (streamFailed ? (streamFailedMessage ?? "The selected provider stream was cancelled.") : (streamCompactTag || streamReasoningTag)),
         reasoningReturned: isStreamReasoningPromoted,
       });
       if (isCacheDebugEnabled()) {
@@ -5570,6 +5760,46 @@ export function registerOpenAiGateway(app: Express) {
           outputResponse: (isStreamReasoningPromoted ? "[REASONING_FALLBACK]\n" : "") + (streamedOutputText || ""),
           ipAddress: (req.headers["x-forwarded-for"] as string) || req.ip || null,
         }).catch(() => undefined);
+      }
+      if (!streamFailed && !clientDisconnected && !res.writableEnded && !res.destroyed) {
+        const rawPrompt = Number(
+          (finalUsage as any)?.prompt_tokens ??
+          (finalUsage as any)?.input_tokens ??
+          tokens.inputTokens ??
+          estimatedInputTokens
+        );
+        const cached = Number(
+          (finalUsage as any)?.cached_tokens ??
+          (finalUsage as any)?.prompt_tokens_details?.cached_tokens ??
+          0
+        );
+        const totalPrompt = rawPrompt + cached;
+        if (compactScalingEnabled && totalPrompt >= compactScalingConfig.triggerTokens) {
+          didCompactScalingTrigger = true;
+        }
+
+        if (!hasEmittedUsageChunk && didCompactScalingTrigger) {
+          const scaled = scaleOpenAiUsageProportionally(totalPrompt, cached, OPENAI_REPORTED_COMPACT_TOTAL);
+          const finalOutput = tokens.outputTokens ?? estimateTextTokens(streamedOutputText);
+          const finalUsageChunk = {
+            id: `chatcmpl-${requestId}`,
+            object: "chat.completion.chunk",
+            created: Math.floor(Date.now() / 1000),
+            model: input.model,
+            choices: [],
+            usage: {
+              prompt_tokens: scaled.promptTokens,
+              completion_tokens: finalOutput,
+              total_tokens: scaled.promptTokens + finalOutput,
+              ...(scaled.cachedTokens > 0
+                ? { prompt_tokens_details: { cached_tokens: scaled.cachedTokens } }
+                : {}),
+            },
+          };
+          res.write(`data: ${JSON.stringify(finalUsageChunk)}\n\ndata: [DONE]\n\n`);
+          hasEmittedUsageChunk = true;
+          console.log(`[CompactTrigger:OpenAI:StreamEnd] key=${key.id} real=${totalPrompt} reported=${OPENAI_REPORTED_COMPACT_TOTAL} model=${model}`);
+        }
       }
       res.end();
     }

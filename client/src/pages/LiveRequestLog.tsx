@@ -801,14 +801,33 @@ export default function LiveRequestLog() {
                                 🖼️ {visualTag}
                               </span>
                             )}
-                            {row.rawErrorMessage && row.rawErrorMessage.includes("[CompactTrigger") && (
-                              <span
-                                className="inline-flex items-center rounded border border-purple-400/40 bg-purple-500/20 px-1.5 py-0.2 text-[8.5px] font-bold tracking-wide text-purple-200 shadow-sm"
-                                title={row.rawErrorMessage}
-                              >
-                                COMPACTED
-                              </span>
-                            )}
+                            {(() => {
+                              if (!row.rawErrorMessage || !row.rawErrorMessage.includes("[CompactTrigger")) return null;
+                              const match = row.rawErrorMessage.match(/\[CompactTrigger:\s*([0-9,kM\.]+)\s*->\s*([0-9,kM\.]+)\s*(?:\(ua:\s*([^)]*)\))?\]/i);
+                              const tokenTransition = match ? `${match[1]} → ${match[2]}` : null;
+                              const rawUa = (match?.[3] || "").toLowerCase();
+                              let harness = "Agent";
+                              if (rawUa.includes("claude-code") || rawUa.includes("claude-cli")) harness = "Claude Code";
+                              else if (rawUa.includes("hermes")) harness = "Hermes";
+                              else if (rawUa.includes("pi-") || rawUa.includes("pi/") || rawUa.includes("pi-coding")) harness = "Pi";
+                              else if (rawUa.includes("cursor")) harness = "Cursor";
+                              else if (rawUa.includes("aider")) harness = "Aider";
+                              else if (rawUa.includes("cline")) harness = "Cline";
+                              else if (rawUa.includes("roo")) harness = "Roo Code";
+                              else if (rawUa.includes("openhands") || rawUa.includes("all-hands")) harness = "OpenHands";
+                              else if (match?.[3]) harness = match[3].split(/[\s/]/)[0].slice(0, 14);
+
+                              return (
+                                <span
+                                  className="inline-flex items-center gap-1 rounded border border-purple-400/40 bg-purple-500/20 px-1.5 py-0.2 text-[8.5px] font-bold tracking-wide text-purple-200 shadow-sm"
+                                  title={`Context Compaction Triggered!\nClient / Harness: ${match?.[3] || "CLI / Agent"}\nDiagnostic: ${row.rawErrorMessage}`}
+                                >
+                                  <span className="h-1.5 w-1.5 rounded-full bg-purple-400 animate-pulse" />
+                                  <span>COMPACTED · {harness}</span>
+                                  {tokenTransition && <span className="opacity-80 font-mono text-[8px]">({tokenTransition})</span>}
+                                </span>
+                              );
+                            })()}
                             {(row.reasoningReturned || (row.rawErrorMessage && row.rawErrorMessage.includes("[ReasoningFallback"))) && (
                               <span
                                 className="inline-flex items-center gap-1 rounded border border-amber-400/40 bg-amber-500/20 px-1.5 py-0.2 text-[8.5px] font-bold tracking-wide text-amber-300 shadow-sm"
