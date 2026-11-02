@@ -1531,6 +1531,8 @@ export function registerAnthropicMessagesGateway(app: Express) {
           ? "[ReasoningFallback: content was empty, returned reasoning]"
           : undefined;
 
+        const durationMs = Date.now() - startedAt;
+
         await recordUsage({
           requestId,
           userId: key.userId,
@@ -1543,7 +1545,9 @@ export function registerAnthropicMessagesGateway(app: Express) {
           chargeNanos: settlement.chargedNanos,
           sourceIpHash: ipHash,
           provider: finalizeProviderLabel(providerContext.providerLabel, providerContext),
-          latencyMs: Date.now() - startedAt,
+          latencyMs: durationMs,
+          durationMs,
+          ttftMs: durationMs,
           rawErrorMessage: reasoningDiagnosticTag ?? compactDiagnosticTag,
           reasoningReturned: isReasoningOnly,
         });
@@ -1563,7 +1567,7 @@ export function registerAnthropicMessagesGateway(app: Express) {
             cachedTokens: cached,
             completionTokens: tokens.outputTokens ?? 0,
             totalTokens: tokens.totalTokens ?? (tokens.inputTokens + tokens.outputTokens),
-            latencyMs: Date.now() - startedAt,
+            latencyMs: durationMs,
             status: upstream.status,
           });
         }
