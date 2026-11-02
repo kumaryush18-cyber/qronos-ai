@@ -36,7 +36,7 @@ jobs:
             type=raw,value=latest
             type=sha,format=short
 
-      - name: Build and Push Qronos Gateway Docker Image
+      - name: Build and Push Docker Image
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -45,17 +45,6 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      - name: Build and Push 9Router Docker Image
-        uses: docker/build-push-action@v5
-        with:
-          context: ./router
-          file: ./router/Dockerfile
-          platforms: linux/amd64
-          push: true
-          tags: ghcr.io/${{ github.repository_owner }}/qronos-router:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
