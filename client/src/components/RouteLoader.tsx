@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 
 const LOADING_ASSET_URL =
-  "https://res.cloudinary.com/dhrh8heb5/video/upload/ar_1.0,c_crop,g_center,w_500,fps_15,e_accelerate:40/gemini_generated_video_d86dda13_ey5bf3.gif";
+  "https://github.com/kumaryush18-cyber/9router-render-proxy/releases/download/v1.0-media/route_loader.gif";
 
 export interface RouteLoaderProps {
   onEnded?: () => void;

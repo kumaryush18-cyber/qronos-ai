@@ -1,0 +1,31 @@
+{
+    email kumararpit9468@gmail.com
+}
+
+qronos.me, www.qronos.me, api.qronos.me {
+    request_body {
+        max_size 50MB
+    }
+
+    reverse_proxy app:3000 {
+        flush_interval -1
+        header_up Host {host}
+        header_up X-Real-IP {remote_host}
+        header_up X-Forwarded-For {remote_host}
+        header_up X-Forwarded-Proto {scheme}
+    }
+}
+
+router.qronos.me {
+    request_body {
+        max_size 50MB
+    }
+
+    reverse_proxy router:10000 {
+        flush_interval -1
+        header_up Host {host}
+        header_up X-Real-IP {remote_host}
+        header_up X-Forwarded-For {remote_host}
+        header_up X-Forwarded-Proto {scheme}
+    }
+}

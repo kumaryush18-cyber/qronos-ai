@@ -77,7 +77,7 @@ import { clearOneTimeApiKey, getOneTimeApiKey, rememberOneTimeApiKey } from "../
 import { buildReferralInviteUrl } from "../../../shared/referrals";
 import { EventsWorkspace } from "@/components/events/EventsWorkspace";
 
-export const DASHBOARD_VIDEO_URL = "https://res.cloudinary.com/dhrh8heb5/video/upload/v1792215533/QV_1792214944093_szkkmh.mp4";
+export const DASHBOARD_VIDEO_URL = "https://github.com/kumaryush18-cyber/9router-render-proxy/releases/download/v1.0-media/dashboard_video.mp4";
 
 let _hasGlobalVideoPreloaded = false;
 
