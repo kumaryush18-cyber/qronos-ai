@@ -139,6 +139,11 @@ export default function AdminDashboard({ initialSection }: { initialSection?: Ad
   const [announcementText, setAnnouncementText] = useState("");
   const [modelQuery, setModelQuery] = useState("");
 
+  const { data: totalUnreadChatCount = 0 } = trpc.support.adminGetTotalUnreadCount.useQuery(undefined, {
+    refetchInterval: 120_000, // Background check every 2 minutes (cached in-memory on server, 0 TiDB load)
+    staleTime: 60_000,
+  });
+
   const modelControl = trpc.admin.setModelEnabled.useMutation({
     onSuccess: () => {
       utils.admin.overview.invalidate();
@@ -533,7 +538,16 @@ export default function AdminDashboard({ initialSection }: { initialSection?: Ad
               : item === "live"
               ? "Live requests"
               : item === "live-chat"
-              ? "Live Chat"
+              ? (
+                <span className="inline-flex items-center gap-1.5">
+                  <span>Live Chat</span>
+                  {Number(totalUnreadChatCount) > 0 && (
+                    <span className="inline-flex items-center justify-center min-w-[18px] h-4 px-1 rounded-full text-[10px] font-bold font-mono bg-rose-500 text-white shadow-sm shadow-rose-950/50">
+                      {Number(totalUnreadChatCount) > 99 ? "99+" : totalUnreadChatCount}
+                    </span>
+                  )}
+                </span>
+              )
               : "Activity"}
           </Button>
         ))}

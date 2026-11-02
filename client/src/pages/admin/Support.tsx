@@ -86,6 +86,7 @@ export default function AdminSupport() {
   const markAsRead = trpc.support.adminMarkAsRead.useMutation({
     onSuccess: () => {
       utils.support.adminGetConversations.invalidate();
+      utils.support.adminGetTotalUnreadCount.invalidate();
     },
   });
 
@@ -97,6 +98,7 @@ export default function AdminSupport() {
       }
       utils.support.adminGetChatHistory.invalidate();
       utils.support.adminGetConversations.invalidate();
+      utils.support.adminGetTotalUnreadCount.invalidate();
       utils.support.getUnreadCount.invalidate();
     },
   });
@@ -133,6 +135,7 @@ export default function AdminSupport() {
         utils.support.adminGetChatHistory.invalidate({ userId: selectedUserId });
       }
       utils.support.adminGetConversations.invalidate();
+      utils.support.adminGetTotalUnreadCount.invalidate();
       utils.support.getHistory.invalidate();
       utils.support.getUnreadCount.invalidate();
     },

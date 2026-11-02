@@ -515,6 +515,7 @@ import {
   sendAdminReply,
   findUserByEmail,
   deleteAdminMessage,
+  getAdminTotalUnreadCount,
 } from "./support";
 
 export const supportRouter = router({
@@ -530,10 +531,13 @@ export const supportRouter = router({
   getUnreadCount: protectedProcedure.query(async ({ ctx }) => {
     return getUserUnreadCount(ctx.user.id);
   }),
-  
+
   // Admin routes
   adminGetConversations: adminProcedure.query(async () => {
     return getAdminConversations();
+  }),
+  adminGetTotalUnreadCount: adminProcedure.query(async () => {
+    return getAdminTotalUnreadCount();
   }),
   adminMarkAsRead: adminProcedure.input(z.object({ userId: z.number() })).mutation(async ({ input }) => {
     return markAdminMessagesAsRead(input.userId);

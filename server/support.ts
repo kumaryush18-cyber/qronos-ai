@@ -39,6 +39,7 @@ export async function sendSupportMessage(userId: number, content: string) {
   }
   bustCache(`support_unread:${userId}`);
   bustCache("support_admin_conversations");
+  bustCache("support_admin_total_unread");
   return true;
 }
 
@@ -102,6 +103,17 @@ export async function getAdminConversations() {
   });
 }
 
+export async function getAdminTotalUnreadCount(): Promise<number> {
+  return cached("support_admin_total_unread", 120_000, async () => {
+    const db = await getDb();
+    if (!db) return 0;
+    const row = (await db.select({ count: sql<number>`count(*)` })
+      .from(supportMessages)
+      .where(and(eq(supportMessages.senderRole, "user"), eq(supportMessages.isRead, false))))[0];
+    return Number(row?.count ?? 0);
+  });
+}
+
 export async function markAdminMessagesAsRead(userId: number) {
   const db = await getDb();
   if (!db) return false;
@@ -110,6 +122,7 @@ export async function markAdminMessagesAsRead(userId: number) {
     .where(and(eq(supportMessages.userId, userId), eq(supportMessages.senderRole, "user")));
   bustCache(`support_unread:${userId}`);
   bustCache("support_admin_conversations");
+  bustCache("support_admin_total_unread");
   return true;
 }
 
@@ -125,6 +138,7 @@ export async function sendAdminReply(userId: number, content: string) {
   });
   bustCache(`support_unread:${userId}`);
   bustCache("support_admin_conversations");
+  bustCache("support_admin_total_unread");
   return true;
 }
 
@@ -159,5 +173,6 @@ export async function deleteAdminMessage(messageId: number) {
   await db.delete(supportMessages).where(eq(supportMessages.id, messageId));
   bustCache(`support_unread:${msg.userId}`);
   bustCache("support_admin_conversations");
+  bustCache("support_admin_total_unread");
   return { success: true, deletedId: messageId, userId: msg.userId };
 }
