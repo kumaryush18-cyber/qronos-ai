@@ -88,7 +88,25 @@ export const inferenceIpRateLimit = rateLimit({
 });
 
 /**
- * 5. Global Baseline IP Rate Limiter
+ * 5. Management API Rate Limiter (/v1/keys, /v1/topup, /v1/usage, /v1/referrals)
+ * Prevents key creation floods, order spam, and database resource exhaustion attacks (20 req/min).
+ */
+export const managementApiRateLimit = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 20,
+  standardHeaders: "draft-7",
+  legacyHeaders: false,
+  message: {
+    error: {
+      message: "Rate limit exceeded for management API. Please wait a moment before trying again.",
+      type: "rate_limit_exceeded",
+      code: "rate_limit_exceeded",
+    },
+  },
+});
+
+/**
+ * 6. Global Baseline IP Rate Limiter
  * Broad protective umbrella across all incoming requests (2400 requests/minute),
  * skipping local static assets, images, Vite dev modules, and dedicated tRPC/health endpoints.
  */

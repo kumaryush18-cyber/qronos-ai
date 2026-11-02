@@ -2,7 +2,7 @@ import type { Express, Request, Response } from "express";
 import { createHash, createHmac, randomUUID } from "node:crypto";
 import https from "node:https";
 import { Readable } from "node:stream";
-import { checkAccountRateLimit } from "./rateLimiters";
+import { checkAccountRateLimit, managementApiRateLimit } from "./rateLimiters";
 import {
   getBailuWebshareProxyPoolRuntimeConfig,
   isBaiProviderCircuitEligible,
@@ -71,7 +71,20 @@ import {
   recordUserInteractionLog,
   findAllMultimodalProviders,
   getModelCompactScalingConfig,
+  listApiKeys,
+  createApiKey,
+  revokeApiKey,
+  rotateApiKey,
+  getUsageSummary,
+  getReferralOverview,
+  getModelMinTier,
+  isModelAvailable,
 } from "./db";
+import { getEffectiveModelPricing } from "./creditPricing";
+import { getSolPriceUsd } from "./solanaPayGateway";
+import { getWhopPaygCheckoutUrl, getWhopTokenPlanCheckoutUrl } from "@shared/paymentTiers";
+import { cached } from "./memoryCache";
+import { Keypair } from "@solana/web3.js";
 import {
   payloadContainsVisualData,
   payloadContainsDocumentData,
@@ -4954,40 +4967,137 @@ export function formatInspectionMessages(messages: unknown): string {
   }).join("\n\n---\n\n");
 }
 
-export function registerOpenAiGateway(app: Express) {
-  app.get("/v1/models", async (_req, res) => {
-    res.setHeader("x-request-id", `qronos_req_${randomUUID().replaceAll("-", "")}`);
+const CONTEXT_WINDOW_MAP: Record<string, number> = {
+  "claude-opus-5.5": 1_000_000,
+  "claude-sonnet-5.5": 1_000_000,
+  "claude-haiku-5.5": 1_000_000,
+  "claude-opus-5": 1_000_000,
+  "claude-sonnet-4.6": 1_000_000,
+  "claude-fable-5.1": 1_000_000,
+  "claude-fable-5": 1_000_000,
+  "gpt-6-astra": 1_000_000,
+  "gpt-6-sol": 1_000_000,
+  "gpt-6-luna": 1_000_000,
+  "gemini-4-argon": 1_000_000,
+  "mercury-3": 1_000_000,
+  "glm-5.3": 1_000_000,
+  "glm-5.3-flash": 1_000_000,
+  "kimi-k3": 1_000_000,
+  "deepseek-v4-pro": 1_000_000,
+  "deepseek-v4-flash": 1_000_000,
+  "qwen3.8-max": 1_000_000,
+};
+
+export async function getEnrichedPublicModelCatalogue() {
+  return cached("enriched_public_model_catalogue_v1", 15_000, async () => {
+    const rawCatalogue = getDynamicModelCatalogue();
     let snapshot: Array<{ modelId: string; available: boolean }> = [];
     try {
       snapshot = await getModelAvailabilitySnapshot();
     } catch {
       snapshot = [];
     }
-    if (!snapshot || snapshot.length === 0) {
+    const availabilityByModel = new Map(snapshot.map(item => [item.modelId, item.available]));
+
+    const enriched = await Promise.all(
+      rawCatalogue.map(async (model) => {
+        const [minTier, isAvailable] = await Promise.all([
+          getModelMinTier(model.id).catch(() => "free" as UserTier),
+          isModelAvailable(model.id).catch(() => true),
+        ]);
+        const pricing = getEffectiveModelPricing(model.id, "payg");
+        const contextWindow = CONTEXT_WINDOW_MAP[model.id] ?? 1_000_000;
+        const available = availabilityByModel.has(model.id)
+          ? Boolean(availabilityByModel.get(model.id))
+          : isAvailable;
+
+        return {
+          id: model.id,
+          object: "model" as const,
+          created: 1700000000,
+          owned_by: "qronos",
+          display_name: model.displayName,
+          description: model.description,
+          capabilities: model.capabilities,
+          context_window: contextWindow,
+          max_output_tokens: 64_000,
+          min_tier: minTier,
+          pricing: {
+            input_usd_per_million: pricing.inputUsdPerMillion,
+            output_usd_per_million: pricing.outputUsdPerMillion,
+            is_custom: pricing.isCustom,
+            currency: "USD",
+          },
+          available,
+        };
+      })
+    );
+
+    return enriched;
+  });
+}
+
+export function registerOpenAiGateway(app: Express) {
+  // 1. Enriched Models Catalog (Dynamic Pricing, Context Window & Min Tier)
+  app.get("/v1/models", async (_req, res) => {
+    res.setHeader("x-request-id", `qronos_req_${randomUUID().replaceAll("-", "")}`);
+    try {
+      const data = await getEnrichedPublicModelCatalogue();
+      return res.json({ object: "list", data });
+    } catch {
       return res.json({ object: "list", data: TOKENFORGE_CATALOGUE });
     }
-    const availabilityByModel = new Map(snapshot.map(item => [item.modelId, item.available]));
-    const data = TOKENFORGE_CATALOGUE.filter(model => availabilityByModel.get(model.id) !== false);
-    return res.json({ object: "list", data: data.length > 0 ? data : TOKENFORGE_CATALOGUE });
   });
 
   app.get("/v1/models/:model", async (req: Request, res: Response) => {
     const rawModel = req.params.model;
     const normalized = normalizeModelIdentifier(rawModel);
-    const model = TOKENFORGE_CATALOGUE.find(m => m.id === normalized || m.id === rawModel);
-    if (!model) {
-      return res.status(404).json({
-        error: {
-          message: `Model '${rawModel}' not found in active Qronos AI catalogue.`,
-          type: "invalid_request_error",
-          code: "model_not_found",
-        },
-      });
-    }
     res.setHeader("x-request-id", `qronos_req_${randomUUID().replaceAll("-", "")}`);
-    return res.json(model);
+    try {
+      const all = await getEnrichedPublicModelCatalogue();
+      const model = all.find(m => m.id === normalized || m.id === rawModel);
+      if (!model) {
+        return res.status(404).json({
+          error: {
+            message: `Model '${rawModel}' not found in active Qronos AI catalogue.`,
+            type: "invalid_request_error",
+            code: "model_not_found",
+          },
+        });
+      }
+      return res.json(model);
+    } catch {
+      const fallback = TOKENFORGE_CATALOGUE.find(m => m.id === normalized || m.id === rawModel);
+      if (!fallback) {
+        return res.status(404).json({
+          error: {
+            message: `Model '${rawModel}' not found in active Qronos AI catalogue.`,
+            type: "invalid_request_error",
+            code: "model_not_found",
+          },
+        });
+      }
+      return res.json(fallback);
+    }
   });
 
+  // 2. High-Level Public Health Check (Zero Internal Provider Telemetry Exposed)
+  app.get(["/v1/health", "/v1/status", "/api/health/v1"], async (_req: Request, res: Response) => {
+    res.setHeader("x-request-id", `qronos_hlth_${randomUUID().replaceAll("-", "")}`);
+    return res.json({
+      status: "healthy",
+      timestamp: new Date().toISOString(),
+      services: {
+        api_gateway: "operational",
+        chat_completions: "operational",
+        messages: "operational",
+        streaming: "operational",
+      },
+      supported_protocols: ["openai_chat_completions", "anthropic_messages"],
+    });
+  });
+
+  // 3. User Balance & Plan Quota Endpoint
   app.get(["/v1/balance", "/v1/user/balance"], async (req: Request, res: Response) => {
     const requestId = `qronos_bal_${randomUUID().replaceAll("-", "")}`;
     res.setHeader("x-request-id", requestId);
@@ -5043,6 +5153,284 @@ export function registerOpenAiGateway(app: Express) {
         daily_tokens_remaining: quota?.remainingTokens ?? 0,
       },
     });
+  });
+
+  // 4. Current Account Profile & Tier Metadata (GET /v1/me)
+  app.get(["/v1/me", "/v1/account", "/v1/user/profile"], managementApiRateLimit, async (req: Request, res: Response) => {
+    const requestId = `qronos_me_${randomUUID().replaceAll("-", "")}`;
+    res.setHeader("x-request-id", requestId);
+    const secret = bearer(req);
+    if (!secret) return errorResponse(res, requestId, 401, "Send a Qronos AI key using Bearer authorization or x-api-key header.", "invalid_api_key");
+    const key = await findActiveApiKey(secret);
+    if (!key) return errorResponse(res, requestId, 401, "The supplied Qronos AI key is missing, invalid, or revoked.", "invalid_api_key");
+
+    const [tier, quota, verified] = await Promise.all([
+      getUserTier(key.userId),
+      getQuotaStatus(key.userId),
+      isDiscordVerified(key.userId),
+    ]);
+
+    return res.json({
+      object: "user",
+      id: key.userId,
+      tier,
+      tier_name: USER_TIER_DISPLAY_NAMES[tier] || tier,
+      discord_verified: verified,
+      active_key_label: key.label,
+      active_key_group: (key as any).keyGroup || "payg",
+      quota: {
+        suspended: Boolean(quota?.suspended),
+        daily_requests_remaining: quota?.remainingRequests ?? 0,
+        daily_tokens_remaining: quota?.remainingTokens ?? 0,
+      },
+    });
+  });
+
+  // 5. Usage Rollup Endpoint: Tokens Per Day & Per Model (GET /v1/usage)
+  app.get(["/v1/usage", "/v1/user/usage"], managementApiRateLimit, async (req: Request, res: Response) => {
+    const requestId = `qronos_usg_${randomUUID().replaceAll("-", "")}`;
+    res.setHeader("x-request-id", requestId);
+    const secret = bearer(req);
+    if (!secret) return errorResponse(res, requestId, 401, "Send a Qronos AI key using Bearer authorization or x-api-key header.", "invalid_api_key");
+    const key = await findActiveApiKey(secret);
+    if (!key) return errorResponse(res, requestId, 401, "The supplied Qronos AI key is missing, invalid, or revoked.", "invalid_api_key");
+
+    try {
+      const usage = await getUsageSummary(key.userId);
+      return res.json({
+        object: "usage",
+        user_id: key.userId,
+        total_requests: usage.totalRequests,
+        total_tokens: usage.totalTokens,
+        daily: usage.daily,
+        by_model: usage.byModel || [],
+        quota: {
+          remaining_requests_today: usage.quota?.remainingRequests ?? 0,
+          remaining_tokens_today: usage.quota?.remainingTokens ?? 0,
+        },
+      });
+    } catch {
+      return errorResponse(res, requestId, 500, "Failed to retrieve usage data.", "internal_error");
+    }
+  });
+
+  // 6. List API Keys (GET /v1/keys)
+  app.get("/v1/keys", managementApiRateLimit, async (req: Request, res: Response) => {
+    const requestId = `qronos_keys_${randomUUID().replaceAll("-", "")}`;
+    res.setHeader("x-request-id", requestId);
+    const secret = bearer(req);
+    if (!secret) return errorResponse(res, requestId, 401, "Send a Qronos AI key using Bearer authorization or x-api-key header.", "invalid_api_key");
+    const key = await findActiveApiKey(secret);
+    if (!key) return errorResponse(res, requestId, 401, "The supplied Qronos AI key is missing, invalid, or revoked.", "invalid_api_key");
+
+    const keys = await listApiKeys(key.userId);
+    return res.json({
+      object: "list",
+      data: keys.map(k => ({
+        id: k.id,
+        name: k.label,
+        masked_key: `${k.prefix}...`,
+        key_group: k.keyGroup,
+        status: k.status,
+        created_at: k.createdAt,
+        last_used_at: k.lastUsedAt,
+        expires_at: k.expiresAt,
+      })),
+    });
+  });
+
+  // 7. Create API Key (POST /v1/keys)
+  app.post("/v1/keys", managementApiRateLimit, async (req: Request, res: Response) => {
+    const requestId = `qronos_key_new_${randomUUID().replaceAll("-", "")}`;
+    res.setHeader("x-request-id", requestId);
+    const secret = bearer(req);
+    if (!secret) return errorResponse(res, requestId, 401, "Send a Qronos AI key using Bearer authorization or x-api-key header.", "invalid_api_key");
+    const callerKey = await findActiveApiKey(secret);
+    if (!callerKey) return errorResponse(res, requestId, 401, "The supplied Qronos AI key is missing, invalid, or revoked.", "invalid_api_key");
+
+    if (!(await isDiscordVerified(callerKey.userId))) {
+      return errorResponse(res, requestId, 403, "Discord membership verification is required to create API keys. Please verify at https://qronos.me/verify-discord.", "discord_verification_required");
+    }
+
+    const { name, label, key_group } = req.body || {};
+    const keyName = String(name || label || "API Key").trim().slice(0, 64);
+    const keyGroup = key_group === "token_plan" || key_group === "coding_plan" ? "token_plan" : "payg";
+
+    try {
+      const created = await createApiKey(callerKey.userId, keyName, keyGroup);
+      return res.status(201).json({
+        object: "api_key",
+        id: created.record.id,
+        name: created.record.label,
+        key: created.key,
+        masked_key: `${created.record.prefix}...`,
+        key_group: created.record.keyGroup,
+        status: created.record.status,
+        created_at: created.record.createdAt,
+        message: "Key created successfully. Please store this key securely — it will not be displayed again.",
+      });
+    } catch (err: any) {
+      return errorResponse(res, requestId, 400, err?.message || "Failed to create API key.", "api_key_creation_failed");
+    }
+  });
+
+  // 8. Revoke API Key (DELETE /v1/keys/:id)
+  app.delete("/v1/keys/:id", managementApiRateLimit, async (req: Request, res: Response) => {
+    const requestId = `qronos_key_del_${randomUUID().replaceAll("-", "")}`;
+    res.setHeader("x-request-id", requestId);
+    const secret = bearer(req);
+    if (!secret) return errorResponse(res, requestId, 401, "Send a Qronos AI key using Bearer authorization or x-api-key header.", "invalid_api_key");
+    const callerKey = await findActiveApiKey(secret);
+    if (!callerKey) return errorResponse(res, requestId, 401, "The supplied Qronos AI key is missing, invalid, or revoked.", "invalid_api_key");
+
+    const keyId = parseInt(req.params.id, 10);
+    if (!Number.isSafeInteger(keyId) || keyId <= 0) {
+      return errorResponse(res, requestId, 400, "Invalid key ID provided.", "invalid_request_error");
+    }
+
+    const revoked = await revokeApiKey(callerKey.userId, keyId);
+    if (!revoked) {
+      return errorResponse(res, requestId, 404, "API key not found or not owned by your account.", "key_not_found");
+    }
+    return res.json({ object: "api_key", id: keyId, revoked: true });
+  });
+
+  // 9. Rotate API Key (POST /v1/keys/:id/rotate)
+  app.post("/v1/keys/:id/rotate", managementApiRateLimit, async (req: Request, res: Response) => {
+    const requestId = `qronos_key_rot_${randomUUID().replaceAll("-", "")}`;
+    res.setHeader("x-request-id", requestId);
+    const secret = bearer(req);
+    if (!secret) return errorResponse(res, requestId, 401, "Send a Qronos AI key using Bearer authorization or x-api-key header.", "invalid_api_key");
+    const callerKey = await findActiveApiKey(secret);
+    if (!callerKey) return errorResponse(res, requestId, 401, "The supplied Qronos AI key is missing, invalid, or revoked.", "invalid_api_key");
+
+    const keyId = parseInt(req.params.id, 10);
+    if (!Number.isSafeInteger(keyId) || keyId <= 0) {
+      return errorResponse(res, requestId, 400, "Invalid key ID provided.", "invalid_request_error");
+    }
+
+    try {
+      const rotated = await rotateApiKey(callerKey.userId, keyId);
+      return res.json({
+        object: "api_key",
+        id: rotated.record.id,
+        name: rotated.record.label,
+        key: rotated.key,
+        masked_key: `${rotated.record.prefix}...`,
+        key_group: rotated.record.keyGroup,
+        status: rotated.record.status,
+        created_at: rotated.record.createdAt,
+        message: "Key rotated successfully. The previous key has been revoked.",
+      });
+    } catch (err: any) {
+      return errorResponse(res, requestId, 400, err?.message || "Failed to rotate API key.", "key_rotation_failed");
+    }
+  });
+
+  // 10. Top-Up Invoice Creation (POST /v1/topup)
+  app.post("/v1/topup", managementApiRateLimit, async (req: Request, res: Response) => {
+    const requestId = `qronos_topup_${randomUUID().replaceAll("-", "")}`;
+    res.setHeader("x-request-id", requestId);
+    const secret = bearer(req);
+    if (!secret) return errorResponse(res, requestId, 401, "Send a Qronos AI key using Bearer authorization or x-api-key header.", "invalid_api_key");
+    const key = await findActiveApiKey(secret);
+    if (!key) return errorResponse(res, requestId, 401, "The supplied Qronos AI key is missing, invalid, or revoked.", "invalid_api_key");
+
+    const { amount_usd = 25, method = "solana", package_usd, tier_id } = req.body || {};
+    const usd = Number(amount_usd || package_usd || 25);
+    if (!Number.isFinite(usd) || usd < 5 || usd > 1000) {
+      return errorResponse(res, requestId, 400, "amount_usd must be between $5 and $1000 USD.", "invalid_request_error");
+    }
+
+    const cleanMethod = String(method).toLowerCase().trim();
+    if (cleanMethod === "whop") {
+      const userEmail = await lookupUserEmail(key.userId);
+      const checkoutUrl = tier_id
+        ? getWhopTokenPlanCheckoutUrl(tier_id, userEmail)
+        : getWhopPaygCheckoutUrl(usd, userEmail);
+      return res.json({
+        object: "topup_invoice",
+        method: "whop",
+        amount_usd: usd,
+        checkout_url: checkoutUrl,
+        message: "Pay with Card, Apple Pay, Google Pay, or PayPal via Whop.",
+      });
+    }
+
+    // Default to Solana Pay
+    try {
+      const solPrice = await getSolPriceUsd();
+      const calculatedSol = Number((usd / solPrice).toFixed(5));
+      const orderId = `tf_ord_${Date.now()}_${randomUUID().replace(/-/g, "").slice(0, 8)}`;
+      const referenceKeypair = Keypair.generate();
+      const referencePubkey = referenceKeypair.publicKey.toBase58();
+      const MERCHANT_PUBKEY = "B35p1QfJ1q4Z9k3b5X7m8Y2w6V9t4C7n2M5j8K1s3D6";
+      const params = new URLSearchParams({
+        amount: calculatedSol.toString(),
+        reference: referencePubkey,
+        label: "Qronos AI",
+        message: `$${usd} API Compute`,
+      });
+      const solanaPayUrl = `solana:${MERCHANT_PUBKEY}?${params.toString()}`;
+      const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
+
+      const db = await getDb();
+      if (db) {
+        await db.execute(sql`
+          INSERT INTO solana_orders (
+            order_id, user_id, usd_amount, sol_amount,
+            credits_nanos, reference_pubkey, merchant_pubkey, status,
+            created_at, expires_at
+          ) VALUES (
+            ${orderId}, ${key.userId}, ${usd}, ${calculatedSol},
+            ${usd * 1_000_000_000}, ${referencePubkey},
+            ${MERCHANT_PUBKEY}, 'PENDING',
+            NOW(), ${expiresAt.toISOString().slice(0, 19).replace('T', ' ')}
+          )
+        `);
+      }
+
+      return res.status(201).json({
+        object: "topup_invoice",
+        method: "solana_pay",
+        order_id: orderId,
+        amount_usd: usd,
+        amount_sol: calculatedSol,
+        sol_usd_price: solPrice,
+        solana_pay_url: solanaPayUrl,
+        qr_code_url: `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(solanaPayUrl)}`,
+        status_check_url: `/api/solana-pay/verify-order/${orderId}`,
+        expires_at: expiresAt.toISOString(),
+      });
+    } catch (err: any) {
+      return errorResponse(res, requestId, 500, err?.message || "Failed to create Solana invoice.", "internal_error");
+    }
+  });
+
+  // 11. Referral Code & Invite Status (GET /v1/referrals)
+  app.get(["/v1/referrals", "/v1/referral"], managementApiRateLimit, async (req: Request, res: Response) => {
+    const requestId = `qronos_ref_${randomUUID().replaceAll("-", "")}`;
+    res.setHeader("x-request-id", requestId);
+    const secret = bearer(req);
+    if (!secret) return errorResponse(res, requestId, 401, "Send a Qronos AI key using Bearer authorization or x-api-key header.", "invalid_api_key");
+    const key = await findActiveApiKey(secret);
+    if (!key) return errorResponse(res, requestId, 401, "The supplied Qronos AI key is missing, invalid, or revoked.", "invalid_api_key");
+
+    try {
+      const ref = await getReferralOverview(key.userId);
+      const commissionUsd = (ref.totalRewardNanos / 1_000_000_000).toFixed(2);
+      return res.json({
+        object: "referral",
+        referral_code: ref.code,
+        invite_url: `https://qronos.me/signup?aff=${ref.code}`,
+        total_referred_users: ref.referrals.length,
+        total_bonus_tokens_earned: ref.totalReferralTokens,
+        lifetime_commission_usd: Number(commissionUsd),
+        commission_rate: "25% lifetime on every recharge",
+      });
+    } catch {
+      return errorResponse(res, requestId, 500, "Failed to retrieve referral data.", "internal_error");
+    }
   });
 
   app.post("/v1/chat/completions", async (req: Request, res) => {
@@ -5418,6 +5806,8 @@ export function registerOpenAiGateway(app: Express) {
       res.setHeader("x-request-id", requestId);
       res.setHeader("x-qronos-credit-balance", String(settlement.balanceNanos));
       res.setHeader("x-qronos-credit-charge", String(settlement.chargedNanos));
+      res.setHeader("x-qronos-latency-ms", String(durationMs));
+      res.setHeader("x-qronos-ttft-ms", String(durationMs));
       return res.status(200).json(publicPayload);
     }
 

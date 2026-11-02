@@ -6714,7 +6714,7 @@ export async function getQuotaStatus(userId: number) {
 export async function getUsageSummary(userId: number) {
   const db = await getDb();
   const quota = await getQuotaStatus(userId);
-  if (!db) return { quota, totalRequests: 0, totalTokens: 0, daily: [] as { day: string; requests: number; tokens: number }[] };
+  if (!db) return { quota, totalRequests: 0, totalTokens: 0, daily: [] as { day: string; requests: number; tokens: number }[], byModel: [] as { modelId: string; requests: number; tokens: number }[] };
   const totals = await db
     .select({
       totalRequests: sql<number>`coalesce(sum(${dailyUsage.requestCount}), 0)`,
@@ -6724,16 +6724,29 @@ export async function getUsageSummary(userId: number) {
     .where(eq(dailyUsage.userId, userId));
   const start = new Date();
   start.setUTCDate(start.getUTCDate() - 13);
-  const rows = await db
-    .select({ day: dailyUsage.usageDate, requests: dailyUsage.requestCount, tokens: dailyUsage.totalTokens })
-    .from(dailyUsage)
-    .where(and(eq(dailyUsage.userId, userId), gte(dailyUsage.usageDate, utcUsageDate(start))))
-    .orderBy(dailyUsage.usageDate);
+  const [rows, modelRows] = await Promise.all([
+    db
+      .select({ day: dailyUsage.usageDate, requests: dailyUsage.requestCount, tokens: dailyUsage.totalTokens })
+      .from(dailyUsage)
+      .where(and(eq(dailyUsage.userId, userId), gte(dailyUsage.usageDate, utcUsageDate(start))))
+      .orderBy(dailyUsage.usageDate),
+    db
+      .select({
+        modelId: dailyUsage.modelId,
+        requests: sql<number>`coalesce(sum(${dailyUsage.requestCount}), 0)`,
+        tokens: sql<number>`coalesce(sum(${dailyUsage.totalTokens}), 0)`,
+      })
+      .from(dailyUsage)
+      .where(eq(dailyUsage.userId, userId))
+      .groupBy(dailyUsage.modelId)
+      .orderBy(desc(sql`sum(${dailyUsage.totalTokens})`)),
+  ]);
   return {
     quota,
     totalRequests: Number(totals[0]?.totalRequests ?? 0),
     totalTokens: Number(totals[0]?.totalTokens ?? 0),
     daily: rows.map(row => ({ day: new Date(row.day).toISOString().slice(0, 10), requests: Number(row.requests), tokens: Number(row.tokens) })),
+    byModel: modelRows.map(row => ({ modelId: row.modelId, requests: Number(row.requests), tokens: Number(row.tokens) })),
   };
 }
 

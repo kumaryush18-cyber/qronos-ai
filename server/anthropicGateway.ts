@@ -1023,6 +1023,8 @@ async function handleNativeTokenRouterMessagesRequest(req: Request, res: Respons
     res.setHeader("x-request-id", requestId);
     res.setHeader("x-qronos-credit-balance", String(settlement.balanceNanos));
     res.setHeader("x-qronos-credit-charge", String(settlement.chargedNanos));
+    res.setHeader("x-qronos-latency-ms", String(durationMs));
+    res.setHeader("x-qronos-ttft-ms", String(durationMs));
     return res.status(200).json(response);
   }
 
@@ -1569,6 +1571,8 @@ export function registerAnthropicMessagesGateway(app: Express) {
         res.setHeader("x-request-id", requestId);
         res.setHeader("x-qronos-credit-balance", String(settlement.balanceNanos));
         res.setHeader("x-qronos-credit-charge", String(settlement.chargedNanos));
+        res.setHeader("x-qronos-latency-ms", String(durationMs));
+        res.setHeader("x-qronos-ttft-ms", String(durationMs));
         return res.status(200).json(response);
       } catch (error) {
         const message = publicProviderErrorMessage();
