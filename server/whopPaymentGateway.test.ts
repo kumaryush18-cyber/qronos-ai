@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import crypto from "crypto";
-import { verifyWhopWebhookSignature, resolveWhopProduct, WHOP_PRODUCT_CATALOG } from "./whopPaymentGateway";
+import { verifyWhopWebhookSignature, resolveWhopProduct, processWhopWebhookPayload, WHOP_PRODUCT_CATALOG } from "./whopPaymentGateway";
 
 describe("Whop Webhook Gateway Security & Verification", () => {
   const secret = "ws_2e999f5dc62963e37d850099325994f0740271c4c87ea4275b635e98f60b43a0";
@@ -134,6 +134,10 @@ describe("Whop Webhook Gateway Security & Verification", () => {
       expect(enterprise.type).toBe("token_plan");
       expect(enterprise.tokensToGrant).toBe(13_000_000_000);
       expect(enterprise.amountUsd).toBe(150);
+    });
+
+    it("exports processWhopWebhookPayload for background asynchronous processing", () => {
+      expect(typeof processWhopWebhookPayload).toBe("function");
     });
   });
 });

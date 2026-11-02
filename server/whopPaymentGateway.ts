@@ -1,7 +1,7 @@
 import type { Express, Request, Response } from "express";
 import crypto from "crypto";
 import { sql, eq, desc } from "drizzle-orm";
-import { getDb, applyReferralCommissionForRecharge, setUserTier, type UserTier } from "./db";
+import { getDb, applyReferralCommissionForRecharge, setUserTier, clearUserTierCache, type UserTier } from "./db";
 import { users, creditAccounts, creditLedger, processedWebhooks } from "../drizzle/schema";
 import { sdk } from "./_core/sdk";
 
@@ -169,6 +169,243 @@ export async function ensureProcessedWebhooksTable(): Promise<void> {
 }
 
 /**
+ * In-memory LRU deduplication cache for webhook events.
+ * Prevents redundant database queries and eliminates TiDB Request Unit (RU) waste
+ * when Whop retries or admin triggers replay deliveries.
+ */
+const processedWebhookMemory = new Map<string, number>();
+const MEMORY_CACHE_EXPIRY_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+function pruneWebhookMemoryCache(): void {
+  const cutoff = Date.now() - MEMORY_CACHE_EXPIRY_MS;
+  for (const [id, time] of processedWebhookMemory.entries()) {
+    if (time < cutoff) processedWebhookMemory.delete(id);
+  }
+}
+
+/**
+ * Asynchronously processes verified Whop webhook payloads in the background.
+ * Uses atomic single-pass SQL statements to minimize TiDB Request Units (RU).
+ */
+export async function processWhopWebhookPayload(payload: any, webhookId: string): Promise<void> {
+  const startTime = Date.now();
+  try {
+    const db = await getDb();
+    if (!db) {
+      console.error("[Whop Webhook] Database unavailable for processing webhook:", webhookId);
+      return;
+    }
+
+    // 1. Database idempotency check (survives server reboot)
+    if (webhookId) {
+      const [existing] = await db
+        .select({ id: processedWebhooks.id })
+        .from(processedWebhooks)
+        .where(eq(processedWebhooks.webhookId, webhookId))
+        .limit(1);
+
+      if (existing) {
+        console.log(`[Whop Webhook] Webhook ID ${webhookId} was already processed in DB. Skipping duplicate.`);
+        return;
+      }
+    }
+
+    const eventType = (
+      payload.action ||
+      payload.type ||
+      payload.event_type ||
+      payload.event ||
+      ""
+    ).toString().trim();
+
+    // 2. Non-payment events: record and return
+    if (eventType !== "payment.succeeded") {
+      console.log(`[Whop Webhook] Non-payment event '${eventType}' recorded without balance change.`);
+      if (webhookId) {
+        await db.insert(processedWebhooks).values({
+          webhookId,
+          provider: "whop",
+          eventType: eventType || "unspecified",
+          payload: JSON.stringify(payload).slice(0, 5000),
+        }).catch(() => {});
+      }
+      return;
+    }
+
+    // 3. Extract customer email, amount paid, and product/plan ID
+    const data = payload.data || payload;
+    const customerEmail = (
+      data.email ||
+      data.customer?.email ||
+      data.user?.email ||
+      data.customer_email ||
+      payload.user?.email ||
+      payload.customer?.email ||
+      ""
+    ).toString().toLowerCase().trim();
+
+    const rawAmount = data.amount ?? data.total ?? data.subtotal ?? data.final_amount ?? 10;
+    const currency = (data.currency || "usd").toString().toLowerCase();
+
+    let amountUsd = typeof rawAmount === "string" ? parseFloat(rawAmount) : Number(rawAmount);
+    if (amountUsd > 100 && currency === "usd") {
+      amountUsd = amountUsd / 100;
+    }
+    if (isNaN(amountUsd) || amountUsd <= 0) {
+      amountUsd = 10;
+    }
+
+    const productId = (
+      data.product_id ||
+      data.product?.id ||
+      data.product ||
+      ""
+    ).toString().trim();
+
+    const planId = (
+      data.plan_id ||
+      data.plan?.id ||
+      data.plan ||
+      ""
+    ).toString().trim();
+
+    const paymentId = (data.payment_id || data.id || webhookId || "").toString().trim();
+
+    const resolved = resolveWhopProduct(productId, planId, amountUsd, data);
+    const amountNanos = Math.round(amountUsd * 1_000_000_000);
+
+    if (!customerEmail) {
+      console.error("[Whop Webhook] Missing customer email in payment.succeeded payload:", data);
+      if (webhookId) {
+        await db.insert(processedWebhooks).values({
+          webhookId,
+          provider: "whop",
+          eventType,
+          payload: JSON.stringify(payload).slice(0, 5000),
+        }).catch(() => {});
+      }
+      return;
+    }
+
+    // Look up user by email
+    const [user] = await db
+      .select({ id: users.id, email: users.email, name: users.name, tier: users.tier })
+      .from(users)
+      .where(eq(sql`LOWER(${users.email})`, customerEmail))
+      .limit(1);
+
+    if (!user) {
+      console.warn(`[Whop Webhook] Refusing credit top-up: No registered Qronos account found for email: ${customerEmail}.`);
+      if (webhookId) {
+        await db.insert(processedWebhooks).values({
+          webhookId,
+          provider: "whop",
+          eventType,
+          payload: JSON.stringify({
+            unregisteredEmail: customerEmail,
+            amountUsd,
+            productId,
+            planId,
+            paymentId,
+            status: "account_not_found",
+          }),
+        }).catch(() => {});
+      }
+      return;
+    }
+
+    // Atomic combined transaction to grant balance & audit with minimum TiDB RU
+    await db.transaction(async (tx) => {
+      if (resolved.type === "token_plan") {
+        const tokensToAdd = resolved.tokensToGrant || 600_000_000;
+
+        // Single atomic query: inserts account or increments tokens in 1 RU
+        await tx.execute(sql`
+          INSERT INTO credit_accounts (userId, balanceNanos, paygBalanceNanos, codingPlanTokens, createdAt, updatedAt)
+          VALUES (${user.id}, 0, 0, ${tokensToAdd}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+          ON DUPLICATE KEY UPDATE
+            codingPlanTokens = codingPlanTokens + ${tokensToAdd},
+            updatedAt = CURRENT_TIMESTAMP
+        `);
+
+        // Audit ledger entry
+        await tx.insert(creditLedger).values({
+          userId: user.id,
+          kind: "manual_adjustment",
+          amountNanos: 0,
+          balanceAfterNanos: tokensToAdd,
+          referenceId: `whop_token_plan:${paymentId}`,
+          note: `Whop Token Plan Purchase: ${resolved.name} (+${(tokensToAdd / 1_000_000).toFixed(0)}M Tokens, $${amountUsd}). Webhook: ${webhookId}`,
+        });
+
+        // Upgrade account tier directly within the same transaction if changed
+        if (resolved.tier && user.tier !== resolved.tier) {
+          await tx.update(users).set({ tier: resolved.tier }).where(eq(users.id, user.id));
+          clearUserTierCache(user.id);
+          console.log(`[Whop Webhook] Automatically upgraded user #${user.id} (${user.email}) to ${resolved.tier.toUpperCase()} tier.`);
+        }
+
+        console.log(`[Whop Webhook] Successfully credited +${(tokensToAdd / 1_000_000).toFixed(0)}M Tokens to user #${user.id} (${user.email}).`);
+      } else {
+        // PAYG top-up in 1 single atomic query
+        await tx.execute(sql`
+          INSERT INTO credit_accounts (userId, balanceNanos, paygBalanceNanos, codingPlanTokens, createdAt, updatedAt)
+          VALUES (${user.id}, 0, ${amountNanos}, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+          ON DUPLICATE KEY UPDATE
+            paygBalanceNanos = paygBalanceNanos + ${amountNanos},
+            updatedAt = CURRENT_TIMESTAMP
+        `);
+
+        await tx.insert(creditLedger).values({
+          userId: user.id,
+          kind: "manual_adjustment",
+          amountNanos: amountNanos,
+          balanceAfterNanos: amountNanos,
+          referenceId: `whop_pay:${paymentId}`,
+          note: `Whop Payment Top-Up: $${amountUsd.toFixed(2)} PAYG Balance (${resolved.name}). Webhook: ${webhookId}`,
+        });
+
+        console.log(`[Whop Webhook] Successfully credited +$${amountUsd.toFixed(2)} PAYG balance to user #${user.id} (${user.email}).`);
+      }
+
+      // Trigger referral commission for user's referrer (25% of amount paid)
+      await applyReferralCommissionForRecharge(
+        tx,
+        user.id,
+        amountNanos,
+        paymentId,
+        "Whop Card"
+      );
+
+      // Record webhook as processed
+      if (webhookId) {
+        await tx.insert(processedWebhooks).values({
+          webhookId,
+          provider: "whop",
+          eventType,
+          payload: JSON.stringify({
+            userId: user.id,
+            email: customerEmail,
+            amountUsd,
+            productId,
+            planId,
+            paymentId,
+            productName: resolved.name,
+            productType: resolved.type,
+            status: "credited",
+          }),
+        });
+      }
+    });
+
+    const elapsed = Date.now() - startTime;
+    console.log(`[Whop Webhook] Background credit processing completed for ${customerEmail} in ${elapsed}ms.`);
+  } catch (bgErr) {
+    console.error(`[Whop Webhook] Background credit failed for webhook ${webhookId}:`, bgErr);
+  }
+}
+
+/**
  * Register Whop Webhook handler on the Express server.
  * Listens on:
  * - POST /api/webhooks/whop (Canonical Whop webhook endpoint)
@@ -183,8 +420,6 @@ export function registerWhopPaymentGateway(app: Express): void {
   app.post(
     ["/api/webhooks/whop", "/api/payments/whop/webhook"],
     async (req: Request, res: Response) => {
-      const startTime = Date.now();
-
       try {
         // 1. Extract Whop Webhook headers
         const webhookId = (
@@ -222,7 +457,7 @@ export function registerWhopPaymentGateway(app: Express): void {
           return res.status(400).json({ error: "Missing raw request payload for webhook verification." });
         }
 
-        // 3. Verify HMAC-SHA256 signature
+        // 3. Verify HMAC-SHA256 signature (< 2ms)
         const isValidSignature = verifyWhopWebhookSignature(
           webhookId,
           timestamp,
@@ -251,263 +486,36 @@ export function registerWhopPaymentGateway(app: Express): void {
           return res.status(400).json({ error: "Malformed JSON payload." });
         }
 
-        const eventType = (
-          payload.action ||
-          payload.type ||
-          payload.event_type ||
-          payload.event ||
-          ""
-        ).toString().trim();
-
-        const db = await getDb();
-        if (!db) {
-          return res.status(500).json({ error: "Database temporarily unavailable." });
-        }
-
-        // 5. Idempotency Check: check if whop-webhook-id was already processed
-        if (webhookId) {
-          const [existingWebhook] = await db
-            .select({ id: processedWebhooks.id })
-            .from(processedWebhooks)
-            .where(eq(processedWebhooks.webhookId, webhookId))
-            .limit(1);
-
-          if (existingWebhook) {
-            console.log(`[Whop Webhook] Webhook ID ${webhookId} was already processed. Returning 200 OK immediately.`);
-            return res.status(200).json({
-              success: true,
-              received: true,
-              message: "Webhook ID already processed (idempotent duplicate skipped).",
-            });
-          }
-        }
-
-        // 6. Verify event type is payment.succeeded
-        if (eventType !== "payment.succeeded") {
-          console.log(`[Whop Webhook] Non-payment event '${eventType}' acknowledged without credit disbursement.`);
-          if (webhookId) {
-            await db.insert(processedWebhooks).values({
-              webhookId,
-              provider: "whop",
-              eventType: eventType || "unspecified",
-              payload: JSON.stringify(payload).slice(0, 5000),
-            }).catch(() => {});
-          }
+        // 5. In-Memory Idempotency Check (0 TiDB RU cost):
+        // If this webhook was already processed recently, return 200 OK immediately without querying TiDB.
+        if (webhookId && processedWebhookMemory.has(webhookId)) {
+          console.log(`[Whop Webhook] Webhook ID ${webhookId} was already processed (in-memory deduplication, 0 RU).`);
           return res.status(200).json({
             success: true,
             received: true,
-            note: `Event '${eventType}' acknowledged without balance change.`,
+            message: "Webhook ID already processed (idempotent duplicate skipped, 0 RU).",
           });
         }
 
-        // 7. Extract customer email, amount paid, and product/plan ID
-        const data = payload.data || payload;
-        const customerEmail = (
-          data.email ||
-          data.customer?.email ||
-          data.user?.email ||
-          data.customer_email ||
-          payload.user?.email ||
-          payload.customer?.email ||
-          ""
-        ).toString().toLowerCase().trim();
-
-        const rawAmount = data.amount ?? data.total ?? data.subtotal ?? data.final_amount ?? 10;
-        const currency = (data.currency || "usd").toString().toLowerCase();
-
-        // Amount normalization: in cents (e.g. 1000) or dollars (10.0 or 10)
-        let amountUsd = typeof rawAmount === "string" ? parseFloat(rawAmount) : Number(rawAmount);
-        if (amountUsd > 100 && currency === "usd") {
-          amountUsd = amountUsd / 100;
-        }
-        if (isNaN(amountUsd) || amountUsd <= 0) {
-          amountUsd = 10;
-        }
-
-        const productId = (
-          data.product_id ||
-          data.product?.id ||
-          data.product ||
-          ""
-        ).toString().trim();
-
-        const planId = (
-          data.plan_id ||
-          data.plan?.id ||
-          data.plan ||
-          ""
-        ).toString().trim();
-
-        const paymentId = (data.payment_id || data.id || webhookId || "").toString().trim();
-
-        const resolved = resolveWhopProduct(productId, planId, amountUsd, data);
-        const amountNanos = Math.round(amountUsd * 1_000_000_000);
-
-        console.log(`[Whop Webhook] Processing ${resolved.type}: "${resolved.name}" for customer ${customerEmail} ($${amountUsd})`);
-
-        // 9. Look up user by email
-        if (!customerEmail) {
-          console.error("[Whop Webhook] Missing customer email in payment.succeeded payload:", data);
-          if (webhookId) {
-            await db.insert(processedWebhooks).values({
-              webhookId,
-              provider: "whop",
-              eventType,
-              payload: JSON.stringify(payload).slice(0, 5000),
-            }).catch(() => {});
+        if (webhookId) {
+          processedWebhookMemory.set(webhookId, Date.now());
+          if (processedWebhookMemory.size > 5000) {
+            pruneWebhookMemoryCache();
           }
-          return res.status(200).json({
-            success: true,
-            warning: "Customer email missing in payload; webhook recorded without disbursement.",
-          });
         }
 
-        const [user] = await db
-          .select({ id: users.id, email: users.email, name: users.name })
-          .from(users)
-          .where(eq(sql`LOWER(${users.email})`, customerEmail))
-          .limit(1);
-
-        // 10. Execute atomic balance increment & log webhook as processed
-        if (user) {
-          await db.transaction(async (tx) => {
-            // Ensure credit account exists
-            await tx.insert(creditAccounts).values({
-              userId: user.id,
-              balanceNanos: 0,
-              paygBalanceNanos: 0,
-              codingPlanTokens: 0,
-            }).onDuplicateKeyUpdate({ set: { userId: user.id } });
-
-            if (resolved.type === "token_plan") {
-              const tokensToAdd = resolved.tokensToGrant || 600_000_000;
-              await tx.update(creditAccounts)
-                .set({ codingPlanTokens: sql`${creditAccounts.codingPlanTokens} + ${tokensToAdd}` })
-                .where(eq(creditAccounts.userId, user.id));
-
-              // Fetch updated balance for ledger
-              const [acc] = await tx
-                .select({ codingPlanTokens: creditAccounts.codingPlanTokens, paygBalanceNanos: creditAccounts.paygBalanceNanos })
-                .from(creditAccounts)
-                .where(eq(creditAccounts.userId, user.id))
-                .limit(1);
-
-              const newBalanceNanos = Number(acc?.paygBalanceNanos ?? 0);
-
-              // Audit ledger entry
-              await tx.insert(creditLedger).values({
-                userId: user.id,
-                kind: "manual_adjustment",
-                amountNanos: 0,
-                balanceAfterNanos: newBalanceNanos,
-                referenceId: `whop_token_plan:${paymentId}`,
-                note: `Whop Token Plan Purchase: ${resolved.name} (+${(tokensToAdd / 1_000_000).toFixed(0)}M Tokens, $${amountUsd}). Webhook: ${webhookId}`,
-              });
-
-              // Automatically upgrade account tier if a token plan was purchased (e.g. Plus, Pro, Ultra, Enterprise)
-              if (resolved.tier) {
-                await setUserTier(user.id, resolved.tier);
-                console.log(`[Whop Webhook] Automatically upgraded user #${user.id} (${user.email}) to ${resolved.tier.toUpperCase()} tier.`);
-              }
-
-              console.log(`[Whop Webhook] Successfully credited +${(tokensToAdd / 1_000_000).toFixed(0)}M Tokens to user #${user.id} (${user.email}).`);
-            } else {
-              // PAYG top-up
-              await tx.update(creditAccounts)
-                .set({ paygBalanceNanos: sql`${creditAccounts.paygBalanceNanos} + ${amountNanos}` })
-                .where(eq(creditAccounts.userId, user.id));
-
-              // Fetch updated balance for ledger
-              const [acc] = await tx
-                .select({ paygBalanceNanos: creditAccounts.paygBalanceNanos })
-                .from(creditAccounts)
-                .where(eq(creditAccounts.userId, user.id))
-                .limit(1);
-
-              const newBalanceNanos = Number(acc?.paygBalanceNanos ?? amountNanos);
-
-              // Audit ledger entry
-              await tx.insert(creditLedger).values({
-                userId: user.id,
-                kind: "manual_adjustment",
-                amountNanos: amountNanos,
-                balanceAfterNanos: newBalanceNanos,
-                referenceId: `whop_pay:${paymentId}`,
-                note: `Whop Payment Top-Up: $${amountUsd.toFixed(2)} PAYG Balance (${resolved.name}). Webhook: ${webhookId}`,
-              });
-
-              console.log(`[Whop Webhook] Successfully credited +$${amountUsd.toFixed(2)} PAYG balance to user #${user.id} (${user.email}).`);
-            }
-
-            // Trigger referral commission for user's referrer (25% of amount paid)
-            await applyReferralCommissionForRecharge(
-              tx,
-              user.id,
-              amountNanos,
-              paymentId,
-              "Whop Card"
-            );
-
-            // Mark webhook as processed
-            if (webhookId) {
-              await tx.insert(processedWebhooks).values({
-                webhookId,
-                provider: "whop",
-                eventType,
-                payload: JSON.stringify({
-                  userId: user.id,
-                  email: customerEmail,
-                  amountUsd,
-                  productId,
-                  planId,
-                  paymentId,
-                  productName: resolved.name,
-                  productType: resolved.type,
-                  status: "credited",
-                }),
-              });
-            }
-          });
-        } else {
-          // Users MUST have an existing registered account in Qronos to receive a top-up.
-          console.warn(`[Whop Webhook] Refusing credit top-up: No registered Qronos account found for email: ${customerEmail}.`);
-
-          if (webhookId) {
-            await db.insert(processedWebhooks).values({
-              webhookId,
-              provider: "whop",
-              eventType,
-              payload: JSON.stringify({
-                unregisteredEmail: customerEmail,
-                amountUsd,
-                productId,
-                planId,
-                paymentId,
-                status: "account_not_found",
-              }),
-            }).catch(() => {});
-          }
-
-          return res.status(200).json({
-            success: false,
-            error: "account_not_found",
-            message: `User with email ${customerEmail} does not have an account in Qronos. Top-up requires an existing account.`,
-          });
-        }
-
-        const elapsedMs = Date.now() - startTime;
-        console.log(`[Whop Webhook] Completed processing in ${elapsedMs}ms.`);
-
-        // 12. Return 200 OK within 3 seconds
-        return res.status(200).json({
+        // 6. FAST ACK (< 50ms): Respond 200 OK to Whop immediately so Whop never exceeds its 5.00s timeout!
+        res.status(200).json({
           success: true,
-          message: "Payment verified and credited successfully.",
-          creditedUsd: amountUsd,
-          customerEmail,
-          elapsedMs,
+          received: true,
+          message: "Webhook verified and accepted.",
+          webhookId,
         });
+
+        // 7. Execute database crediting and tier upgrade asynchronously in background
+        void processWhopWebhookPayload(payload, webhookId);
       } catch (err: any) {
-        console.error("[Whop Webhook] Error processing webhook:", err);
+        console.error("[Whop Webhook] Error processing incoming webhook:", err);
         return res.status(500).json({ error: err?.message || "Internal webhook processing error." });
       }
     }
