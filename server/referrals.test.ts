@@ -45,7 +45,7 @@ describe("TokenForge referrals", () => {
     expect(dbSource).toContain("!invitation || invitation.userId === referredUserId");
     expect(dbSource).toContain("reason: \"already_rewarded\"");
     expect(dbSource).toContain("referralAttributions");
-    expect(dbSource).toContain("kind: \"referral_commission\"");
+    expect(dbSource).toContain("applyReferralCommissionForRecharge");
     expect(dbSource).toContain("await awardReferralForNewUser(userId, input.referralCode)");
     expect(routerSource).not.toContain("referralCode: z.string().trim().max(100).optional()");
     expect(routerSource).toContain("getReferralOverview(ctx.user.id)");
@@ -85,7 +85,7 @@ describe("TokenForge referrals", () => {
 		expect(dbSource).toContain("export const SPECIAL_REFERRAL_CAMPAIGN_CAP = 150");
 		expect(dbSource).toContain("if (slotNumber > SPECIAL_REFERRAL_CAMPAIGN_CAP)");
 		expect(dbSource).toContain('reason: "campaign_full"');
-		expect(dbSource).toContain('kind: "special_referral_bonus"');
+		expect(dbSource).toContain("settleSpecialReferralBonus");
 		expect(dbSource).toContain("if (claim.awardedAt)");
 		expect(dbSource).toContain("SPECIAL_REFERRAL_BONUS_NANOS");
 		// expect(discordSource).toContain("settleSpecialReferralBonus");

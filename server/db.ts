@@ -1299,7 +1299,7 @@ export async function awardReferralForNewUser(referredUserId: number, rawReferra
       if (inviter?.email) {
         await tx.insert(systemNotifications).values({
           title: "1M Referral Tokens & New Developer Joined",
-          message: `A new developer joined using your affiliate link! 1,000,000 free tokens have been credited to your balance. Plus, you will earn 25% lifetime commission on every balance recharge they make.`,
+          message: `A new developer joined using your referral link! 1,000,000 free tokens have been credited to your balance.`,
           type: "update",
           targetAudience: "SPECIFIC_EMAILS",
           targetEmails: normalizeEmail(inviter.email),
@@ -1334,94 +1334,17 @@ export async function awardReferralForNewUser(referredUserId: number, rawReferra
 }
 
 /**
- * Deposits 25% affiliate commission into the inviter's PAYG balance on every recharge made by a referred user.
+ * Referral commission on balance recharges has been discontinued.
+ * Function retained as a lightweight zero-query no-op for backward compatibility.
  */
 export async function applyReferralCommissionForRecharge(
-  tx: any,
-  payingUserId: number,
-  rechargeAmountNanos: number,
-  orderId: string,
-  paymentMethod: string
+  _tx: any,
+  _payingUserId: number,
+  _rechargeAmountNanos: number,
+  _orderId: string,
+  _paymentMethod: string
 ) {
-  if (rechargeAmountNanos <= 0) return null;
-
-  const attribution = (
-    await tx
-      .select({
-        id: referralAttributions.id,
-        referrerUserId: referralAttributions.referrerUserId,
-      })
-      .from(referralAttributions)
-      .where(eq(referralAttributions.referredUserId, payingUserId))
-      .limit(1)
-  )[0];
-
-  if (!attribution || !attribution.referrerUserId || attribution.referrerUserId === payingUserId) {
-    return null;
-  }
-
-  const referrerUserId = attribution.referrerUserId;
-  const commissionNanos = Math.round(rechargeAmountNanos * 0.25);
-  if (commissionNanos <= 0) return null;
-
-  await tx.insert(creditAccounts).values({
-    userId: referrerUserId,
-    balanceNanos: 0,
-    paygBalanceNanos: 0,
-    codingPlanTokens: 0,
-  }).onDuplicateKeyUpdate({ set: { userId: referrerUserId } });
-
-  await tx
-    .update(creditAccounts)
-    .set({ paygBalanceNanos: sql`${creditAccounts.paygBalanceNanos} + ${commissionNanos}` })
-    .where(eq(creditAccounts.userId, referrerUserId));
-
-  const referrerAccount = (
-    await tx
-      .select({ paygBalanceNanos: creditAccounts.paygBalanceNanos })
-      .from(creditAccounts)
-      .where(eq(creditAccounts.userId, referrerUserId))
-      .limit(1)
-  )[0];
-
-  const commissionUsd = (commissionNanos / 1_000_000_000).toFixed(2);
-  const rechargeUsd = (rechargeAmountNanos / 1_000_000_000).toFixed(2);
-
-  await tx.insert(creditLedger).values({
-    userId: referrerUserId,
-    kind: "referral_commission",
-    amountNanos: commissionNanos,
-    balanceAfterNanos: referrerAccount?.paygBalanceNanos ?? commissionNanos,
-    referenceId: `ref_comm:${orderId}:${payingUserId}`,
-    note: `25% Affiliate Commission from referral recharge ($${rechargeUsd} ${paymentMethod}). +$${commissionUsd} PAYG credit.`,
-  });
-
-  await tx
-    .update(referralAttributions)
-    .set({ rewardNanos: sql`${referralAttributions.rewardNanos} + ${commissionNanos}` })
-    .where(eq(referralAttributions.id, attribution.id));
-
-  const referrerUser = (
-    await tx
-      .select({ email: users.email })
-      .from(users)
-      .where(eq(users.id, referrerUserId))
-      .limit(1)
-  )[0];
-
-  if (referrerUser?.email) {
-    await tx.insert(systemNotifications).values({
-      title: "Referral Commission Received",
-      message: `You earned $${commissionUsd} (25% commission) from a referred user's $${rechargeUsd} ${paymentMethod} recharge! Deposited to your PAYG balance.`,
-      type: "update",
-      targetAudience: "SPECIFIC_EMAILS",
-      targetEmails: normalizeEmail(referrerUser.email),
-      createdByUserId: payingUserId,
-      createdAt: new Date(),
-    });
-  }
-
-  return { referrerUserId, commissionNanos };
+  return null;
 }
 
 export async function getReferralOverview(userId: number) {
@@ -1949,7 +1872,6 @@ export async function creditAccountFromSolanaPay(input: {
         referenceId: `solana_coding:${input.orderId}`,
         note: `Coding Plan: ${input.planName || "Coding Plan"} (+${mTokens}M Tokens). tx: ${input.signature.slice(0, 8)}...`,
       });
-      await applyReferralCommissionForRecharge(tx, input.userId, amountNanos, input.orderId, "Solana Pay");
       return { balanceNanos, paygBalanceNanos, codingPlanTokens };
     } else {
       const creditGrantNanos = amountNanos;
@@ -1966,7 +1888,6 @@ export async function creditAccountFromSolanaPay(input: {
         referenceId: `solana_payg:${input.orderId}`,
         note: `PAYG USD Deposit (${input.assetLabel ?? "USD"}) with 60% Model Discount. tx: ${input.signature.slice(0, 8)}...`,
       });
-      await applyReferralCommissionForRecharge(tx, input.userId, amountNanos, input.orderId, input.assetLabel ?? "Solana Pay");
       return { balanceNanos, paygBalanceNanos, codingPlanTokens };
     }
   });
@@ -2021,7 +1942,6 @@ export async function creditAccountFromUPIPay(input: {
           referenceId: `upi_coding:${input.orderId}`,
           note: `Coding Plan: ${input.planName || "Coding Plan"} (+${mTokens}M Tokens). UTR: ${input.utr}`,
         });
-        await applyReferralCommissionForRecharge(tx, input.userId, amountNanos, input.orderId, "Domestic UPI");
         return { balanceNanos, paygBalanceNanos, codingPlanTokens };
       } else {
         const creditGrantNanos = amountNanos;
@@ -2038,7 +1958,6 @@ export async function creditAccountFromUPIPay(input: {
           referenceId: `upi_payg:${input.orderId}`,
           note: `PAYG USD Deposit (${input.assetLabel ?? "UPI INR"}) with 60% Model Discount. UTR: ${input.utr}`,
         });
-        await applyReferralCommissionForRecharge(tx, input.userId, amountNanos, input.orderId, input.assetLabel ?? "Domestic UPI");
         return { balanceNanos, paygBalanceNanos, codingPlanTokens };
       }
     });
@@ -2087,7 +2006,6 @@ export async function creditAccountFromDodoPay(input: {
         referenceId: `dodo_payg:${input.paymentId || input.orderId}`,
         note: `PAYG USD Deposit (${input.assetLabel ?? (input.planName || "Card Deposit")}) with 60% Model Discount. payment_id: ${input.paymentId}`,
       });
-      await applyReferralCommissionForRecharge(tx, input.userId, amountNanos, input.paymentId || input.orderId, "Card Payment");
       return { balanceNanos, paygBalanceNanos };
     });
   } catch (error: any) {

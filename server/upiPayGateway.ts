@@ -88,12 +88,28 @@ export function buildUpiUri(params: {
 }
 
 /**
+ * Resilient database getter that retries across TiDB serverless idle connection drops.
+ */
+async function getUpiDbWithRetry(retries = 3, delayMs = 400) {
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      const db = await getDb();
+      if (db) return db;
+    } catch {}
+    if (attempt < retries) {
+      await new Promise((r) => setTimeout(r, delayMs * attempt));
+    }
+  }
+  return null;
+}
+
+/**
  * Synchronize UPI orders from persistent MySQL storage into memory
  * Also hydrates any completed orders recorded in credit_ledger
  */
 export async function syncUpiOrdersFromDb(): Promise<void> {
   try {
-    const db = await getDb();
+    const db = await getUpiDbWithRetry(3, 400);
     if (!db) return;
 
     // 1. Ensure table exists with user_email and user_name columns

@@ -77,7 +77,7 @@ import { clearOneTimeApiKey, getOneTimeApiKey, rememberOneTimeApiKey } from "../
 import { buildReferralInviteUrl } from "../../../shared/referrals";
 import { EventsWorkspace } from "@/components/events/EventsWorkspace";
 
-export const DASHBOARD_VIDEO_URL = "https://github.com/kumaryush18-cyber/9router-render-proxy/releases/download/v1.0-media/dashboard_video.mp4";
+export const DASHBOARD_VIDEO_URL = "https://github.com/kumaryush18-cyber/qronos-media/releases/download/v1.0-media/dashboard_video.mp4";
 
 let _hasGlobalVideoPreloaded = false;
 
@@ -2257,25 +2257,25 @@ function ReferralWorkspace() {
             <div className="flex items-center gap-2.5 flex-wrap">
               <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-3 py-1 text-[10px] font-mono font-bold uppercase tracking-wider text-emerald-400">
                 <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                Affiliate Network Active
+                Referral Network Active
               </span>
               <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[10px] font-mono text-zinc-300">
                 <Zap size={12} className="text-emerald-400" />
-                25% Lifetime Recharge Cut
+                +1M & +5M Free Tokens
               </span>
             </div>
             <h1 className="mt-3.5 text-2xl sm:text-4xl font-extrabold tracking-tight text-white">
-              25% Lifetime Affiliate Program
+              Developer Referral Program
             </h1>
             <p className="mt-2 text-xs sm:text-sm text-zinc-400 max-w-2xl leading-relaxed">
-              Share your affiliate link. Whenever any developer who signs up via your link recharges their balance with Domestic UPI or Solana Pay, you receive <strong className="text-emerald-400">25% of their recharge amount</strong> automatically deposited into your Pay-As-You-Go compute balance.
+              Invite other developers to Qronos AI. When someone joins with your link, they receive <strong className="text-emerald-400">5,000,000 Free Coding Tokens</strong> instantly and you receive <strong className="text-emerald-400">1,000,000 Free Coding Tokens</strong> credited directly to your balance.
             </p>
           </div>
 
           <div className="flex items-center gap-3 shrink-0">
             <div className="text-right hidden sm:block">
-              <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-500 block">Commission Rate</span>
-              <span className="text-2xl font-bold font-mono text-emerald-400">25% Cut</span>
+              <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-500 block">Bonus Reward</span>
+              <span className="text-2xl font-bold font-mono text-emerald-400">+1M Tokens</span>
             </div>
           </div>
         </div>
@@ -2311,12 +2311,12 @@ function ReferralWorkspace() {
                     </div>
                   </div>
                   <Badge className="border-0 bg-emerald-500/10 text-emerald-400 border border-emerald-500/25 font-mono text-[10px]">
-                    25% Payout / Recharge
+                    +1M / +5M Tokens
                   </Badge>
                 </div>
 
                 <p className="mt-4 text-xs text-zinc-400 leading-relaxed">
-                  Anyone who joins through this link receives an automatic +5M free referral tokens bonus (15M free tokens total upon login). Every time they recharge their balance, 25% of that payment lands in your PAYG balance instantly.
+                  Anyone who joins through this link receives an automatic +5M free referral tokens bonus (15M free tokens total upon login), and you receive +1M free tokens credited instantly.
                 </p>
 
                 {/* Copy Link Input Bar */}
@@ -2423,7 +2423,7 @@ function ReferralWorkspace() {
             className="rounded-3xl border p-6 flex flex-col justify-between shadow-xl"
           >
             <div className="flex items-center justify-between text-zinc-400">
-              <span className="text-[10px] font-mono uppercase tracking-wider font-bold">Total Commission Earned</span>
+              <span className="text-[10px] font-mono uppercase tracking-wider font-bold">Total Bonus Tokens Earned</span>
               <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-white/[0.06] border border-white/10 text-white">
                 <Coins size={16} />
               </div>
@@ -2433,21 +2433,21 @@ function ReferralWorkspace() {
                 <div className="h-9 w-28 rounded bg-white/10 animate-pulse my-1" />
               ) : (
                 <p className="text-3xl sm:text-4xl font-extrabold font-mono text-emerald-400 tracking-tight">
-                  {formatCredit(referral.totalRewardNanos)}
+                  +{((referral.totalReferralTokens ?? (referral.referrals.length * 1_000_000)) / 1_000_000).toLocaleString(undefined, { maximumFractionDigits: 1 })}M
                 </p>
               )}
-              <p className="mt-1 text-xs text-zinc-500 font-mono">Credited directly to PAYG balance</p>
+              <p className="mt-1 text-xs text-zinc-500 font-mono">Credited to Token Plan quota</p>
             </div>
           </div>
         </div>
       </div>
 
       {/* 3. Step-by-Step Referral Process Cards */}
-      <section className="space-y-3" aria-label="How the 25% affiliate commission works">
+      <section className="space-y-3" aria-label="How referral rewards work">
         <div className="flex items-center gap-2">
           <Sparkles size={14} className="text-white" />
           <p className="text-[10px] font-bold uppercase tracking-[.18em] font-mono text-zinc-400">
-            How The 25% Affiliate Commission Works
+            How Referral Rewards Work
           </p>
         </div>
 
@@ -2462,19 +2462,19 @@ function ReferralWorkspace() {
           >
             <div className="flex items-center justify-between pb-3 border-b border-white/[0.06]">
               <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-emerald-400 bg-emerald-500/10 border border-emerald-500/25 px-2.5 py-0.5 rounded-full">
-                Step 1 · 1M + 5M Tokens
+                Step 1 · Share Link
               </span>
               <span className="text-xs font-mono font-bold text-zinc-500">01</span>
             </div>
             <div className="mt-4">
-              <h3 className="text-base font-bold text-white tracking-tight">1M for You, 5M for Referral</h3>
+              <h3 className="text-base font-bold text-white tracking-tight">Invite Fellow Developers</h3>
               <p className="mt-2 text-xs text-zinc-400 leading-relaxed">
-                When a developer creates an account with your link, <strong>they receive 5,000,000 Free Tokens</strong> and <strong>you receive 1,000,000 Free Tokens</strong> credited instantly to your balances.
+                Copy your personal invitation link and share it with peers, teammates, communities, and developer networks.
               </p>
             </div>
             <div className="mt-4 pt-3 border-t border-white/[0.06] flex items-center gap-2 text-[11px] font-mono text-zinc-300">
               <CheckCircle2 size={13} className="text-emerald-400" />
-              <span>+1M tokens to you · +5M tokens to referral</span>
+              <span>Unique link tied to your account</span>
             </div>
           </div>
 
@@ -2488,19 +2488,19 @@ function ReferralWorkspace() {
           >
             <div className="flex items-center justify-between pb-3 border-b border-white/[0.06]">
               <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-cyan-300 bg-cyan-500/10 border border-cyan-500/25 px-2.5 py-0.5 rounded-full">
-                Step 2 · They Recharge
+                Step 2 · They Join
               </span>
               <span className="text-xs font-mono font-bold text-zinc-500">02</span>
             </div>
             <div className="mt-4">
-              <h3 className="text-base font-bold text-white tracking-tight">On Every Balance Deposit</h3>
+              <h3 className="text-base font-bold text-white tracking-tight">They Get 5M Free Tokens</h3>
               <p className="mt-2 text-xs text-zinc-400 leading-relaxed">
-                Whenever your invited developers recharge their PAYG compute balance or purchase a Token Plan via Domestic UPI or Solana Pay.
+                When a developer creates an account through your invitation, <strong>they receive 5,000,000 Free Coding Tokens</strong> on login.
               </p>
             </div>
             <div className="mt-4 pt-3 border-t border-white/[0.06] flex items-center gap-2 text-[11px] font-mono text-zinc-300">
               <Zap size={13} className="text-cyan-400" />
-              <span>Lifetime commission on all future recharges</span>
+              <span>Instant welcome token grant</span>
             </div>
           </div>
 
@@ -2514,19 +2514,19 @@ function ReferralWorkspace() {
           >
             <div className="flex items-center justify-between pb-3 border-b border-white/[0.06]">
               <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-amber-300 bg-amber-500/10 border border-amber-500/25 px-2.5 py-0.5 rounded-full">
-                Step 3 · Instant 25% Payout
+                Step 3 · You Earn
               </span>
               <span className="text-xs font-mono font-bold text-zinc-500">03</span>
             </div>
             <div className="mt-4">
-              <h3 className="text-base font-bold text-white tracking-tight">Direct PAYG Balance Deposit</h3>
+              <h3 className="text-base font-bold text-white tracking-tight">You Get 1M Free Tokens</h3>
               <p className="mt-2 text-xs text-zinc-400 leading-relaxed">
-                You immediately receive <strong>25% of the recharged amount</strong> credited straight into your PAYG balance with real-time Notification Bell alerts.
+                You immediately receive <strong>1,000,000 Free Coding Tokens</strong> added directly to your Token Plan quota for every successful signup.
               </p>
             </div>
             <div className="mt-4 pt-3 border-t border-white/[0.06] flex items-center gap-2 text-[11px] font-mono text-zinc-300">
               <Coins size={13} className="text-amber-400" />
-              <span>Zero threshold · Instant usable compute</span>
+              <span>Zero limits · Uncapped token growth</span>
             </div>
           </div>
         </div>
@@ -2639,7 +2639,7 @@ function ReferralWorkspace() {
               <Users className="mx-auto text-zinc-500 mb-3" size={28} />
               <p className="text-sm font-bold text-white font-mono">No referral attributions yet</p>
               <p className="mt-1 text-xs text-zinc-400 max-w-sm mx-auto">
-                Invite developers with your referral link above. You will receive <strong>1,000,000 Free Tokens</strong>, your referral receives <strong>5,000,000 Free Tokens</strong>, plus you earn 25% lifetime commission on every balance recharge they complete!
+                Invite developers with your referral link above. You will receive <strong>1,000,000 Free Tokens</strong> and your referral receives <strong>5,000,000 Free Tokens</strong> credited instantly upon registration!
               </p>
             </div>
           )}

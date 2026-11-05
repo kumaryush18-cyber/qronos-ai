@@ -223,10 +223,10 @@ function App() {
   const [introFinished, setIntroFinished] = useState(false);
 
   useEffect(() => {
-    // Safety fallback: ensure loading screen releases after 7.8s (GIF duration at +40% speed is 7.14s)
+    // Safety fallback: ensure loading screen releases after 7.0s (MP4 at 1.5x speed is 6.67s)
     const timer = setTimeout(() => {
       setIntroFinished(true);
-    }, 7800);
+    }, 7000);
     return () => clearTimeout(timer);
   }, []);
 

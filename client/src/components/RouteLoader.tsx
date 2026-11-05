@@ -1,19 +1,30 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 
 const LOADING_ASSET_URL =
-  "https://github.com/kumaryush18-cyber/9router-render-proxy/releases/download/v1.0-media/route_loader.gif";
+  "https://github.com/kumaryush18-cyber/qronos-media/releases/download/v1.0-media/route_loader.mp4";
 
 export interface RouteLoaderProps {
   onEnded?: () => void;
 }
 
 export function RouteLoader({ onEnded }: RouteLoaderProps) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (video) {
+      video.playbackRate = 1.5;
+      video.defaultPlaybackRate = 1.5;
+      video.play().catch(() => {});
+    }
+  }, []);
+
   useEffect(() => {
     if (onEnded) {
-      // With e_accelerate:40 (+40% faster), 1 full cycle finishes in exactly 7.14 seconds
+      // With 1.5x playback speed (+50% faster), 1 full cycle completes in exactly 6.67 seconds
       const timer = setTimeout(() => {
         onEnded();
-      }, 7140);
+      }, 6670);
       return () => clearTimeout(timer);
     }
   }, [onEnded]);
@@ -57,15 +68,24 @@ export function RouteLoader({ onEnded }: RouteLoaderProps) {
       >
         {/* Inner black card with curved edges clipping the media */}
         <div
-          className="w-full h-full rounded-[22px] overflow-hidden flex items-center justify-center"
-          style={{ backgroundColor: "#010101" }}
+          className="w-full h-full rounded-[22px] overflow-hidden flex items-center justify-center bg-[#010101]"
         >
-          <img
+          <video
+            ref={videoRef}
             src={LOADING_ASSET_URL}
-            alt="Qronos AI Loading"
-            draggable={false}
-            className="w-full h-full object-contain pointer-events-none select-none p-1.5"
+            autoPlay
+            muted
+            playsInline
+            loop
+            preload="auto"
+            className="w-full h-full object-cover pointer-events-none select-none scale-105"
+            onCanPlay={() => {
+              if (videoRef.current) {
+                videoRef.current.playbackRate = 1.5;
+              }
+            }}
             onError={() => onEnded?.()}
+            onEnded={() => onEnded?.()}
           />
         </div>
       </div>

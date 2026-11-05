@@ -406,21 +406,21 @@ function CodeIntegrationHub() {
 --------------------------------------------------------- */
 const PLATFORM_EXPLAINERS = [
   {
-    image: "https://github.com/kumaryush18-cyber/9router-render-proxy/releases/download/v1.0-media/home_feature_1.png",
+    image: "https://github.com/kumaryush18-cyber/qronos-media/releases/download/v1.0-media/home_feature_1.png",
     heading: "One endpoint. Every model.",
     description:
       "Send every request to Qronos, and we route it to the fastest healthy provider for the model you picked. If a provider errors or stalls, your request moves to the next one automatically. Your app never notices.",
     tags: ["Smart routing", "Automatic failover", "Real-time streaming"],
   },
   {
-    image: "https://github.com/kumaryush18-cyber/9router-render-proxy/releases/download/v1.0-media/home_feature_2.png",
+    image: "https://github.com/kumaryush18-cyber/qronos-media/releases/download/v1.0-media/home_feature_2.png",
     heading: "Top up with crypto. Credits in seconds.",
     description:
       "Connect your wallet, send USDC or SOL, and your balance updates as soon as the transaction confirms. No credit card, no international payment blocks, no minimum spend.",
     tags: ["Instant top-ups", "Wallet-friendly", "Transparent usage"],
   },
   {
-    image: "https://github.com/kumaryush18-cyber/9router-render-proxy/releases/download/v1.0-media/home_feature_3.png",
+    image: "https://github.com/kumaryush18-cyber/qronos-media/releases/download/v1.0-media/home_feature_3.png",
     heading: "Change one line. Keep your workflow.",
     description:
       "Qronos speaks the Anthropic Messages API natively. Set your base URL, add your key, and Claude Code, Cline or your own app just works.",

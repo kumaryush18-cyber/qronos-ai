@@ -5425,8 +5425,8 @@ export function registerOpenAiGateway(app: Express) {
         invite_url: `https://qronos.me/signup?aff=${ref.code}`,
         total_referred_users: ref.referrals.length,
         total_bonus_tokens_earned: ref.totalReferralTokens,
-        lifetime_commission_usd: Number(commissionUsd),
-        commission_rate: "25% lifetime on every recharge",
+        lifetime_commission_usd: 0,
+        commission_rate: "0%",
       });
     } catch {
       return errorResponse(res, requestId, 500, "Failed to retrieve referral data.", "internal_error");
