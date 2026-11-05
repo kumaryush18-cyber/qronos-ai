@@ -1783,6 +1783,16 @@ export function registerAnthropicMessagesGateway(app: Express) {
           }
           writeSse(res, "content_block_delta", { type: "content_block_delta", index: textIndex, delta: { type: "text_delta", text: flushed } });
         }
+        if (streamingFilter.isLeaked()) {
+          void recordSafetyAudit({
+            userId: key.userId,
+            model: model as TokenForgeModelId,
+            triggerType: "upstream_leak_scrubbed",
+            matchedKeywords: "Upstream Brand Scrubbed in Stream",
+            userInput: firstUserText || "User streaming prompt",
+            outputShown: streamedOutputText,
+          }).catch(() => undefined);
+        }
       }
 
       if (!failed && textIndex === null && toolIndexes.size === 0 && streamedReasoningText.trim()) {

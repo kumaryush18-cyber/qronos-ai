@@ -4247,12 +4247,28 @@ export function publicManagedContent(model: TokenForgeModelId, value: unknown, i
 
   // If the whole message is merely an identity statement (short and primarily a disclosure)
   if (trimmed.length < 120 && (leaks(cleaned) || leaks(value))) {
-    return publicIdentityForManagedModel(model, lang);
+    const fallbackIdentity = publicIdentityForManagedModel(model, lang);
+    void recordSafetyAudit({
+      model,
+      triggerType: "upstream_leak_scrubbed",
+      matchedKeywords: "Upstream Disclosure Replaced with Fallback",
+      userInput: typeof langOrContext === "string" ? langOrContext : "Conversational turn",
+      outputShown: fallbackIdentity,
+    }).catch(() => undefined);
+    return fallbackIdentity;
   }
 
   // Otherwise, sanitize leaked phrases in place so the full response is preserved!
   if (leaks(cleaned) || leaks(value)) {
-    return sanitizeLeakedPhrasesInPlace(text, model, lang);
+    const cleanedText = sanitizeLeakedPhrasesInPlace(text, model, lang);
+    void recordSafetyAudit({
+      model,
+      triggerType: "upstream_leak_scrubbed",
+      matchedKeywords: "Upstream Brand Terms Sanitized in Place",
+      userInput: typeof langOrContext === "string" ? langOrContext : "Conversational turn",
+      outputShown: cleanedText,
+    }).catch(() => undefined);
+    return cleanedText;
   }
   return text.length ? text : (value.length ? value : "");
 }
@@ -4269,11 +4285,20 @@ export function createStreamingIdentityFilter(model: TokenForgeModelId, initialL
   let buffer = "";
   let fullAccumulated = "";
   let detectedLang: DetectedLanguage = initialLang || "en";
+  let leakedFlag = false;
   // Custom watch lists add their own hold-back prefixes to the universal set.
   const watchScope = identityWatchScopeFor(model);
 
+  const checkAndClean = (raw: string): string => {
+    const cleaned = sanitizeLeakedPhrasesInPlace(raw, model, detectedLang);
+    if (cleaned !== raw) {
+      leakedFlag = true;
+    }
+    return cleaned;
+  };
+
   return {
-    isLeaked: () => false,
+    isLeaked: () => leakedFlag,
     push: (chunkText: string): string | null => {
       if (typeof chunkText !== "string" || !chunkText) return chunkText;
 
@@ -4294,19 +4319,19 @@ export function createStreamingIdentityFilter(model: TokenForgeModelId, initialL
           const safePrefix = buffer.slice(0, buffer.length - lastWord.length);
           buffer = lastWord;
           if (safePrefix.length > 0) {
-            return sanitizeLeakedPhrasesInPlace(safePrefix, model, detectedLang);
+            return checkAndClean(safePrefix);
           }
           return null;
         }
       }
 
-      const out = sanitizeLeakedPhrasesInPlace(buffer, model, detectedLang);
+      const out = checkAndClean(buffer);
       buffer = "";
       return out;
     },
     flush: (): string | null => {
       if (!buffer) return null;
-      const out = sanitizeLeakedPhrasesInPlace(buffer, model, detectedLang);
+      const out = checkAndClean(buffer);
       buffer = "";
       return out;
     },
@@ -6107,6 +6132,16 @@ export function registerOpenAiGateway(app: Express) {
       }
     } finally {
       clearTimeout(timeout);
+      if (streamingFilter?.isLeaked()) {
+        void recordSafetyAudit({
+          userId: key.userId,
+          model: input.model as TokenForgeModelId,
+          triggerType: "upstream_leak_scrubbed",
+          matchedKeywords: "Upstream Brand Scrubbed in Stream",
+          userInput: firstUserText || "User streaming prompt",
+          outputShown: streamedContentText || streamedOutputText || "",
+        }).catch(() => undefined);
+      }
       const durationMs = Date.now() - startedAt;
       const ttftMs = firstTokenAt !== null ? firstTokenAt - startedAt : null;
       let outcome: "success" | "truncated" | "client_disconnected" | "upstream_error" | "rejected";

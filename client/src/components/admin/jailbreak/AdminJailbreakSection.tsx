@@ -33,6 +33,17 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 
 interface SafetyAuditRecord {
@@ -95,6 +106,17 @@ export function AdminJailbreakSection() {
     },
     onError: (err) => {
       toast.error(`Failed to save configuration: ${err.message}`);
+    },
+  });
+
+  const clearMutation = trpc.admin.clearSafetyAuditLogs.useMutation({
+    onSuccess: () => {
+      toast.success("All safety audit and jailbreak logs have been permanently deleted.");
+      void safetyLogsQuery.refetch();
+      void utils.admin.safetyAudit.invalidate();
+    },
+    onError: (err) => {
+      toast.error(err.message || "Failed to clear logs");
     },
   });
 
@@ -419,16 +441,52 @@ export function AdminJailbreakSection() {
               Real-time audit log of prompts intercepted and neutralized by NeMoGuard, Nemotron 8B, and the structural shield.
             </p>
           </div>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => void safetyLogsQuery.refetch()}
-            disabled={safetyLogsQuery.isFetching}
-            className="border-zinc-700 hover:bg-zinc-800 text-xs font-mono text-white"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 mr-1 ${safetyLogsQuery.isFetching ? "animate-spin" : ""}`} />
-            Refresh Feed
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => void safetyLogsQuery.refetch()}
+              disabled={safetyLogsQuery.isFetching}
+              className="border-zinc-700 hover:bg-zinc-800 text-xs font-mono text-white"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 mr-1 ${safetyLogsQuery.isFetching ? "animate-spin" : ""}`} />
+              Refresh Feed
+            </Button>
+
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={clearMutation.isPending || recentLogs.length === 0}
+                  className="border-rose-900/40 text-rose-400 hover:bg-rose-500/10 text-xs font-mono"
+                >
+                  <Trash2 className="w-3.5 h-3.5 mr-1" />
+                  Clear All Logs
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent className="bg-zinc-950 border-zinc-800 text-white">
+                <AlertDialogHeader>
+                  <AlertDialogTitle className="text-white flex items-center gap-2">
+                    <AlertTriangle className="w-4 h-4 text-rose-400" />
+                    Permanently delete all safety logs?
+                  </AlertDialogTitle>
+                  <AlertDialogDescription className="text-zinc-400 text-xs">
+                    This action will permanently delete all safety audit records, prompt injection detections, and scrubbed upstream leaks from both the database and memory. This action cannot be undone.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel className="bg-zinc-900 border-zinc-800 text-zinc-300 hover:bg-zinc-800">Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={() => clearMutation.mutate()}
+                    className="bg-rose-600 hover:bg-rose-700 text-white font-semibold"
+                  >
+                    Delete All Logs
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </div>
         </div>
 
         {recentLogs.length === 0 ? (
