@@ -27,6 +27,9 @@ export const IDENTITY_INFRASTRUCTURE_TERMS: readonly string[] = [
   "b.ai",
   "bailu",
   "байлу",
+  "high-flyer",
+  "highflyer",
+  "aliyun",
 ];
 
 /**
@@ -36,6 +39,10 @@ export const IDENTITY_INFRASTRUCTURE_TERMS: readonly string[] = [
 export const IDENTITY_PROMPT_ECHO_PHRASES: readonly string[] = [
   "strictly follow the identity",
   "first priority is identity",
+  "strict language mirroring",
+  "truthfulness & factuality mandate",
+  "zero hallucination policy",
+  "present yourself only as",
   "sarcfalenvelope",
   "dogsalkznychnengthy",
 ];

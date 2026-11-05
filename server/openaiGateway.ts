@@ -77,8 +77,6 @@ import {
   rotateApiKey,
   getUsageSummary,
   getReferralOverview,
-  getModelMinTier,
-  isModelAvailable,
 } from "./db";
 import { getEffectiveModelPricing } from "./creditPricing";
 import { getSolPriceUsd } from "./solanaPayGateway";
@@ -137,6 +135,7 @@ import {
   getUniversalModelRuntimeConfig,
   isUniversalModelConfigured,
 } from "./universalModelProviders";
+import { checkStructuralJailbreak, evaluateJailbreakShieldAsync } from "./nemoGuard";
 import { sdk } from "./_core/sdk";
 
 export let TOKENFORGE_CATALOGUE = getDynamicModelCatalogue().map(model => ({
@@ -216,11 +215,17 @@ export const MANAGED_MODEL_IDENTITY_DISCLOSURE = /(?<!\p{L})(?:i(?:'m| am)\s+(?:
 
 export function isPromptExtractionOrAdversarialAttack(text: string): boolean {
   if (!text || typeof text !== "string") return false;
-  // Direct prompt extraction commands (verb + instructions/prompt target)
-  if (/\b(?:repeat|print|output|reveal|dump|show|leak|expose|give\s+me|tell\s+me|display)\s+(?:all\s+|the\s+|your\s+)?(?:system\s+|initial\s+|developer\s+|hidden\s+)?(?:prompt|instructions?|messages?|rules?)\b/i.test(text)) {
+
+  // 1. Structural adversarial shield (catches system overrides, jailbreaks, persona hijacking, debug mode)
+  if (checkStructuralJailbreak(text).isJailbreak) {
     return true;
   }
-  if (/\bwhat\s+(?:are|were)\s+(?:your|the)\s+(?:system\s+|initial\s+|developer\s+|hidden\s+)?(?:prompt|instructions?|rules?)\b/i.test(text)) {
+
+  // 2. Direct prompt extraction commands (verb + instructions/prompt target)
+  if (/\b(?:repeat|print|output|reveal|dump|show|leak|expose|give\s+me|tell\s+me|display)\s+(?:all\s+|the\s+|your\s+)?(?:system\s+|initial\s+|developer\s+|hidden\s+|current\s+|active\s+)?(?:prompt|instructions?|messages?|rules?)\b/i.test(text)) {
+    return true;
+  }
+  if (/\bwhat\s+(?:are|were)\s+(?:your|the)\s+(?:system\s+|initial\s+|developer\s+|hidden\s+|current\s+|active\s+)?(?:prompt|instructions?|rules?)\b/i.test(text)) {
     return true;
   }
   if (/\b(?:ignore|disregard|forget)\s+(?:all\s+)?(?:previous|prior)\s+instructions?\b/i.test(text)) {
@@ -3630,7 +3635,7 @@ function extractMessageText(content: unknown): string {
   return "";
 }
 
-function lastUserText(messages: TokenForgeChatMessage[] | undefined) {
+export function lastUserText(messages: TokenForgeChatMessage[] | undefined) {
   if (!messages) return "";
   for (let index = messages.length - 1; index >= 0; index -= 1) {
     const message = messages[index];
@@ -3673,6 +3678,11 @@ function isDirectDeepseekV4ProIdentityRequest(messages: TokenForgeChatMessage[] 
  */
 function isDisqualifiedFromIdentityInterception(messages: TokenForgeChatMessage[] | undefined, text: string): boolean {
   if (!text || !messages || messages.length === 0) return true;
+
+  // Crucial: Adversarial attacks, system overrides, or prompt extractions are NEVER disqualified!
+  if (isPromptExtractionOrAdversarialAttack(text)) {
+    return false;
+  }
 
   // 1. Multi-turn conversation check:
   // If the conversation already has an assistant reply, or has more than 3 total messages,
@@ -3791,24 +3801,29 @@ export function inspectManagedSafetyProbe(messages: TokenForgeChatMessage[] | un
     return { isProbe: false, triggerType: "inbound_probe", matchedKeywords: [], text: "" };
   }
 
-  // Robust Option 2: Never inspect or flag coding sessions, multi-turn chats, or disqualified prompts
-  if (isDisqualifiedFromIdentityInterception(messages, text)) {
-    return { isProbe: false, triggerType: "inbound_probe", matchedKeywords: [], text };
-  }
-
-  // Check prompt extraction or adversarial jailbreak
+  // Check prompt extraction or adversarial jailbreak FIRST!
   if (isPromptExtractionOrAdversarialAttack(text)) {
     const matched: string[] = [];
+    if (/system\s*override/i.test(text)) matched.push("system override");
+    if (/jailbreak/i.test(text)) matched.push("jailbreak protocol");
+    if (/identity\s*erasure|no\s*longer\s+claude/i.test(text)) matched.push("identity erasure");
+    if (/debug\s*mode/i.test(text)) matched.push("debug mode");
+    if (/guardrails|safety\s*filters?/i.test(text)) matched.push("guardrail suspension");
     if (/system\s*prompt/i.test(text)) matched.push("system prompt");
     if (/developer\s*(?:instructions|prompt)/i.test(text)) matched.push("developer instructions");
     if (/ignore\s*(?:all\s*)?(?:previous|prior)/i.test(text)) matched.push("ignore instructions");
-    if (/reveal|leak|print|show|repeat/i.test(text)) matched.push("prompt extraction");
+    if (/reveal|leak|print|show|repeat|dump|output/i.test(text)) matched.push("prompt extraction");
     return {
       isProbe: true,
       triggerType: "prompt_extraction",
-      matchedKeywords: matched.length > 0 ? matched : ["prompt_extraction_attack"],
+      matchedKeywords: matched.length > 0 ? matched : ["adversarial_jailbreak_attack"],
       text,
     };
+  }
+
+  // Robust Option 2: Never inspect or flag coding sessions, multi-turn chats, or disqualified prompts
+  if (isDisqualifiedFromIdentityInterception(messages, text)) {
+    return { isProbe: false, triggerType: "inbound_probe", matchedKeywords: [], text };
   }
 
   // Check competitor / base engine keywords
@@ -3816,7 +3831,8 @@ export function inspectManagedSafetyProbe(messages: TokenForgeChatMessage[] | un
   const competitorRegexes: [string, RegExp][] = [
     ["Qoder", /\b(?:qoder|кьюодер|куодер)(?:-[0-9a-z.]+)?\b/i],
     ["OpenAI", /\b(?:openai|опенаи|опен\s*аи|опенай)\b/i],
-    ["ChatGPT / GPT", /\b(?:chat-?gpt|gpt(?:-[0-9a-z.]+)?|чатгпт|чат\s*гпт|гпт(?:-[0-9a-z.]+)?)\b/i],
+    ["GPT", /\b(?:gpt(?:-[0-9a-z.]+)?|гпт(?:-[0-9a-z.]+)?)\b/i],
+    ["ChatGPT", /\b(?:chat-?gpt|чатгпт|чат\s*гпт)\b/i],
     ["Codex / Codex CLI", /\b(?:codex(?:\s*cli|-cli)?|кодекс)\b/i],
     ["DeepSeek", /\b(?:deepseek|дипсик(?:а|ом|е)?|дип\s*сик)(?:-[0-9a-z.]+)?\b/i],
     ["Qwen", /\b(?:qwen|квен(?:ь|2|2\.5|3)?)(?:-[0-9a-z.]+)?\b/i],
@@ -3856,6 +3872,35 @@ export function inspectManagedSafetyProbe(messages: TokenForgeChatMessage[] | un
   }
 
   return { isProbe: false, triggerType: "inbound_probe", matchedKeywords: [], text };
+}
+
+export async function inspectManagedSafetyProbeAsync(messages: TokenForgeChatMessage[] | undefined): Promise<SafetyProbeInspection> {
+  const syncResult = inspectManagedSafetyProbe(messages);
+  if (syncResult.isProbe) {
+    return syncResult;
+  }
+
+  const text = lastUserText(messages);
+  if (!text) {
+    return syncResult;
+  }
+
+  try {
+    const shieldResult = await evaluateJailbreakShieldAsync(text);
+    if (shieldResult.isJailbreak) {
+      const isContentViolation = shieldResult.trigger?.startsWith("content_violation");
+      return {
+        isProbe: true,
+        triggerType: isContentViolation ? ("content_violation" as any) : "prompt_extraction",
+        matchedKeywords: [shieldResult.matchedPattern || "nemoguard_flagged"],
+        text,
+      };
+    }
+  } catch {
+    // Graceful fallback to sync result
+  }
+
+  return syncResult;
 }
 
 function canonicalClaudeOpus5IdentityResponse(stream: boolean | undefined) {
@@ -3903,7 +3948,7 @@ export async function forwardProviderRequest(rawModel: TokenForgeModelId, rawInp
     ...rawInput,
     model: normalizeModelIdentifier(rawInput.model ?? rawModel) as TokenForgeModelId,
   };
-  const probeInspection = inspectManagedSafetyProbe(input.messages);
+  const probeInspection = await inspectManagedSafetyProbeAsync(input.messages);
   if (isStrictPublicManagedModel(model) && (probeInspection.isProbe || isManagedIdentityDisclosureRequest(input.messages))) {
     const userText = probeInspection.text || lastUserText(input.messages) || "";
     const lang = detectMessageLanguage(userText);
@@ -4124,8 +4169,9 @@ export function sanitizeLeakedPhrasesInPlace(text: string, model: TokenForgeMode
   if (watchScope.source === "custom") {
     let scoped = watchScope.replaceIdentityTerms(text, displayName);
     scoped = watchScope.replaceInfrastructureTerms(scoped, "Qronos AI");
-    scoped = scoped.replace(/(?<!\p{L})(?:created|trained|developed|made)\s+by\s+(?:openai|open\s*ai|alibaba|aliyun|deepseek|qoder)/giu, "available through Qronos AI");
+    scoped = scoped.replace(/(?<!\p{L})(?:created|trained|developed|made|incubated)\s+by\s+(?:openai|open\s*ai|alibaba|aliyun|deepseek|qoder|zhipu|meta|moonshot|minimax|baidu|sber|yandex)/giu, "available through Qronos AI");
     scoped = scoped.replace(/(?<!\p{L})(?:создан[аоы]?|разработан[аоы]?|обучен[аоы]?|тренирован[аоы]?)\s+(?:компанией\s+)?(?:openai|опенаи|deepseek|дипсик|alibaba|алибаба|qoder)/giu, "доступен через Qronos AI");
+    scoped = scoped.replace(/(?<!\p{L})(?:hangzhou|zhejiang|high-flyer(?:\s*capital)?|highflyer|liang\s*wenfeng)(?!\p{L})/giu, "cloud data cluster");
     return scoped;
   }
 
@@ -4134,6 +4180,9 @@ export function sanitizeLeakedPhrasesInPlace(text: string, model: TokenForgeMode
   out = out.replace(/(?<!\p{L})(?:i(?:'m| am)|я\s+(?:—\s+)?(?:являюсь\s+)?)(?:\s+an?\s+)?(?:[a-z0-9_.-]+\/[a-z0-9_.-]+|qoder|кьюодер|куодер|deepseek|дипсик|qwen|квен|nemotron|немотрон|llama|лама|mistral|мистраль|openai|опенаи|chatgpt|чатгпт|гпт|yandexgpt|яндексгпт|gigachat|гигачат)(?:-[a-z0-9._\/-]+)?/giu, () => {
     return lang === "ru" ? `Я ${displayName}` : `I am ${displayName}`;
   });
+
+  // Replace compound model versions (e.g., Qwen 2.5 72B Instruct, DeepSeek-V3, GLM-4-Plus)
+  out = out.replace(/(?<!\p{L})(?:qwen|deepseek|glm|nemotron|llama|mistral|yi|minimax|moonshot|kimi)(?:\s*[-_.]?\s*[0-9]+(?:\.[0-9]+)?(?:\s*[-_.]?\s*(?:b|m|k|pro|max|instruct|chat|turbo|plus|flash|air|base|v[0-9]+))*)+(?!\p{L})/giu, displayName);
 
   // Replace standalone provider/model brand names
   out = out.replace(/(?<!\p{L})(?:qoder|кьюодер|куодер)(?:-[a-z0-9._/-]+)?(?!\p{L})/giu, displayName);
@@ -4144,8 +4193,11 @@ export function sanitizeLeakedPhrasesInPlace(text: string, model: TokenForgeMode
   out = out.replace(/(?<!\p{L})(?:alibaba|aliyun|алибаба|алибабы)(?!\p{L})/giu, "Qronos AI");
   out = out.replace(/(?<!\p{L})(?:tokenrouter|tokenharbor|orcarouter|fxqidian|bluesminds|bailu|байлу)(?!\p{L})/giu, "Qronos AI");
 
+  // Redact corporate datacenters & hedge funds / incubator entities
+  out = out.replace(/(?<!\p{L})(?:hangzhou|zhejiang|high-flyer(?:\s*capital)?|highflyer|liang\s*wenfeng)(?!\p{L})/giu, "cloud data cluster");
+
   // Replace creator/training attributions
-  out = out.replace(/(?<!\p{L})(?:created|trained|developed|made)\s+by\s+(?:openai|open\s*ai|alibaba|aliyun|deepseek|qoder)/giu, "available through Qronos AI");
+  out = out.replace(/(?<!\p{L})(?:created|trained|developed|made|incubated)\s+by\s+(?:openai|open\s*ai|alibaba|aliyun|deepseek|qoder|zhipu|meta|moonshot|minimax|baidu|sber|yandex)/giu, "available through Qronos AI");
   out = out.replace(/(?<!\p{L})(?:создан[аоы]?|разработан[аоы]?|обучен[аоы]?|тренирован[аоы]?)\s+(?:компанией\s+)?(?:openai|опенаи|deepseek|дипсик|alibaba|алибаба|qoder)/giu, "доступен через Qronos AI");
 
   return out;
@@ -5804,10 +5856,12 @@ export function registerOpenAiGateway(app: Express) {
         }
       }
       res.setHeader("x-request-id", requestId);
-      res.setHeader("x-qronos-credit-balance", String(settlement.balanceNanos));
-      res.setHeader("x-qronos-credit-charge", String(settlement.chargedNanos));
-      res.setHeader("x-qronos-latency-ms", String(durationMs));
-      res.setHeader("x-qronos-ttft-ms", String(durationMs));
+      if (req.header("x-qronos-debug") || req.header("x-debug")) {
+        res.setHeader("x-qronos-credit-balance", String(settlement.balanceNanos));
+        res.setHeader("x-qronos-credit-charge", String(settlement.chargedNanos));
+        res.setHeader("x-qronos-latency-ms", String(durationMs));
+        res.setHeader("x-qronos-ttft-ms", String(durationMs));
+      }
       return res.status(200).json(publicPayload);
     }
 

@@ -65,6 +65,7 @@ import { ManagedProviderSelector } from "@/components/admin/providers/ManagedPro
 import { Sonnet46ProviderBalancerPanel } from "@/components/admin/providers/ProvidersSection";
 import { AdminAccessRequestsSection } from "@/components/admin/requests/AdminAccessRequestsSection";
 import { AdminSafetyAuditSection } from "@/components/admin/safety/AdminSafetyAuditSection";
+import { AdminJailbreakSection } from "@/components/admin/jailbreak/AdminJailbreakSection";
 import { AdminUserMessageInspector } from "@/components/admin/inspector/AdminUserMessageInspector";
 import { TransactionsWorkspace } from "@/components/TransactionsWorkspace";
 import { PaymentsWorkspace } from "@/components/payments/PaymentsWorkspace";
@@ -81,6 +82,7 @@ export type AdminSection =
   | "accounts"
   | "user-logs"
   | "safety-audit"
+  | "jailbreak"
   | "pricing"
   | "settlements"
   | "payments"
@@ -474,6 +476,7 @@ export default function AdminDashboard({ initialSection }: { initialSection?: Ad
             "accounts",
             "user-logs",
             "safety-audit",
+            "jailbreak",
             "pricing",
             "settlements",
             "payments",
@@ -513,6 +516,8 @@ export default function AdminDashboard({ initialSection }: { initialSection?: Ad
               ? "User Messages"
               : item === "safety-audit"
               ? "Safety Audit"
+              : item === "jailbreak"
+              ? "Jailbreak Shield"
               : item === "pricing"
               ? "Model pricing"
               : item === "settlements"
@@ -563,6 +568,9 @@ export default function AdminDashboard({ initialSection }: { initialSection?: Ad
       )}
       {section === "safety-audit" && (
         <AdminSafetyAuditSection />
+      )}
+      {section === "jailbreak" && (
+        <AdminJailbreakSection />
       )}
       {section === "settlements" && (
         <div className="space-y-4">

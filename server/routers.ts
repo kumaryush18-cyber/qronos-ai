@@ -82,6 +82,8 @@ import {
   setUnoRouterBadgeEnabled,
   getRefundPolicyEnabled,
   setRefundPolicyEnabled,
+  getJailbreakShieldConfig,
+  updateJailbreakShieldConfig,
   getModelTokenMultipliers,
   setModelTokenMultiplier,
   getModelPricingOverrides,
@@ -1130,6 +1132,58 @@ ${input.intent ? `Requested Notification Type: ${input.intent}` : ""}`;
       });
       return { success: true };
     }),
+    getJailbreakShieldConfig: adminProcedure.query(async () => {
+      const config = await getJailbreakShieldConfig();
+      const maskedKeys = config.apiKeys.map(key => {
+        if (!key || key.length < 8) return "••••••••";
+        return `${key.slice(0, 4)}••••${key.slice(-4)}`;
+      });
+      return {
+        ...config,
+        maskedKeys,
+      };
+    }),
+    updateJailbreakShieldConfig: adminProcedure
+      .input(
+        z.object({
+          enabled: z.boolean().optional(),
+          jailbreakDetectionEnabled: z.boolean().optional(),
+          scanMode: z.enum(["hybrid_windowed", "full_sliding_window", "structural_only"]),
+          strictness: z.enum(["high", "medium", "low"]),
+          contentSafetyEnabled: z.boolean().optional(),
+          apiKeys: z.array(z.string()),
+          apiKeyEnabled: z.array(z.boolean()).optional(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const current = await getJailbreakShieldConfig();
+        const resolvedKeys = input.apiKeys.map((key, idx) => {
+          if (key.includes("••••") && current.apiKeys[idx]) {
+            return current.apiKeys[idx];
+          }
+          return key;
+        });
+
+        const updated = await updateJailbreakShieldConfig({
+          ...input,
+          apiKeys: resolvedKeys,
+        }, ctx.user.id);
+
+        await writeAuditEvent({
+          actorUserId: ctx.user.id,
+          targetUserId: ctx.user.id,
+          action: "admin.jailbreak_shield.updated",
+          entityType: "security_shield",
+          entityId: "nemoguard",
+        });
+
+        const maskedKeys = updated.apiKeys.map(key => {
+          if (!key || key.length < 8) return "••••••••";
+          return `${key.slice(0, 4)}••••${key.slice(-4)}`;
+        });
+
+        return { ...updated, maskedKeys };
+      }),
     toggleUserMessageLogging: adminProcedure
       .input(
         z.object({

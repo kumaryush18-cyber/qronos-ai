@@ -26,6 +26,7 @@ import {
   isUserMessageLoggingEnabled,
   recordUserInteractionLog,
   getModelCompactScalingConfig,
+  recordSafetyAudit,
 } from "./db";
 import type { GlmPrivateToolContinuation } from "./glmToolContinuationVault";
 import { calculateCreditChargeNanos, normalizedBillableMaxOutputTokens, type PricingTier } from "./creditPricing";
@@ -52,6 +53,10 @@ import {
   publicIdentityForManagedModel,
   isStrictPublicManagedModel,
   detectMessageLanguage,
+  inspectManagedSafetyProbe,
+  inspectManagedSafetyProbeAsync,
+  isManagedIdentityDisclosureRequest,
+  lastUserText,
 } from "./openaiGateway";
 
 export { tryExtractImageDimensions, estimateSingleImageTokens };
@@ -815,6 +820,73 @@ function writeSse(res: Response, event: string, payload: unknown) {
   res.write(`event: ${event}\ndata: ${JSON.stringify(payload)}\n\n`);
 }
 
+function canonicalAnthropicManagedIdentityResponse(
+  res: Response,
+  requestId: string,
+  model: string,
+  identity: string,
+  stream: boolean | undefined
+) {
+  const msgId = `msg_${randomUUID().replaceAll("-", "")}`;
+  res.setHeader("request-id", requestId);
+  res.setHeader("x-request-id", requestId);
+
+  if (!stream) {
+    return res.status(200).json({
+      id: msgId,
+      type: "message",
+      role: "assistant",
+      model,
+      content: [{ type: "text", text: identity }],
+      stop_reason: "end_turn",
+      stop_sequence: null,
+      usage: { input_tokens: 15, output_tokens: 25 },
+    });
+  }
+
+  res.status(200);
+  res.setHeader("content-type", "text/event-stream; charset=utf-8");
+  res.setHeader("cache-control", "no-cache, no-transform");
+  res.setHeader("connection", "keep-alive");
+  res.setHeader("X-Accel-Buffering", "no");
+  res.flushHeaders();
+
+  writeSse(res, "message_start", {
+    type: "message_start",
+    message: {
+      id: msgId,
+      type: "message",
+      role: "assistant",
+      model,
+      content: [],
+      stop_reason: null,
+      stop_sequence: null,
+      usage: { input_tokens: 15, output_tokens: 0 },
+    },
+  });
+  writeSse(res, "content_block_start", {
+    type: "content_block_start",
+    index: 0,
+    content_block: { type: "text", text: "" },
+  });
+  writeSse(res, "content_block_delta", {
+    type: "content_block_delta",
+    index: 0,
+    delta: { type: "text_delta", text: identity },
+  });
+  writeSse(res, "content_block_stop", {
+    type: "content_block_stop",
+    index: 0,
+  });
+  writeSse(res, "message_delta", {
+    type: "message_delta",
+    delta: { stop_reason: "end_turn", stop_sequence: null },
+    usage: { output_tokens: 25 },
+  });
+  writeSse(res, "message_stop", { type: "message_stop" });
+  return res.end();
+}
+
 function nativeTokenRouterResponse(model: TokenForgeModelId, payload: unknown): (Record<string, any> & { model: TokenForgeModelId }) | null {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) return null;
   return { ...(payload as Record<string, unknown>), model };
@@ -831,6 +903,26 @@ async function handleNativeTokenRouterMessagesRequest(req: Request, res: Respons
   }
   const model: TokenForgeModelId = input.model;
   if (!(await isModelAvailable(model))) return respondError(res, requestId, 503, "api_error", "The requested model is temporarily unavailable. Retry shortly or choose another available model.");
+
+  const probeMessages = (input.messages ?? []).map(m => ({ role: m.role, content: m.content }));
+  const probeInspection = await inspectManagedSafetyProbeAsync(probeMessages);
+  if (isStrictPublicManagedModel(model) && (probeInspection.isProbe || isManagedIdentityDisclosureRequest(probeMessages))) {
+    const userText = probeInspection.text || lastUserText(probeMessages) || "";
+    const lang = detectMessageLanguage(userText);
+    const outputShown = publicIdentityForManagedModel(model, lang);
+    void recordSafetyAudit({
+      userId: key.userId,
+      apiKeyId: key.id,
+      model,
+      triggerType: probeInspection.triggerType,
+      matchedKeywords: probeInspection.matchedKeywords,
+      userPrompt: userText,
+      blocked: true,
+      outputShown,
+    }).catch(() => undefined);
+
+    return canonicalAnthropicManagedIdentityResponse(res, requestId, model, outputShown, input.stream);
+  }
 
   const userTier = await getUserTier(key.userId);
   const minTier = await getModelMinTier(model);
@@ -1246,6 +1338,27 @@ export function registerAnthropicMessagesGateway(app: Express) {
     const firstUserMsg = Array.isArray(translatedMessages) ? translatedMessages.find(m => m?.role === "user")?.content : undefined;
     const firstUserText = typeof firstUserMsg === "string" ? firstUserMsg : Array.isArray(firstUserMsg) ? ((firstUserMsg as any[]).find((p: any) => p?.type === "text")?.text || "") : "";
     const sessionLang = detectMessageLanguage(firstUserText);
+
+    // Pre-flight Safety & Identity Interception (Equal protection on /v1/messages)
+    const probeInspection = await inspectManagedSafetyProbeAsync(translatedMessages);
+    if (isStrictPublicManagedModel(model) && (probeInspection.isProbe || isManagedIdentityDisclosureRequest(translatedMessages))) {
+      const userText = probeInspection.text || lastUserText(translatedMessages) || firstUserText || "";
+      const lang = detectMessageLanguage(userText);
+      const outputShown = publicIdentityForManagedModel(model, lang);
+      void recordSafetyAudit({
+        userId: key.userId,
+        apiKeyId: key.id,
+        model,
+        triggerType: probeInspection.triggerType,
+        matchedKeywords: probeInspection.matchedKeywords,
+        userPrompt: userText,
+        blocked: true,
+        outputShown,
+      }).catch(() => undefined);
+
+      return canonicalAnthropicManagedIdentityResponse(res, requestId, model, outputShown, input.stream);
+    }
+
     const upstreamInput: TokenForgeChatInput = {
       ...input,
       messages: withModelScopedGuidance(model, translatedMessages),
@@ -1573,10 +1686,12 @@ export function registerAnthropicMessagesGateway(app: Express) {
         }
         res.setHeader("request-id", requestId);
         res.setHeader("x-request-id", requestId);
-        res.setHeader("x-qronos-credit-balance", String(settlement.balanceNanos));
-        res.setHeader("x-qronos-credit-charge", String(settlement.chargedNanos));
-        res.setHeader("x-qronos-latency-ms", String(durationMs));
-        res.setHeader("x-qronos-ttft-ms", String(durationMs));
+        if (req.header("x-qronos-debug") || req.header("x-debug")) {
+          res.setHeader("x-qronos-credit-balance", String(settlement.balanceNanos));
+          res.setHeader("x-qronos-credit-charge", String(settlement.chargedNanos));
+          res.setHeader("x-qronos-latency-ms", String(durationMs));
+          res.setHeader("x-qronos-ttft-ms", String(durationMs));
+        }
         return res.status(200).json(response);
       } catch (error) {
         const message = publicProviderErrorMessage();

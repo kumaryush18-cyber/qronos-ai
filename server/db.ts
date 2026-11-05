@@ -364,6 +364,132 @@ export async function resumePlatformAfterTimedMaintenance(updatedByUserId: numbe
   return getPlatformMaintenanceConfig();
 }
 
+export const JAILBREAK_SHIELD_CONFIG_SETTING_KEY = "jailbreak_shield_config_v1";
+
+export interface JailbreakShieldStoredConfig {
+  enabled: boolean;
+  jailbreakDetectionEnabled?: boolean;
+  scanMode: "hybrid_windowed" | "full_sliding_window" | "structural_only";
+  strictness: "high" | "medium" | "low";
+  contentSafetyEnabled?: boolean;
+  apiKeys: string[];
+  apiKeyEnabled?: boolean[];
+  updatedAt?: string | null;
+  updatedByUserId?: number | null;
+}
+
+export async function getJailbreakShieldConfig(): Promise<JailbreakShieldStoredConfig> {
+  const fallback: JailbreakShieldStoredConfig = {
+    enabled: true,
+    jailbreakDetectionEnabled: true,
+    scanMode: "hybrid_windowed",
+    strictness: "high",
+    contentSafetyEnabled: true,
+    apiKeys: process.env.NVIDIA_API_KEY ? [process.env.NVIDIA_API_KEY] : [],
+    apiKeyEnabled: [true],
+    updatedAt: null,
+    updatedByUserId: null,
+  };
+
+  return cached("jailbreak_shield_config", 20_000, async () => {
+    try {
+      const db = await getDb();
+      if (!db) {
+        const val = fallbackPlatformSettings.get(JAILBREAK_SHIELD_CONFIG_SETTING_KEY)?.value;
+        if (!val) return fallback;
+        const parsed = JSON.parse(val);
+        const jbEnabled = parsed.jailbreakDetectionEnabled ?? parsed.enabled ?? true;
+        return {
+          enabled: jbEnabled,
+          jailbreakDetectionEnabled: jbEnabled,
+          scanMode: parsed.scanMode ?? "hybrid_windowed",
+          strictness: parsed.strictness ?? "high",
+          contentSafetyEnabled: parsed.contentSafetyEnabled ?? true,
+          apiKeys: Array.isArray(parsed.apiKeys) ? parsed.apiKeys : fallback.apiKeys,
+          apiKeyEnabled: Array.isArray(parsed.apiKeyEnabled) ? parsed.apiKeyEnabled : (parsed.apiKeys?.map(() => true) ?? [true]),
+          updatedAt: null,
+          updatedByUserId: null,
+        };
+      }
+
+      const record = (await db.select().from(platformSettings).where(eq(platformSettings.settingKey, JAILBREAK_SHIELD_CONFIG_SETTING_KEY)).limit(1))[0];
+      if (!record?.value) return fallback;
+
+      const parsed = JSON.parse(record.value) as Partial<JailbreakShieldStoredConfig>;
+      const jbEnabled = parsed.jailbreakDetectionEnabled ?? parsed.enabled ?? true;
+      return {
+        enabled: jbEnabled,
+        jailbreakDetectionEnabled: jbEnabled,
+        scanMode: parsed.scanMode ?? "hybrid_windowed",
+        strictness: parsed.strictness ?? "high",
+        contentSafetyEnabled: parsed.contentSafetyEnabled ?? true,
+        apiKeys: Array.isArray(parsed.apiKeys) ? parsed.apiKeys : fallback.apiKeys,
+        apiKeyEnabled: Array.isArray(parsed.apiKeyEnabled) ? parsed.apiKeyEnabled : (parsed.apiKeys?.map(() => true) ?? [true]),
+        updatedAt: record.updatedAt?.toISOString() ?? null,
+        updatedByUserId: record.updatedByUserId ?? null,
+      };
+    } catch {
+      return fallback;
+    }
+  });
+}
+
+export async function updateJailbreakShieldConfig(input: {
+  enabled?: boolean;
+  jailbreakDetectionEnabled?: boolean;
+  scanMode: "hybrid_windowed" | "full_sliding_window" | "structural_only";
+  strictness: "high" | "medium" | "low";
+  contentSafetyEnabled?: boolean;
+  apiKeys: string[];
+  apiKeyEnabled?: boolean[];
+}, updatedByUserId: number): Promise<JailbreakShieldStoredConfig> {
+  const cleanKeys = input.apiKeys.map(k => k.trim()).filter(Boolean);
+  const cleanEnabled = input.apiKeyEnabled?.slice(0, cleanKeys.length) ?? cleanKeys.map(() => true);
+  const jbEnabled = input.jailbreakDetectionEnabled !== undefined ? input.jailbreakDetectionEnabled : (input.enabled ?? true);
+
+  const payload: JailbreakShieldStoredConfig = {
+    enabled: jbEnabled,
+    jailbreakDetectionEnabled: jbEnabled,
+    scanMode: input.scanMode,
+    strictness: input.strictness,
+    contentSafetyEnabled: input.contentSafetyEnabled ?? true,
+    apiKeys: cleanKeys,
+    apiKeyEnabled: cleanEnabled,
+    updatedAt: new Date().toISOString(),
+    updatedByUserId,
+  };
+
+  fallbackPlatformSettings.set(JAILBREAK_SHIELD_CONFIG_SETTING_KEY, {
+    value: JSON.stringify(payload),
+    updatedAt: new Date(),
+    updatedByUserId,
+  });
+  bustCache("jailbreak_shield_config");
+
+  try {
+    const db = await getDb();
+    if (db) {
+      await db.transaction(async tx => {
+        await tx.insert(platformSettings).values({
+          settingKey: JAILBREAK_SHIELD_CONFIG_SETTING_KEY,
+          value: JSON.stringify(payload),
+          updatedByUserId,
+        }).onDuplicateKeyUpdate({
+          set: {
+            value: JSON.stringify(payload),
+            updatedByUserId,
+            updatedAt: new Date(),
+          },
+        });
+      });
+    }
+  } catch (err) {
+    console.warn("[updateJailbreakShieldConfig] DB write failed; in-memory cache preserved", err);
+  }
+
+  return getJailbreakShieldConfig();
+}
+
 export type PinnedUserRoutingPolicy = {
   softPreference: boolean;
   updatedAt: Date | null;
@@ -10076,6 +10202,8 @@ export async function recordSafetyAudit(input: {
 
   if (input.userId && (!resolvedName || !resolvedEmail)) {
     try {
+      const email = await lookupUserEmail(input.userId);
+      if (email) resolvedEmail = email;
       const user = await getUserById(input.userId);
       if (user) {
         resolvedName = user.name ?? resolvedName;
@@ -10084,6 +10212,10 @@ export async function recordSafetyAudit(input: {
     } catch {
       // ignore
     }
+  }
+
+  if (!resolvedEmail) {
+    resolvedEmail = input.userId ? `User #${input.userId}` : "Web Playground / Anonymous";
   }
 
   const memoryEntry: MemorySafetyAuditLog = {

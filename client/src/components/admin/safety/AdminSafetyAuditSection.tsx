@@ -91,6 +91,24 @@ export function AdminSafetyAuditSection() {
   };
 
   const getTriggerBadge = (type: string, keywords?: string | null) => {
+    if (type.startsWith("content_violation") || type === "nemotron_content_safety") {
+      return (
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-rose-500/20 text-rose-300 border border-rose-500/40">
+          <AlertTriangle size={12} />
+          Content Violation
+          {keywords && <span className="text-rose-200 font-normal">({keywords})</span>}
+        </span>
+      );
+    }
+    if (type === "nemoguard_jailbreak" || type === "nemoguard_api_flagged" || type === "adversarial_override") {
+      return (
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-red-600/25 text-red-300 border border-red-500/40">
+          <ShieldAlert size={12} />
+          NeMoGuard Jailbreak Blocked
+          {keywords && <span className="text-red-200 font-normal">({keywords})</span>}
+        </span>
+      );
+    }
     if (type === "competitor_probe") {
       return (
         <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-red-500/15 text-red-400 border border-red-500/30">
@@ -293,6 +311,28 @@ export function AdminSafetyAuditSection() {
               }`}
             >
               Identity Inquiries
+            </button>
+            <button
+              type="button"
+              onClick={() => setTriggerTypeFilter("nemoguard_jailbreak")}
+              className={`px-2.5 py-1 rounded-md transition-colors ${
+                triggerTypeFilter === "nemoguard_jailbreak"
+                  ? "bg-red-600/30 text-red-300 font-semibold border border-red-500/40"
+                  : "text-[#a2a3b5] hover:text-white"
+              }`}
+            >
+              NeMoGuard Jailbreaks
+            </button>
+            <button
+              type="button"
+              onClick={() => setTriggerTypeFilter("content_violation")}
+              className={`px-2.5 py-1 rounded-md transition-colors ${
+                triggerTypeFilter === "content_violation"
+                  ? "bg-rose-500/30 text-rose-300 font-semibold border border-rose-500/40"
+                  : "text-[#a2a3b5] hover:text-white"
+              }`}
+            >
+              Content Violations
             </button>
           </div>
         </div>
