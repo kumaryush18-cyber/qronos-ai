@@ -909,17 +909,40 @@ async function handleNativeTokenRouterMessagesRequest(req: Request, res: Respons
   if (isStrictPublicManagedModel(model) && (probeInspection.isProbe || isManagedIdentityDisclosureRequest(probeMessages))) {
     const userText = probeInspection.text || lastUserText(probeMessages) || "";
     const lang = detectMessageLanguage(userText);
-    const outputShown = publicIdentityForManagedModel(model, lang);
-    void recordSafetyAudit({
-      userId: key.userId,
-      apiKeyId: key.id,
-      model,
-      triggerType: probeInspection.triggerType,
-      matchedKeywords: probeInspection.matchedKeywords,
-      userPrompt: userText,
-      blocked: true,
-      outputShown,
-    }).catch(() => undefined);
+    const isContentViolation = probeInspection.triggerType === "content_violation";
+    const isJailbreak = probeInspection.triggerType === "prompt_extraction" || probeInspection.triggerType === "nemoguard_jailbreak";
+
+    let outputShown = publicIdentityForManagedModel(model, lang);
+    if (isContentViolation) {
+      outputShown = `[HTTP 400 Bad Request] type: "invalid_request_error" — Your request was blocked due to safety concerns. Prompt violates content safety policies.`;
+    } else if (isJailbreak) {
+      outputShown = `[HTTP 400 Bad Request] type: "invalid_request_error" — Your request was blocked by security guardrails. Prompt injection or jailbreak attempt detected.`;
+    }
+
+    try {
+      void Promise.resolve(recordSafetyAudit({
+        userId: key.userId,
+        apiKeyId: key.id,
+        model,
+        triggerType: probeInspection.triggerType,
+        matchedKeywords: probeInspection.matchedKeywords.length > 0 ? probeInspection.matchedKeywords : [isContentViolation ? "harmful_content" : isJailbreak ? "jailbreak_attempt" : "identity_inquiry"],
+        userPrompt: userText,
+        blocked: true,
+        outputShown,
+      })).catch(() => undefined);
+    } catch {}
+
+    if (isContentViolation || isJailbreak) {
+      return res.status(400).json({
+        type: "error",
+        error: {
+          type: "invalid_request_error",
+          message: isContentViolation
+            ? "Your request was blocked due to safety concerns. Prompt violates content safety policies."
+            : "Your request was blocked by security guardrails. Prompt injection or jailbreak attempt detected.",
+        },
+      });
+    }
 
     return canonicalAnthropicManagedIdentityResponse(res, requestId, model, outputShown, input.stream);
   }
@@ -1344,17 +1367,40 @@ export function registerAnthropicMessagesGateway(app: Express) {
     if (isStrictPublicManagedModel(model) && (probeInspection.isProbe || isManagedIdentityDisclosureRequest(translatedMessages))) {
       const userText = probeInspection.text || lastUserText(translatedMessages) || firstUserText || "";
       const lang = detectMessageLanguage(userText);
-      const outputShown = publicIdentityForManagedModel(model, lang);
-      void recordSafetyAudit({
-        userId: key.userId,
-        apiKeyId: key.id,
-        model,
-        triggerType: probeInspection.triggerType,
-        matchedKeywords: probeInspection.matchedKeywords,
-        userPrompt: userText,
-        blocked: true,
-        outputShown,
-      }).catch(() => undefined);
+      const isContentViolation = probeInspection.triggerType === "content_violation";
+      const isJailbreak = probeInspection.triggerType === "prompt_extraction" || probeInspection.triggerType === "nemoguard_jailbreak";
+
+      let outputShown = publicIdentityForManagedModel(model, lang);
+      if (isContentViolation) {
+        outputShown = `[HTTP 400 Bad Request] type: "invalid_request_error" — Your request was blocked due to safety concerns. Prompt violates content safety policies.`;
+      } else if (isJailbreak) {
+        outputShown = `[HTTP 400 Bad Request] type: "invalid_request_error" — Your request was blocked by security guardrails. Prompt injection or jailbreak attempt detected.`;
+      }
+
+      try {
+        void Promise.resolve(recordSafetyAudit({
+          userId: key.userId,
+          apiKeyId: key.id,
+          model,
+          triggerType: probeInspection.triggerType,
+          matchedKeywords: probeInspection.matchedKeywords.length > 0 ? probeInspection.matchedKeywords : [isContentViolation ? "harmful_content" : isJailbreak ? "jailbreak_attempt" : "identity_inquiry"],
+          userPrompt: userText,
+          blocked: true,
+          outputShown,
+        })).catch(() => undefined);
+      } catch {}
+
+      if (isContentViolation || isJailbreak) {
+        return res.status(400).json({
+          type: "error",
+          error: {
+            type: "invalid_request_error",
+            message: isContentViolation
+              ? "Your request was blocked due to safety concerns. Prompt violates content safety policies."
+              : "Your request was blocked by security guardrails. Prompt injection or jailbreak attempt detected.",
+          },
+        });
+      }
 
       return canonicalAnthropicManagedIdentityResponse(res, requestId, model, outputShown, input.stream);
     }

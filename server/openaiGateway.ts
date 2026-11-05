@@ -3891,8 +3891,8 @@ export async function inspectManagedSafetyProbeAsync(messages: TokenForgeChatMes
       const isContentViolation = shieldResult.trigger?.startsWith("content_violation");
       return {
         isProbe: true,
-        triggerType: isContentViolation ? ("content_violation" as any) : "prompt_extraction",
-        matchedKeywords: [shieldResult.matchedPattern || "nemoguard_flagged"],
+        triggerType: isContentViolation ? ("content_violation" as any) : ("nemoguard_jailbreak" as any),
+        matchedKeywords: [shieldResult.matchedPattern || (isContentViolation ? "harmful_content" : "nemoguard_flagged")],
         text,
       };
     }
@@ -3952,15 +3952,49 @@ export async function forwardProviderRequest(rawModel: TokenForgeModelId, rawInp
   if (isStrictPublicManagedModel(model) && (probeInspection.isProbe || isManagedIdentityDisclosureRequest(input.messages))) {
     const userText = probeInspection.text || lastUserText(input.messages) || "";
     const lang = detectMessageLanguage(userText);
-    const outputShown = publicIdentityForManagedModel(model, lang);
-    void recordSafetyAudit({
-      userId: context?.userId,
-      model,
-      triggerType: probeInspection.triggerType,
-      matchedKeywords: probeInspection.matchedKeywords.length > 0 ? probeInspection.matchedKeywords.join(", ") : "identity_inquiry",
-      userInput: userText,
-      outputShown,
-    });
+    const isPlayground = context?.source === "playground";
+    const isContentViolation = probeInspection.triggerType === "content_violation";
+    const isJailbreak = probeInspection.triggerType === "prompt_extraction" || probeInspection.triggerType === "nemoguard_jailbreak";
+
+    let outputShown = publicIdentityForManagedModel(model, lang);
+    if (isContentViolation) {
+      outputShown = isPlayground
+        ? "I cannot fulfill this request. It has been flagged by safety guardrails due to content safety concerns (violates content policy)."
+        : `[HTTP 400 Bad Request] code: "content_policy_violation" — Your request was rejected as a result of our safety system. Your prompt was flagged for content safety concerns.`;
+    } else if (isJailbreak) {
+      outputShown = isPlayground
+        ? "I cannot fulfill this request as it violates security policies regarding prompt overrides and jailbreak attempts."
+        : `[HTTP 400 Bad Request] code: "jailbreak_detected" — Your request was blocked by security guardrails. Prompt injection or adversarial jailbreak attempt detected.`;
+    }
+
+    try {
+      void Promise.resolve(recordSafetyAudit({
+        userId: context?.userId,
+        model,
+        triggerType: probeInspection.triggerType,
+        matchedKeywords: probeInspection.matchedKeywords.length > 0 ? probeInspection.matchedKeywords.join(", ") : (isContentViolation ? "harmful_content" : isJailbreak ? "jailbreak_attempt" : "identity_inquiry"),
+        userInput: userText,
+        outputShown,
+      })).catch(() => undefined);
+    } catch {}
+
+    if (!isPlayground && (isContentViolation || isJailbreak)) {
+      const errPayload = {
+        error: {
+          message: isContentViolation
+            ? "Your request was rejected as a result of our safety system. Your prompt was flagged for content safety concerns."
+            : "Your request was blocked by security guardrails. Prompt injection or adversarial jailbreak attempt detected.",
+          type: "invalid_request_error",
+          param: null,
+          code: isContentViolation ? "content_policy_violation" : "jailbreak_detected",
+        },
+      };
+      return new Response(JSON.stringify(errPayload), {
+        status: 400,
+        headers: { "content-type": "application/json" },
+      });
+    }
+
     return canonicalManagedIdentityResponse(model, outputShown, input.stream);
   }
   const effectiveInput: TokenForgeChatInput = {
@@ -4248,26 +4282,30 @@ export function publicManagedContent(model: TokenForgeModelId, value: unknown, i
   // If the whole message is merely an identity statement (short and primarily a disclosure)
   if (trimmed.length < 120 && (leaks(cleaned) || leaks(value))) {
     const fallbackIdentity = publicIdentityForManagedModel(model, lang);
-    void recordSafetyAudit({
-      model,
-      triggerType: "upstream_leak_scrubbed",
-      matchedKeywords: "Upstream Disclosure Replaced with Fallback",
-      userInput: typeof langOrContext === "string" ? langOrContext : "Conversational turn",
-      outputShown: fallbackIdentity,
-    }).catch(() => undefined);
+    try {
+      void Promise.resolve(recordSafetyAudit({
+        model,
+        triggerType: "upstream_leak_scrubbed",
+        matchedKeywords: "Upstream Disclosure Replaced with Fallback",
+        userInput: typeof langOrContext === "string" ? langOrContext : "Conversational turn",
+        outputShown: fallbackIdentity,
+      })).catch(() => undefined);
+    } catch {}
     return fallbackIdentity;
   }
 
   // Otherwise, sanitize leaked phrases in place so the full response is preserved!
   if (leaks(cleaned) || leaks(value)) {
     const cleanedText = sanitizeLeakedPhrasesInPlace(text, model, lang);
-    void recordSafetyAudit({
-      model,
-      triggerType: "upstream_leak_scrubbed",
-      matchedKeywords: "Upstream Brand Terms Sanitized in Place",
-      userInput: typeof langOrContext === "string" ? langOrContext : "Conversational turn",
-      outputShown: cleanedText,
-    }).catch(() => undefined);
+    try {
+      void Promise.resolve(recordSafetyAudit({
+        model,
+        triggerType: "upstream_leak_scrubbed",
+        matchedKeywords: "Upstream Brand Terms Sanitized in Place",
+        userInput: typeof langOrContext === "string" ? langOrContext : "Conversational turn",
+        outputShown: cleanedText,
+      })).catch(() => undefined);
+    } catch {}
     return cleanedText;
   }
   return text.length ? text : (value.length ? value : "");
@@ -4616,6 +4654,7 @@ export async function runPlaygroundCompletion(input: {
     providerLabel: undefined as string | undefined,
     isMultimodal: isVisual || isDocument,
     multimodalTag,
+    source: "playground",
   };
   try {
     const upstream = await forwardProviderRequest(input.model, upstreamInput, aborter.signal, providerContext);
@@ -4800,6 +4839,7 @@ async function streamPlaygroundCompletion(input: {
     providerLabel: undefined,
     isMultimodal,
     multimodalTag,
+    source: "playground",
   };
   try {
     const upstream = await forwardProviderRequest(input.model, upstreamInput, aborter.signal, providerContext);
@@ -5700,6 +5740,10 @@ export function registerOpenAiGateway(app: Express) {
 
     if (!upstream.ok) {
       const payload = await upstream.json().catch(() => null);
+      if (upstream.status === 400 && payload?.error) {
+        await settleReservedCredit({ userId: key.userId, requestId, reservedNanos, finalChargeNanos: 0, releaseReason: "Safety policy rejection" });
+        return res.status(400).json(payload);
+      }
       const message = publicProviderErrorMessage(upstream.status);
       const rawError = providerContext.rawErrorMessage
         || (payload?.error?.message ? `[${providerContext.providerLabel || 'Upstream'} HTTP ${upstream.status}] ${payload.error.message}` : `[${providerContext.providerLabel || 'Upstream'}] HTTP ${upstream.status} returned by upstream provider`);
@@ -6133,14 +6177,16 @@ export function registerOpenAiGateway(app: Express) {
     } finally {
       clearTimeout(timeout);
       if (streamingFilter?.isLeaked()) {
-        void recordSafetyAudit({
-          userId: key.userId,
-          model: input.model as TokenForgeModelId,
-          triggerType: "upstream_leak_scrubbed",
-          matchedKeywords: "Upstream Brand Scrubbed in Stream",
-          userInput: firstUserText || "User streaming prompt",
-          outputShown: streamedContentText || streamedOutputText || "",
-        }).catch(() => undefined);
+        try {
+          void Promise.resolve(recordSafetyAudit({
+            userId: key.userId,
+            model: input.model as TokenForgeModelId,
+            triggerType: "upstream_leak_scrubbed",
+            matchedKeywords: "Upstream Brand Scrubbed in Stream",
+            userInput: firstUserText || "User streaming prompt",
+            outputShown: streamedContentText || streamedOutputText || "",
+          })).catch(() => undefined);
+        } catch {}
       }
       const durationMs = Date.now() - startedAt;
       const ttftMs = firstTokenAt !== null ? firstTokenAt - startedAt : null;

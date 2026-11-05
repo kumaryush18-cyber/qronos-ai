@@ -52,7 +52,7 @@ import {
 import { ENV } from "./_core/env";
 import { hashPassword, isPermanentEmailAddress, normalizeEmail, nextFailedLoginState, normalizeEmailAllowlistEntries, retryAfterSeconds, verifyPassword } from "./localAuth";
 import { DAILY_CHECKIN_CREDIT_NANOS, INTRODUCTORY_CREDIT_NANOS, NANODOLLARS_PER_DOLLAR, TOKENFORGE_TOKEN_BASELINE, TOKENFORGE_TOKEN_HISTORICAL, setActivePricingOverrides, registerPricingLoader, type DynamicModelPricingOverride, type PricingTier } from "./creditPricing";
-import { CLAUDE_OPUS5_PROVIDER_SLUG, CLUSTER_PROTOCOL_PROVIDER_SLUG, FXQIDIAN_PROVIDER_SLUG, getTokenForgeUpstreamModelId, TOKENHARBOR_PROVIDER_SLUG, TOKENROUTER_PROVIDER_SLUG, TOKENFORGE_MODEL_CATALOGUE, TOKENFORGE_MODEL_IDS, syncModelFromDatabaseRecord, getDynamicModelIds, type TokenForgeModelId } from "./modelCatalogue";
+import { CLAUDE_OPUS5_PROVIDER_SLUG, CLUSTER_PROTOCOL_PROVIDER_SLUG, FXQIDIAN_PROVIDER_SLUG, getTokenForgeUpstreamModelId, TOKENHARBOR_PROVIDER_SLUG, TOKENROUTER_PROVIDER_SLUG, TOKENFORGE_MODEL_CATALOGUE, TOKENFORGE_MODEL_IDS, syncModelFromDatabaseRecord, getDynamicModelIds, normalizeModelIdentifier, type TokenForgeModelId } from "./modelCatalogue";
 import { getClusterProtocolCredentialPool } from "./clusterProtocolCredentials";
 import { getFxqidianCredentialPool } from "./fxqidianCredentials";
 import { getTokenRouterCredentialPool } from "./tokenRouterCredentials";
@@ -1881,9 +1881,9 @@ export async function settleReservedCredit(
             note: ledgerNote,
           });
 
-          // If all tokens were covered by coding plan, refund any reserved dollar credits
-          if (tokensDeducted >= effectiveTokensToDeduct) {
-            if (reserved > 0) {
+          // If this is a dedicated Token Plan key or all tokens were covered by coding plan
+          if (isTokenPlanKey || tokensDeducted >= effectiveTokensToDeduct) {
+            if (reserved > 0 && !isTokenPlanKey) {
               const wasPayg = activeRes
                 ? activeRes.isPayg
                 : Boolean(_pendingCreditLedgerEvents.find(e => e.referenceId === `reservation_payg:${input.requestId}`)) ||
@@ -3378,7 +3378,8 @@ export async function getModelTokenMultipliers(): Promise<Record<string, number>
  */
 export async function getModelTokenMultiplier(modelId: string): Promise<number> {
   if (!modelId) return 1;
-  const normalized = modelId.trim().toLowerCase();
+  const canonical = normalizeModelIdentifier(modelId) || modelId;
+  const normalized = canonical.trim().toLowerCase();
   const multipliers = await getModelTokenMultipliers();
   if (typeof multipliers[normalized] === "number" && multipliers[normalized] > 0) {
     return multipliers[normalized];
@@ -10192,10 +10193,12 @@ export async function recordSafetyAudit(input: {
   userEmail?: string | null;
   model: string;
   triggerType: string;
-  matchedKeywords?: string | null;
-  userInput: string;
+  matchedKeywords?: string | string[] | null;
+  userInput?: string;
+  userPrompt?: string;
   outputShown: string;
   ipAddress?: string | null;
+  [key: string]: unknown;
 }) {
   let resolvedName = input.userName ?? null;
   let resolvedEmail = input.userEmail ?? null;
@@ -10218,6 +10221,11 @@ export async function recordSafetyAudit(input: {
     resolvedEmail = input.userId ? `User #${input.userId}` : "Web Playground / Anonymous";
   }
 
+  const finalUserInput = input.userInput || input.userPrompt || "";
+  const finalMatchedKeywords = Array.isArray(input.matchedKeywords)
+    ? input.matchedKeywords.join(", ")
+    : (input.matchedKeywords ?? null);
+
   const memoryEntry: MemorySafetyAuditLog = {
     id: _nextMemorySafetyAuditId++,
     userId: input.userId ?? null,
@@ -10225,8 +10233,8 @@ export async function recordSafetyAudit(input: {
     userEmail: resolvedEmail,
     model: input.model,
     triggerType: input.triggerType,
-    matchedKeywords: input.matchedKeywords ?? null,
-    userInput: input.userInput,
+    matchedKeywords: finalMatchedKeywords,
+    userInput: finalUserInput,
     outputShown: input.outputShown,
     ipAddress: input.ipAddress ?? null,
     createdAt: new Date(),
@@ -10247,8 +10255,8 @@ export async function recordSafetyAudit(input: {
         userEmail: resolvedEmail,
         model: input.model,
         triggerType: input.triggerType,
-        matchedKeywords: input.matchedKeywords ?? null,
-        userInput: input.userInput,
+        matchedKeywords: finalMatchedKeywords,
+        userInput: finalUserInput,
         outputShown: input.outputShown,
         ipAddress: input.ipAddress ?? null,
       });

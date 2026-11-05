@@ -7,6 +7,11 @@ describe("Model Token Multipliers", () => {
     expect(opusMultiplier).toBeGreaterThanOrEqual(1);
   });
 
+  it("normalizes model aliases when looking up multipliers", async () => {
+    const opusAlias = await getModelTokenMultiplier("claude-3-opus-20240229");
+    expect(opusAlias).toBe(5);
+  });
+
   it("defaults to 1x for standard models", async () => {
     const standardMultiplier = await getModelTokenMultiplier("deepseek-v4-pro");
     expect(standardMultiplier).toBe(1);
