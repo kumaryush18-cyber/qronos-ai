@@ -69,7 +69,18 @@ let _db: ReturnType<typeof drizzle> | null = null;
 let _pool: mysql.Pool | null = null;
 let _dbHealthy = false;
 let _lastDbHealthCheckTime = 0;
-const DB_HEALTH_CHECK_COOLDOWN_MS = 5_000;
+const DB_HEALTH_CHECK_COOLDOWN_MS = 60_000;
+
+export function resetDatabasePool() {
+  if (_pool) {
+    try {
+      _pool.end().catch(() => {});
+    } catch {}
+    _pool = null;
+  }
+  _db = null;
+  _dbHealthy = false;
+}
 
 export const fallbackPlatformSettings = new Map<string, { value: string; updatedAt: Date; updatedByUserId: number | null }>([
   ["auth_session_version", { value: "1", updatedAt: new Date(), updatedByUserId: null }],
@@ -89,6 +100,9 @@ export function markDatabaseUnhealthy(reason?: string) {
   }
   _dbHealthy = false;
   _lastDbHealthCheckTime = Date.now();
+  if (reason && /PROTOCOL_CONNECTION_LOST|connection lost|closed the connection|ETIMEDOUT|ECONNRESET/i.test(reason)) {
+    resetDatabasePool();
+  }
 }
 
 export const DEFAULT_DAILY_REQUEST_LIMIT = 100;
@@ -2234,6 +2248,23 @@ const DIRECT_DATABASE_URL = ENV.databaseUrl || process.env.CUSTOM_DATABASE_URL |
 
 let _startupMigrationsRan = false;
 
+async function runStartupMigrationsSequentially(pool: mysql.Pool) {
+  try {
+    await ensureUserTierColumn(pool);
+    await ensureModelConfigsMinTierColumn(pool);
+    await ensureApiKeysKeyGroupColumn(pool);
+    await ensureApiKeysColumns(pool);
+    await ensureModelConfigsAccessColumns(pool);
+    await ensureUserCreditsEnabledColumn(pool);
+    await ensureCreditAccountsColumns(pool);
+    await ensureUsageEventsRequestIdIndex(pool);
+    await ensureUsageEventsOutcomeColumns(pool);
+    await ensureNotificationTables(pool);
+  } catch (err) {
+    console.warn("[Database] Startup migration notice:", err);
+  }
+}
+
 // Lazily create and health-check the drizzle instance so local tooling can run without a DB,
 // and so quota-exhausted or restricted clusters gracefully fall back.
 export async function getDb(): Promise<ReturnType<typeof drizzle> | null> {
@@ -2241,14 +2272,15 @@ export async function getDb(): Promise<ReturnType<typeof drizzle> | null> {
   if (!activeDbUrl) return null;
   const now = Date.now();
 
-  // If currently marked unhealthy, attempt a quick ping test to recover fast
+  // Fast path: if pool is active and healthy, return immediately without issuing extra queries.
+  // This completely eliminates redundant SELECT 1 probes and conserves TiDB Request Units (RU).
+  if (_pool && _dbHealthy && _db) {
+    return _db;
+  }
+
+  // If pool was marked unhealthy, respect cooldown before retrying connection/ping to protect TiDB RUs
   if (_pool && !_dbHealthy && now - _lastDbHealthCheckTime < DB_HEALTH_CHECK_COOLDOWN_MS) {
-    try {
-      await _pool.query("SELECT 1");
-      _dbHealthy = true;
-    } catch {
-      return null;
-    }
+    return null;
   }
 
   if (!_pool) {
@@ -2263,58 +2295,51 @@ export async function getDb(): Promise<ReturnType<typeof drizzle> | null> {
         user: decodeURIComponent(parsed.username),
         password: decodeURIComponent(parsed.password),
         database: parsed.pathname.replace(/^\//, "").split("?")[0],
-        connectTimeout: 15000,
+        connectTimeout: 10000,
         waitForConnections: true,
-        connectionLimit: 10,
-        maxIdle: 2,
-        idleTimeout: 45000, // 45 seconds: safely culls idle sockets before TiDB Cloud Serverless drops them
+        connectionLimit: 25,
+        maxIdle: 5,
+        idleTimeout: 30000, // 30 seconds: safely culls idle sockets before TiDB Serverless drops them
+        queueLimit: 200,    // Protects memory and prevents unbounded request queues
         enableKeepAlive: true,
-        keepAliveInitialDelay: 0,
+        keepAliveInitialDelay: 10000,
       };
       if (/tidbcloud\.com|aivencloud\.com/i.test(parsed.hostname)) config.ssl = { rejectUnauthorized: true };
-      _pool = mysql.createPool(config as Parameters<typeof mysql.createPool>[0]);
+      const pool = mysql.createPool(config as Parameters<typeof mysql.createPool>[0]);
+      pool.on("error", (err: any) => {
+        const msg = err?.message || String(err);
+        console.warn("[Database Pool Event Error]:", msg);
+        if (err?.code === "PROTOCOL_CONNECTION_LOST" || /closed|ETIMEDOUT|ECONNRESET/i.test(msg)) {
+          resetDatabasePool();
+        }
+      });
+      _pool = pool;
       _db = drizzle(_pool) as unknown as ReturnType<typeof drizzle>;
     } catch (error) {
       console.warn("[Database] Failed to configure pool:", error);
-      _pool = null;
-      _db = null;
-      _dbHealthy = false;
+      resetDatabasePool();
       return null;
     }
   }
 
-  // Verify health with a lightweight ping
-  if (!_dbHealthy || now - _lastDbHealthCheckTime >= DB_HEALTH_CHECK_COOLDOWN_MS) {
-    _lastDbHealthCheckTime = now;
-    try {
-      await _pool.query("SELECT 1");
-      _dbHealthy = true;
-      if (!_startupMigrationsRan) {
-        _startupMigrationsRan = true;
-        void ensureUserTierColumn(_pool);
-        void ensureModelConfigsMinTierColumn(_pool);
-        void ensureApiKeysKeyGroupColumn(_pool);
-        void ensureApiKeysColumns(_pool);
-        void ensureModelConfigsAccessColumns(_pool);
-        void ensureUserCreditsEnabledColumn(_pool);
-        void ensureCreditAccountsColumns(_pool);
-        void ensureUsageEventsRequestIdIndex(_pool);
-        void ensureUsageEventsOutcomeColumns(_pool);
-        void ensureNotificationTables(_pool);
-      }
-    } catch (error: any) {
-      const msg = error?.message ?? String(error);
-      const isQuotaOrRestricted = error?.errno === 1105 || /quota|restricted|limit/i.test(msg);
-      markDatabaseUnhealthy(isQuotaOrRestricted ? "Cluster usage quota exhausted / access restricted" : msg);
-
-      // If connection was dropped/closed by remote server, reset pool so next request reopens fresh connection
-      if (error?.code === "PROTOCOL_CONNECTION_LOST" || /connection lost|closed the connection|ETIMEDOUT|ECONNRESET/i.test(msg)) {
-        try { _pool?.end().catch(() => {}); } catch {}
-        _pool = null;
-        _db = null;
-      }
-      return null;
+  // Verify health with a lightweight ping bounded by a 3-second timeout so it never hangs
+  _lastDbHealthCheckTime = now;
+  try {
+    await (_pool as any).query({ sql: "SELECT 1", timeout: 3000 });
+    _dbHealthy = true;
+    if (!_startupMigrationsRan) {
+      _startupMigrationsRan = true;
+      void runStartupMigrationsSequentially(_pool);
     }
+  } catch (error: any) {
+    const msg = error?.message ?? String(error);
+    const isQuotaOrRestricted = error?.errno === 1105 || /quota|restricted|limit/i.test(msg);
+    markDatabaseUnhealthy(isQuotaOrRestricted ? "Cluster usage quota exhausted / access restricted" : msg);
+
+    if (error?.code === "PROTOCOL_CONNECTION_LOST" || /connection lost|closed the connection|ETIMEDOUT|ECONNRESET/i.test(msg)) {
+      resetDatabasePool();
+    }
+    return null;
   }
 
   return _dbHealthy ? _db : null;
