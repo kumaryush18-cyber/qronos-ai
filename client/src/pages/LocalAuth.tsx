@@ -4,6 +4,7 @@ import { SignInCard } from "@/components/ui/sign-in-card-2";
 import { AnnouncementBanner } from "@/components/AnnouncementBanner";
 import { MaintenanceCountdownBanner } from "@/components/MaintenanceCountdownBanner";
 import { persistSessionToken } from "@/lib/sessionToken";
+import { trpc } from "@/lib/trpc";
 import {
   isSpecialReferralCampaignCode,
   normalizeReferralCampaignCode,
@@ -20,6 +21,26 @@ export default function LocalAuth({ mode }: LocalAuthProps) {
   const isSignup = mode === "signup";
   const referralCode = normalizeReferralCampaignCode(new URLSearchParams(search).get("aff"));
   const isSpecialReferralCampaign = isSpecialReferralCampaignCode(referralCode);
+
+  const loginMutation = trpc.auth.loginWithPassword.useMutation({
+    onSuccess: (data) => {
+      setIsSuccess(true);
+      if (data?.sessionToken) {
+        persistSessionToken(data.sessionToken);
+      }
+      setTimeout(() => {
+        window.location.assign("/dashboard");
+      }, 300);
+    },
+    onError: (err) => {
+      setErrorMessage(err.message || "Failed to sign in. Please verify your credentials.");
+    },
+  });
+
+  const handlePasswordSignIn = (email: string, pass: string) => {
+    setErrorMessage(null);
+    loginMutation.mutate({ email, password: pass });
+  };
 
   const handleGitHub = () => {
     setGithubLoading(true);
@@ -105,7 +126,9 @@ export default function LocalAuth({ mode }: LocalAuthProps) {
       <div className="flex-1 flex items-center justify-center">
         <SignInCard
           onGitHubSignIn={handleGitHub}
+          onPasswordSignIn={handlePasswordSignIn}
           isLoading={githubLoading}
+          isPasswordLoading={loginMutation.isPending}
           errorMessage={errorMessage}
           isSuccess={isSuccess}
           isSignup={isSignup}

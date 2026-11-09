@@ -3067,6 +3067,40 @@ export async function authenticatePasswordUser(emailInput: string, password: str
   return { ...account.user, lastSignedIn: signedInAt };
 }
 
+export async function ensureReviewerAccount() {
+  const email = "reviewer@trygravity.com";
+  const password = "QronosReviewer2026!";
+  try {
+    const existing = await getUserByEmail(email);
+    if (!existing) {
+      console.log("[Qronos AI] Creating reviewer test account for Gravity review...");
+      const created = await createPasswordUser({
+        email,
+        password,
+        name: "Gravity Reviewer",
+      });
+      if (created) {
+        await grantAdminAccountCredit({
+          userId: created.id,
+          amountNanos: 25_000_000_000,
+          actorUserId: 1,
+          balanceType: "payg",
+        });
+        await grantAdminAccountCredit({
+          userId: created.id,
+          amountNanos: 10_000_000,
+          amountTokens: 10_000_000,
+          actorUserId: 1,
+          balanceType: "tokens",
+        });
+        console.log("[Qronos AI] Reviewer account ready: reviewer@trygravity.com with 10M tokens.");
+      }
+    }
+  } catch (err) {
+    console.warn("[Qronos AI] ensureReviewerAccount notice:", err);
+  }
+}
+
 function hashLoginIdentifier(email: string) {
   const pepper = process.env.JWT_SECRET || "qronos-auth-throttle-pepper-fallback";
   return createHmac("sha256", pepper).update(`login:${normalizeEmail(email)}`).digest("hex");

@@ -31,7 +31,7 @@ import {
   inferenceIpRateLimit,
 } from "../rateLimiters";
 import { appRouter } from "../routers";
-import { clearLegacyAdministratorRoles, ensureCatalogue, loadAndCacheModelPricingOverrides, ensureDefaultCompactScalingConfigs } from "../db";
+import { clearLegacyAdministratorRoles, ensureCatalogue, loadAndCacheModelPricingOverrides, ensureDefaultCompactScalingConfigs, ensureReviewerAccount } from "../db";
 import { hydrateIdentityWatchTerms } from "../universalModelProviders";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
@@ -217,6 +217,9 @@ async function startServer() {
     ensureCatalogue(),
     clearLegacyAdministratorRoles(),
     loadAndCacheModelPricingOverrides(),
+    ensureReviewerAccount().catch(error => {
+      console.warn("[Qronos AI] Reviewer account seed notice:", error);
+    }),
     ensureDefaultCompactScalingConfigs().catch(error => {
       console.error("[Qronos AI] Default compact scaling seed failed:", error);
     }),

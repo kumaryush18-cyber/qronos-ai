@@ -4,6 +4,7 @@ import { Streamdown, Block } from "streamdown";
 import { motion } from "framer-motion";
 import { Copy, Check } from "lucide-react";
 import { BlurReveal } from "./blur-reveal";
+import { GravitySponsoredCard } from "@/components/GravitySponsoredCard";
 import "@/index.css";
 
 /**
@@ -791,29 +792,34 @@ export function AIThinkingOrbInput({
 
           {/* ChatGPT-style Action Row at the bottom */}
           {!isStreaming && answerText && (
-            <div className="mt-3.5 pt-3 border-t border-white/[0.08] flex items-center justify-between gap-3 text-xs font-mono text-zinc-400 shrink-0">
-              <button
-                type="button"
-                onClick={handleCopy}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/10 bg-white/[0.04] text-zinc-300 hover:text-white hover:bg-white/[0.08] hover:border-white/20 transition-all cursor-pointer font-medium active:scale-95"
-                title="Copy response to clipboard"
-              >
-                {copied ? (
-                  <>
-                    <Check size={13} className="text-emerald-400" />
-                    <span className="text-emerald-400 font-semibold">Copied!</span>
-                  </>
-                ) : (
-                  <>
-                    <Copy size={13} className="text-zinc-400" />
-                    <span>Copy</span>
-                  </>
-                )}
-              </button>
-              <span className="text-[11px] text-zinc-500 font-mono">
-                {answerText.length.toLocaleString()} characters
-              </span>
-            </div>
+            <>
+              {/* Gravity In-Chat Sponsored Card Placement (canonical below_response slot) */}
+              <GravitySponsoredCard />
+
+              <div className="mt-3 pt-3 border-t border-white/[0.08] flex items-center justify-between gap-3 text-xs font-mono text-zinc-400 shrink-0">
+                <button
+                  type="button"
+                  onClick={handleCopy}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/10 bg-white/[0.04] text-zinc-300 hover:text-white hover:bg-white/[0.08] hover:border-white/20 transition-all cursor-pointer font-medium active:scale-95"
+                  title="Copy response to clipboard"
+                >
+                  {copied ? (
+                    <>
+                      <Check size={13} className="text-emerald-400" />
+                      <span className="text-emerald-400 font-semibold">Copied!</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy size={13} className="text-zinc-400" />
+                      <span>Copy</span>
+                    </>
+                  )}
+                </button>
+                <span className="text-[11px] text-zinc-500 font-mono">
+                  {answerText.length.toLocaleString()} characters
+                </span>
+              </div>
+            </>
           )}
         </div>
       )}

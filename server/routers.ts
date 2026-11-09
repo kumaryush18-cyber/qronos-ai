@@ -137,6 +137,7 @@ import {
   hasPendingPreProvisionedAccountEmail,
   getUserByEmail,
   verifyAndAuthenticateEmail,
+  authenticatePasswordUser,
   getOrCreateUserByEmail,
   markUserSignedIn,
   setAllUsersCreditBalance,
@@ -208,6 +209,7 @@ import {
   getModelIdentityWatchListSettings,
   updateModelIdentityWatchListSettings,
 } from "./universalModelProviders";
+import { fetchGravityAd } from "./gravityAds";
 
 const apiKeyLabel = z
   .string()
@@ -604,6 +606,18 @@ export const appRouter = router({
       return { active: true, isExempt, message };
     }),
   }),
+  ads: router({
+    getPlaygroundAd: publicProcedure
+      .input(
+        z.object({
+          messages: z.array(z.object({ role: z.string(), content: z.string() })).default([]),
+        }).optional()
+      )
+      .query(async ({ ctx, input }) => {
+        const clientIp = (ctx.req.headers["x-forwarded-for"] as string) || ctx.req.socket.remoteAddress;
+        return await fetchGravityAd(input?.messages || [], clientIp);
+      }),
+  }),
   auth: router({
     me: publicProcedure.query(async (opts) => {
       if (!opts.ctx.user) return null;
@@ -664,6 +678,54 @@ export const appRouter = router({
           throw new TRPCError({
             code: "NOT_FOUND",
             message: error?.message || "Email not registered. Please contact administrator to get access.",
+          });
+        }
+        if (user.isSuspended) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "This account is currently suspended.",
+          });
+        }
+
+        const sessionVersion = await getAuthSessionVersion();
+        const sessionToken = await sdk.createSessionToken(user.openId, {
+          expiresInMs: LOCAL_SESSION_MAX_AGE_MS,
+          name: user.name ?? "Qronos developer",
+          sessionVersion,
+        });
+
+        const cookieOptions = getSessionCookieOptions(ctx.req);
+        ctx.res.cookie(COOKIE_NAME, sessionToken, {
+          ...cookieOptions,
+          maxAge: LOCAL_SESSION_MAX_AGE_MS,
+        });
+
+        await markUserSignedIn(user.id);
+
+        return {
+          success: true as const,
+          sessionToken,
+          user: {
+            id: user.id,
+            openId: user.openId,
+            name: user.name,
+            email: user.email,
+          },
+        };
+      }),
+    loginWithPassword: publicProcedure
+      .input(
+        z.object({
+          email: z.string().trim().email("Please enter a valid email address").max(255),
+          password: z.string().min(1, "Password is required"),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const user = await authenticatePasswordUser(input.email, input.password);
+        if (!user) {
+          throw new TRPCError({
+            code: "UNAUTHORIZED",
+            message: "Invalid email or password.",
           });
         }
         if (user.isSuspended) {

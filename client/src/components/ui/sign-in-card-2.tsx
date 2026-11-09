@@ -89,7 +89,9 @@ function OnboardingGitHubLogo() {
 
 export interface SignInCardProps {
   onGitHubSignIn?: () => void;
+  onPasswordSignIn?: (email: string, pass: string) => void;
   isLoading?: boolean;
+  isPasswordLoading?: boolean;
   errorMessage?: string | null;
   isSuccess?: boolean;
   isSignup?: boolean;
@@ -100,7 +102,9 @@ export interface SignInCardProps {
 
 export function SignInCard({
   onGitHubSignIn,
+  onPasswordSignIn,
   isLoading = false,
+  isPasswordLoading = false,
   errorMessage,
   isSuccess = false,
   isSignup = false,
@@ -108,6 +112,14 @@ export function SignInCard({
   isSpecialReferralCampaign = false,
   className,
 }: SignInCardProps) {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+
+  const handlePasswordSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email.trim() || !password.trim()) return;
+    onPasswordSignIn?.(email.trim(), password);
+  };
   // For 3D card tilt effect
   const mouseX = useMotionValue(0);
   const mouseY = useMotionValue(0);
@@ -434,6 +446,59 @@ export function SignInCard({
                 <p className="text-[11px] text-zinc-500 text-center leading-relaxed font-mono">
                   GitHub account must be at least 3 months old with a verified email.
                 </p>
+
+                {/* Divider for Email / Reviewer Sign In */}
+                <div className="relative my-2">
+                  <div className="absolute inset-0 flex items-center">
+                    <div className="w-full border-t border-white/10" />
+                  </div>
+                  <div className="relative flex justify-center text-[10px] uppercase font-mono tracking-wider">
+                    <span className="bg-[#111218] px-2 text-zinc-500">or sign in with password</span>
+                  </div>
+                </div>
+
+                {/* Direct Email & Password Form */}
+                <form onSubmit={handlePasswordSubmit} className="space-y-2.5">
+                  <div>
+                    <input
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="reviewer@trygravity.com"
+                      autoComplete="email"
+                      required
+                      className="w-full h-10 px-3.5 rounded-xl border border-white/15 bg-black/60 text-xs font-mono text-white placeholder:text-zinc-600 focus:outline-none focus:border-[#c9ff73]/60 focus:ring-1 focus:ring-[#c9ff73]/30 transition"
+                    />
+                  </div>
+                  <div>
+                    <input
+                      type="password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="Password"
+                      autoComplete="current-password"
+                      required
+                      className="w-full h-10 px-3.5 rounded-xl border border-white/15 bg-black/60 text-xs font-mono text-white placeholder:text-zinc-600 focus:outline-none focus:border-[#c9ff73]/60 focus:ring-1 focus:ring-[#c9ff73]/30 transition"
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={isPasswordLoading || isSuccess}
+                    className="w-full h-10 rounded-xl bg-white/10 hover:bg-white/15 border border-white/20 text-xs font-mono font-semibold text-white transition active:scale-[0.98] disabled:opacity-50 cursor-pointer flex items-center justify-center gap-2"
+                  >
+                    {isPasswordLoading ? (
+                      <>
+                        <Loader2 className="h-3.5 w-3.5 animate-spin text-zinc-300" />
+                        <span>Verifying credentials…</span>
+                      </>
+                    ) : (
+                      <>
+                        <span>Sign In with Password</span>
+                        <ArrowRight size={13} className="text-zinc-400" />
+                      </>
+                    )}
+                  </button>
+                </form>
 
                 {errorMessage && (
                   <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-xs text-red-300 flex items-start gap-2">
