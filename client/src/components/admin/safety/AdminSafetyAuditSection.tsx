@@ -20,6 +20,7 @@ import {
   Users,
   Trash2,
   Loader2,
+  Sparkles,
 } from "lucide-react";
 import {
   AlertDialog,
@@ -47,6 +48,43 @@ interface SafetyAuditRecord {
   outputShown: string;
   ipAddress: string | null;
   createdAt: string;
+}
+
+export interface ScrubbedItem {
+  original: string;
+  replacedWith: string;
+  count: number;
+}
+
+export function parseScrubbedKeywords(raw?: string | null): ScrubbedItem[] {
+  if (!raw) return [];
+  const trimmed = raw.trim();
+  if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (Array.isArray(parsed)) {
+        return parsed.map((item: any) => ({
+          original: String(item.original || item.from || "").trim(),
+          replacedWith: String(item.replacedWith || item.to || "").trim(),
+          count: typeof item.count === "number" ? item.count : 1,
+        }));
+      }
+    } catch {}
+  }
+  // Format: "term1 ➔ replacement1 (×2), term2 ➔ replacement2 (×1)"
+  const parts = trimmed.split(/,\s*(?=[^,]+➔)/);
+  const items: ScrubbedItem[] = [];
+  for (const part of parts) {
+    const match = part.trim().match(/^(.+?)\s*➔\s*(.+?)(?:\s*\(×(\d+)\))?$/);
+    if (match) {
+      items.push({
+        original: match[1].trim(),
+        replacedWith: match[2].trim(),
+        count: match[3] ? parseInt(match[3], 10) : 1,
+      });
+    }
+  }
+  return items;
 }
 
 export function AdminSafetyAuditSection() {
@@ -128,10 +166,19 @@ export function AdminSafetyAuditSection() {
       );
     }
     if (type === "upstream_leak_scrubbed") {
+      const scrubbed = parseScrubbedKeywords(keywords);
+      const totalCount = scrubbed.reduce((acc, s) => acc + s.count, 0);
       return (
         <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-purple-500/15 text-purple-300 border border-purple-500/30">
           <ShieldCheck size={12} />
           Upstream Scrubbed
+          {scrubbed.length > 0 ? (
+            <span className="text-purple-200 font-normal">
+              ({scrubbed.length} {scrubbed.length === 1 ? "term" : "terms"} • {totalCount}× scrubbed)
+            </span>
+          ) : keywords && !keywords.includes("Upstream") ? (
+            <span className="text-purple-200 font-normal">({keywords})</span>
+          ) : null}
         </span>
       );
     }
@@ -410,6 +457,49 @@ export function AdminSafetyAuditSection() {
                   </div>
                 </div>
 
+                {/* Upstream Scrubbed Transformations Box */}
+                {log.triggerType === "upstream_leak_scrubbed" && (
+                  <div className="mt-3 rounded-lg border border-purple-500/30 bg-purple-950/20 p-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs font-semibold text-purple-300 flex items-center gap-1.5">
+                        <Sparkles size={13} className="text-purple-400" />
+                        Scrubbed Upstream Identity & Brand Transformations
+                      </span>
+                      <Badge variant="outline" className="text-[10px] bg-purple-500/10 text-purple-300 border-purple-500/30">
+                        In-Flight Replacement
+                      </Badge>
+                    </div>
+                    {(() => {
+                      const scrubbedItems = parseScrubbedKeywords(log.matchedKeywords);
+                      if (scrubbedItems.length === 0) {
+                        return (
+                          <p className="text-xs text-purple-200/80 font-mono">
+                            {log.matchedKeywords || "Identity disclosures scrubbed in response stream"}
+                          </p>
+                        );
+                      }
+                      return (
+                        <div className="flex flex-wrap gap-2">
+                          {scrubbedItems.map((item, idx) => (
+                            <div key={idx} className="flex items-center gap-2 px-2.5 py-1.5 rounded-md bg-black/40 border border-white/10 text-xs font-mono">
+                              <span className="px-2 py-0.5 rounded bg-red-500/20 text-red-300 border border-red-500/30 font-semibold line-through">
+                                {item.original}
+                              </span>
+                              <span className="text-purple-400 font-bold">➔</span>
+                              <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-semibold">
+                                {item.replacedWith}
+                              </span>
+                              <span className="px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 text-[10px] font-semibold">
+                                {item.count}× scrubbed
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    })()}
+                  </div>
+                )}
+
                 {/* Input and Output comparison grid */}
                 <div className="mt-3 grid grid-cols-1 lg:grid-cols-2 gap-3 text-xs">
                   {/* User Input Section */}
@@ -515,6 +605,51 @@ export function AdminSafetyAuditSection() {
                 <p className="font-semibold text-[#c9ff73] mt-0.5">{selectedRecord.model}</p>
               </div>
             </div>
+
+            {/* Scrubbed Transformations Panel for Modal */}
+            {selectedRecord.triggerType === "upstream_leak_scrubbed" && (
+              <div className="rounded-xl border border-purple-500/30 bg-purple-950/20 p-4 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-purple-300 flex items-center gap-1.5">
+                    <Sparkles size={14} className="text-purple-400" />
+                    Scrubbed Upstream Identity & Brand Transformations
+                  </span>
+                  <Badge variant="outline" className="text-[10px] bg-purple-500/10 text-purple-300 border-purple-500/30">
+                    Active Replacement Filter
+                  </Badge>
+                </div>
+                {(() => {
+                  const items = parseScrubbedKeywords(selectedRecord.matchedKeywords);
+                  if (items.length === 0) {
+                    return (
+                      <p className="text-xs text-purple-200/80 font-mono">
+                        {selectedRecord.matchedKeywords || "Identity disclosures scrubbed in response stream"}
+                      </p>
+                    );
+                  }
+                  return (
+                    <div className="space-y-2">
+                      {items.map((item, idx) => (
+                        <div key={idx} className="flex flex-wrap items-center justify-between gap-2 p-2.5 rounded-lg bg-black/50 border border-white/10 text-xs font-mono">
+                          <div className="flex items-center gap-2">
+                            <span className="px-2.5 py-1 rounded bg-red-500/20 text-red-300 border border-red-500/40 font-semibold line-through">
+                              {item.original}
+                            </span>
+                            <span className="text-purple-400 font-bold">➔</span>
+                            <span className="px-2.5 py-1 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-semibold">
+                              {item.replacedWith}
+                            </span>
+                          </div>
+                          <span className="px-2.5 py-1 rounded-full bg-purple-500/20 text-purple-300 text-xs font-semibold">
+                            {item.count}× scrubbed in this turn
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
+              </div>
+            )}
 
             {/* Full Input Text */}
             <div className="space-y-1.5">

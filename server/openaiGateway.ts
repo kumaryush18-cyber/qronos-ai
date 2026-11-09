@@ -4187,7 +4187,23 @@ export function publicIdentityForManagedModel(model: TokenForgeModelId, langOrCo
   return localizedPublicIdentityForModel(model, lang);
 }
 
-export function sanitizeLeakedPhrasesInPlace(text: string, model: TokenForgeModelId, lang: DetectedLanguage = "en"): string {
+export interface ScrubbedTermDetail {
+  original: string;
+  replacedWith: string;
+  count: number;
+}
+
+export function formatScrubbedTermsSummary(items: ScrubbedTermDetail[]): string {
+  if (items.length === 0) return "Upstream Brand Terms Sanitized in Place";
+  return items.map(i => `${i.original} ➔ ${i.replacedWith} (×${i.count})`).join(", ");
+}
+
+export function sanitizeLeakedPhrasesInPlace(
+  text: string,
+  model: TokenForgeModelId,
+  lang: DetectedLanguage = "en",
+  tracker?: Map<string, ScrubbedTermDetail>
+): string {
   const modelDef = getTokenForgeModel(model);
   const displayName = modelDef?.displayName || (
     model === "claude-opus-5.5" ? "Claude Opus 5.5" :
@@ -4196,43 +4212,101 @@ export function sanitizeLeakedPhrasesInPlace(text: string, model: TokenForgeMode
     model
   );
 
+  const recordScrub = (original: string, replacedWith: string) => {
+    if (!tracker) return;
+    const cleanOrig = String(original ?? "").trim();
+    const cleanRepl = String(replacedWith ?? "").trim();
+    if (!cleanOrig || cleanOrig.toLowerCase() === cleanRepl.toLowerCase()) return;
+    const key = `${cleanOrig.toLowerCase()}➔${cleanRepl.toLowerCase()}`;
+    const existing = tracker.get(key);
+    if (existing) {
+      existing.count += 1;
+    } else {
+      tracker.set(key, { original: cleanOrig, replacedWith: cleanRepl, count: 1 });
+    }
+  };
+
   // A saved per-model watch list narrows detection and replacement to that list.
   // Infrastructure names and creator attributions stay global for every model:
   // they expose the platform's plumbing rather than a model name.
   const watchScope = identityWatchScopeFor(model);
   if (watchScope.source === "custom") {
-    let scoped = watchScope.replaceIdentityTerms(text, displayName);
-    scoped = watchScope.replaceInfrastructureTerms(scoped, "Qronos AI");
-    scoped = scoped.replace(/(?<!\p{L})(?:created|trained|developed|made|incubated)\s+by\s+(?:openai|open\s*ai|alibaba|aliyun|deepseek|qoder|zhipu|meta|moonshot|minimax|baidu|sber|yandex)/giu, "available through Qronos AI");
-    scoped = scoped.replace(/(?<!\p{L})(?:создан[аоы]?|разработан[аоы]?|обучен[аоы]?|тренирован[аоы]?)\s+(?:компанией\s+)?(?:openai|опенаи|deepseek|дипсик|alibaba|алибаба|qoder)/giu, "доступен через Qronos AI");
-    scoped = scoped.replace(/(?<!\p{L})(?:hangzhou|zhejiang|high-flyer(?:\s*capital)?|highflyer|liang\s*wenfeng)(?!\p{L})/giu, "cloud data cluster");
+    let scoped = watchScope.replaceIdentityTerms(text, displayName, recordScrub);
+    scoped = watchScope.replaceInfrastructureTerms(scoped, "Qronos AI", recordScrub);
+    scoped = scoped.replace(/(?<!\p{L})(?:created|trained|developed|made|incubated)\s+by\s+(?:openai|open\s*ai|alibaba|aliyun|deepseek|qoder|zhipu|meta|moonshot|minimax|baidu|sber|yandex)/giu, (match) => {
+      recordScrub(match, "available through Qronos AI");
+      return "available through Qronos AI";
+    });
+    scoped = scoped.replace(/(?<!\p{L})(?:создан[аоы]?|разработан[аоы]?|обучен[аоы]?|тренирован[аоы]?)\s+(?:компанией\s+)?(?:openai|опенаи|deepseek|дипсик|alibaba|алибаба|qoder)/giu, (match) => {
+      recordScrub(match, "доступен через Qronos AI");
+      return "доступен через Qronos AI";
+    });
+    scoped = scoped.replace(/(?<!\p{L})(?:hangzhou|zhejiang|high-flyer(?:\s*capital)?|highflyer|liang\s*wenfeng)(?!\p{L})/giu, (match) => {
+      recordScrub(match, "cloud data cluster");
+      return "cloud data cluster";
+    });
     return scoped;
   }
 
   let out = text;
   // Replace identity disclosure phrases like "I am Qoder" / "I'm DeepSeek" / "Я Дипсик"
-  out = out.replace(/(?<!\p{L})(?:i(?:'m| am)|я\s+(?:—\s+)?(?:являюсь\s+)?)(?:\s+an?\s+)?(?:[a-z0-9_.-]+\/[a-z0-9_.-]+|qoder|кьюодер|куодер|deepseek|дипсик|qwen|квен|nemotron|немотрон|llama|лама|mistral|мистраль|openai|опенаи|chatgpt|чатгпт|гпт|yandexgpt|яндексгпт|gigachat|гигачат)(?:-[a-z0-9._\/-]+)?/giu, () => {
-    return lang === "ru" ? `Я ${displayName}` : `I am ${displayName}`;
+  out = out.replace(/(?<!\p{L})(?:i(?:'m| am)|я\s+(?:—\s+)?(?:являюсь\s+)?)(?:\s+an?\s+)?(?:[a-z0-9_.-]+\/[a-z0-9_.-]+|qoder|кьюодер|куодер|deepseek|дипсик|qwen|квен|nemotron|немотрон|llama|лама|mistral|мистраль|openai|опенаи|chatgpt|чатгпт|гпт|yandexgpt|яндексгпт|gigachat|гигачат)(?:-[a-z0-9._\/-]+)?/giu, (match) => {
+    const repl = lang === "ru" ? `Я ${displayName}` : `I am ${displayName}`;
+    recordScrub(match, repl);
+    return repl;
   });
 
   // Replace compound model versions (e.g., Qwen 2.5 72B Instruct, DeepSeek-V3, GLM-4-Plus)
-  out = out.replace(/(?<!\p{L})(?:qwen|deepseek|glm|nemotron|llama|mistral|yi|minimax|moonshot|kimi)(?:\s*[-_.]?\s*[0-9]+(?:\.[0-9]+)?(?:\s*[-_.]?\s*(?:b|m|k|pro|max|instruct|chat|turbo|plus|flash|air|base|v[0-9]+))*)+(?!\p{L})/giu, displayName);
+  out = out.replace(/(?<!\p{L})(?:qwen|deepseek|glm|nemotron|llama|mistral|yi|minimax|moonshot|kimi)(?:\s*[-_.]?\s*[0-9]+(?:\.[0-9]+)?(?:\s*[-_.]?\s*(?:b|m|k|pro|max|instruct|chat|turbo|plus|flash|air|base|v[0-9]+))*)+(?!\p{L})/giu, (match) => {
+    recordScrub(match, displayName);
+    return displayName;
+  });
 
   // Replace standalone provider/model brand names
-  out = out.replace(/(?<!\p{L})(?:qoder|кьюодер|куодер)(?:-[a-z0-9._/-]+)?(?!\p{L})/giu, displayName);
-  out = out.replace(/(?<!\p{L})(?:deepseek|дипсик(?:а|ом|е)?|дип\s*сик)(?:-[a-z0-9._/-]+)?(?!\p{L})/giu, displayName);
-  out = out.replace(/(?<!\p{L})(?:qwen|квен(?:ь|2|2\.5|3)?)(?:-[a-z0-9._/-]+)?(?!\p{L})/giu, displayName);
-  out = out.replace(/(?<!\p{L})(?:nemotron|немотрон)(?!\p{L})/giu, displayName);
-  out = out.replace(/(?<!\p{L})(?:chatgpt|chat-gpt|чатгпт|чат\s*гпт)(?!\p{L})/giu, displayName);
-  out = out.replace(/(?<!\p{L})(?:alibaba|aliyun|алибаба|алибабы)(?!\p{L})/giu, "Qronos AI");
-  out = out.replace(/(?<!\p{L})(?:tokenrouter|tokenharbor|orcarouter|fxqidian|bluesminds|bailu|байлу)(?!\p{L})/giu, "Qronos AI");
+  out = out.replace(/(?<!\p{L})(?:qoder|кьюодер|куодер)(?:-[a-z0-9._/-]+)?(?!\p{L})/giu, (match) => {
+    recordScrub(match, displayName);
+    return displayName;
+  });
+  out = out.replace(/(?<!\p{L})(?:deepseek|дипсик(?:а|ом|е)?|дип\s*сик)(?:-[a-z0-9._/-]+)?(?!\p{L})/giu, (match) => {
+    recordScrub(match, displayName);
+    return displayName;
+  });
+  out = out.replace(/(?<!\p{L})(?:qwen|квен(?:ь|2|2\.5|3)?)(?:-[a-z0-9._/-]+)?(?!\p{L})/giu, (match) => {
+    recordScrub(match, displayName);
+    return displayName;
+  });
+  out = out.replace(/(?<!\p{L})(?:nemotron|немотрон)(?!\p{L})/giu, (match) => {
+    recordScrub(match, displayName);
+    return displayName;
+  });
+  out = out.replace(/(?<!\p{L})(?:chatgpt|chat-gpt|чатгпт|чат\s*гпт)(?!\p{L})/giu, (match) => {
+    recordScrub(match, displayName);
+    return displayName;
+  });
+  out = out.replace(/(?<!\p{L})(?:alibaba|aliyun|алибаба|алибабы)(?!\p{L})/giu, (match) => {
+    recordScrub(match, "Qronos AI");
+    return "Qronos AI";
+  });
+  out = out.replace(/(?<!\p{L})(?:tokenrouter|tokenharbor|orcarouter|fxqidian|bluesminds|bailu|байлу)(?!\p{L})/giu, (match) => {
+    recordScrub(match, "Qronos AI");
+    return "Qronos AI";
+  });
 
   // Redact corporate datacenters & hedge funds / incubator entities
-  out = out.replace(/(?<!\p{L})(?:hangzhou|zhejiang|high-flyer(?:\s*capital)?|highflyer|liang\s*wenfeng)(?!\p{L})/giu, "cloud data cluster");
+  out = out.replace(/(?<!\p{L})(?:hangzhou|zhejiang|high-flyer(?:\s*capital)?|highflyer|liang\s*wenfeng)(?!\p{L})/giu, (match) => {
+    recordScrub(match, "cloud data cluster");
+    return "cloud data cluster";
+  });
 
   // Replace creator/training attributions
-  out = out.replace(/(?<!\p{L})(?:created|trained|developed|made|incubated)\s+by\s+(?:openai|open\s*ai|alibaba|aliyun|deepseek|qoder|zhipu|meta|moonshot|minimax|baidu|sber|yandex)/giu, "available through Qronos AI");
-  out = out.replace(/(?<!\p{L})(?:создан[аоы]?|разработан[аоы]?|обучен[аоы]?|тренирован[аоы]?)\s+(?:компанией\s+)?(?:openai|опенаи|deepseek|дипсик|alibaba|алибаба|qoder)/giu, "доступен через Qronos AI");
+  out = out.replace(/(?<!\p{L})(?:created|trained|developed|made|incubated)\s+by\s+(?:openai|open\s*ai|alibaba|aliyun|deepseek|qoder|zhipu|meta|moonshot|minimax|baidu|sber|yandex)/giu, (match) => {
+    recordScrub(match, "available through Qronos AI");
+    return "available through Qronos AI";
+  });
+  out = out.replace(/(?<!\p{L})(?:создан[аоы]?|разработан[аоы]?|обучен[аоы]?|тренирован[аоы]?)\s+(?:компанией\s+)?(?:openai|опенаи|deepseek|дипсик|alibaba|алибаба|qoder)/giu, (match) => {
+    recordScrub(match, "доступен через Qronos AI");
+    return "доступен через Qronos AI";
+  });
 
   return out;
 }
@@ -4282,11 +4356,13 @@ export function publicManagedContent(model: TokenForgeModelId, value: unknown, i
   // If the whole message is merely an identity statement (short and primarily a disclosure)
   if (trimmed.length < 120 && (leaks(cleaned) || leaks(value))) {
     const fallbackIdentity = publicIdentityForManagedModel(model, lang);
+    const disclosureMatch = cleaned.match(/(?:i(?:'m| am)|я\s+(?:—\s+)?(?:являюсь\s+)?)[^\n.!?]+/i)?.[0] || cleaned || "Upstream Identity Disclosure";
+    const matchedKeywords = `${disclosureMatch.trim()} ➔ ${fallbackIdentity} (×1)`;
     try {
       void Promise.resolve(recordSafetyAudit({
         model,
         triggerType: "upstream_leak_scrubbed",
-        matchedKeywords: "Upstream Disclosure Replaced with Fallback",
+        matchedKeywords,
         userInput: typeof langOrContext === "string" ? langOrContext : "Conversational turn",
         outputShown: fallbackIdentity,
       })).catch(() => undefined);
@@ -4296,12 +4372,17 @@ export function publicManagedContent(model: TokenForgeModelId, value: unknown, i
 
   // Otherwise, sanitize leaked phrases in place so the full response is preserved!
   if (leaks(cleaned) || leaks(value)) {
-    const cleanedText = sanitizeLeakedPhrasesInPlace(text, model, lang);
+    const tracker = new Map<string, ScrubbedTermDetail>();
+    const cleanedText = sanitizeLeakedPhrasesInPlace(text, model, lang, tracker);
+    const scrubbedList = Array.from(tracker.values());
+    const matchedKeywords = scrubbedList.length > 0
+      ? formatScrubbedTermsSummary(scrubbedList)
+      : "Upstream Brand Terms Sanitized in Place";
     try {
       void Promise.resolve(recordSafetyAudit({
         model,
         triggerType: "upstream_leak_scrubbed",
-        matchedKeywords: "Upstream Brand Terms Sanitized in Place",
+        matchedKeywords,
         userInput: typeof langOrContext === "string" ? langOrContext : "Conversational turn",
         outputShown: cleanedText,
       })).catch(() => undefined);
@@ -4315,6 +4396,8 @@ export interface StreamingIdentityFilter {
   push(chunkText: string): string | null;
   flush(): string | null;
   isLeaked(): boolean;
+  getScrubbedReplacements(): ScrubbedTermDetail[];
+  formatScrubbedSummary(): string;
 }
 
 const SENSITIVE_PREFIX_PATTERN = /^(?:qod|deep|qwen|nemo|open|chat|codex|grok|xai|zhip|zai|ali|bai|token|orca|sarc|dog|llama|mist|kimi|moon|mini|hail|baic|дип|квен|опен|чат|гпт|немо|грок|али|мист|лама|ллам|чжип|джип|яндекс|гига|сбер)/iu;
@@ -4324,11 +4407,12 @@ export function createStreamingIdentityFilter(model: TokenForgeModelId, initialL
   let fullAccumulated = "";
   let detectedLang: DetectedLanguage = initialLang || "en";
   let leakedFlag = false;
+  const tracker = new Map<string, ScrubbedTermDetail>();
   // Custom watch lists add their own hold-back prefixes to the universal set.
   const watchScope = identityWatchScopeFor(model);
 
   const checkAndClean = (raw: string): string => {
-    const cleaned = sanitizeLeakedPhrasesInPlace(raw, model, detectedLang);
+    const cleaned = sanitizeLeakedPhrasesInPlace(raw, model, detectedLang, tracker);
     if (cleaned !== raw) {
       leakedFlag = true;
     }
@@ -4337,6 +4421,12 @@ export function createStreamingIdentityFilter(model: TokenForgeModelId, initialL
 
   return {
     isLeaked: () => leakedFlag,
+    getScrubbedReplacements: () => Array.from(tracker.values()),
+    formatScrubbedSummary: () => {
+      const items = Array.from(tracker.values());
+      if (items.length === 0) return "Upstream Brand Scrubbed in Stream";
+      return formatScrubbedTermsSummary(items);
+    },
     push: (chunkText: string): string | null => {
       if (typeof chunkText !== "string" || !chunkText) return chunkText;
 
@@ -6178,11 +6268,12 @@ export function registerOpenAiGateway(app: Express) {
       clearTimeout(timeout);
       if (streamingFilter?.isLeaked()) {
         try {
+          const matchedKeywords = streamingFilter.formatScrubbedSummary();
           void Promise.resolve(recordSafetyAudit({
             userId: key.userId,
             model: input.model as TokenForgeModelId,
             triggerType: "upstream_leak_scrubbed",
-            matchedKeywords: "Upstream Brand Scrubbed in Stream",
+            matchedKeywords,
             userInput: firstUserText || "User streaming prompt",
             outputShown: streamedContentText || streamedOutputText || "",
           })).catch(() => undefined);

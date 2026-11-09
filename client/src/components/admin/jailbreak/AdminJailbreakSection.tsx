@@ -45,6 +45,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
+import { parseScrubbedKeywords } from "../safety/AdminSafetyAuditSection";
 
 interface SafetyAuditRecord {
   id: number;
@@ -529,7 +530,30 @@ export function AdminJailbreakSection() {
                     <p className="text-zinc-300 font-mono text-[11px] truncate">
                       "{log.userInput}"
                     </p>
-                    {log.matchedKeywords && (
+                    {log.triggerType === "upstream_leak_scrubbed" ? (
+                      (() => {
+                        const items = parseScrubbedKeywords(log.matchedKeywords);
+                        if (items.length === 0) {
+                          return (
+                            <p className="text-[10px] text-purple-400">
+                              Trigger: <span className="text-zinc-300">{log.matchedKeywords}</span>
+                            </p>
+                          );
+                        }
+                        return (
+                          <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                            {items.map((item, idx) => (
+                              <span key={idx} className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-purple-500/10 border border-purple-500/30 text-[10px] font-mono">
+                                <span className="text-rose-300 line-through">{item.original}</span>
+                                <span className="text-purple-400">➔</span>
+                                <span className="text-emerald-300">{item.replacedWith}</span>
+                                <span className="text-purple-300 font-semibold">({item.count}×)</span>
+                              </span>
+                            ))}
+                          </div>
+                        );
+                      })()
+                    ) : log.matchedKeywords && (
                       <p className="text-[10px] text-rose-400">
                         Trigger: <span className="text-zinc-300">{log.matchedKeywords}</span>
                       </p>
@@ -583,6 +607,51 @@ export function AdminJailbreakSection() {
                   <span className="font-mono text-amber-400">{selectedRecord.triggerType}</span>
                 </div>
               </div>
+
+              {/* Upstream Scrubbed Detail in Inspection Dialog */}
+              {selectedRecord.triggerType === "upstream_leak_scrubbed" && (
+                <div className="p-3 rounded-lg bg-purple-950/20 border border-purple-500/30 space-y-2">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-semibold text-purple-300 flex items-center gap-1.5 font-mono">
+                      <Sparkles className="w-3.5 h-3.5 text-purple-400" />
+                      Scrubbed Upstream Identity & Brand Transformations
+                    </span>
+                    <Badge variant="outline" className="text-[10px] bg-purple-500/10 text-purple-300 border-purple-500/30">
+                      In-Flight Replacement
+                    </Badge>
+                  </div>
+                  {(() => {
+                    const items = parseScrubbedKeywords(selectedRecord.matchedKeywords);
+                    if (items.length === 0) {
+                      return (
+                        <p className="text-xs text-purple-200/80 font-mono">
+                          {selectedRecord.matchedKeywords || "Identity disclosures scrubbed in response stream"}
+                        </p>
+                      );
+                    }
+                    return (
+                      <div className="space-y-1.5">
+                        {items.map((item, idx) => (
+                          <div key={idx} className="flex flex-wrap items-center justify-between gap-2 p-2 rounded bg-black/60 border border-white/10 text-xs font-mono">
+                            <div className="flex items-center gap-2">
+                              <span className="px-2 py-0.5 rounded bg-red-500/20 text-red-300 border border-red-500/40 line-through font-semibold">
+                                {item.original}
+                              </span>
+                              <span className="text-purple-400 font-bold">➔</span>
+                              <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-semibold">
+                                {item.replacedWith}
+                              </span>
+                            </div>
+                            <span className="px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 text-[10px] font-semibold">
+                              {item.count}× scrubbed
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
 
               {/* Full User Input */}
               <div className="space-y-1.5">

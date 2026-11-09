@@ -115,9 +115,9 @@ export interface IdentityWatchScope {
   /** True when the text contains a watched name or an always-on echo phrase. */
   test: (text: string) => boolean;
   /** Rewrites watched model/provider names to the supplied public name. */
-  replaceIdentityTerms: (text: string, publicName: string) => string;
+  replaceIdentityTerms: (text: string, publicName: string, onMatch?: (match: string, replacement: string) => void) => string;
   /** Rewrites infrastructure/vendor names to the supplied public brand. */
-  replaceInfrastructureTerms: (text: string, publicBrand: string) => string;
+  replaceInfrastructureTerms: (text: string, publicBrand: string, onMatch?: (match: string, replacement: string) => void) => string;
   /** True when a trailing partial word could still grow into a watched name. */
   testIncompleteTermPrefix: (word: string) => boolean;
 }
@@ -203,7 +203,7 @@ function alternation(terms: readonly string[]) {
   return fragments.length ? fragments.join("|") : "(?!)";
 }
 
-function replaceGuarded(text: string, pattern: RegExp, replacement: string) {
+function replaceGuarded(text: string, pattern: RegExp, replacement: string, onMatch?: (match: string, replacement: string) => void) {
   const target = String(replacement ?? "").trim();
   if (!target) return text;
   const loweredText = text.toLowerCase();
@@ -214,6 +214,7 @@ function replaceGuarded(text: string, pattern: RegExp, replacement: string) {
       // Already the public name; rewriting again would duplicate it.
       return match;
     }
+    if (onMatch) onMatch(match, target);
     return target;
   });
 }
@@ -246,13 +247,13 @@ function buildScope(model: string, terms: readonly string[], source: IdentityWat
       if (typeof text !== "string" || !text) return false;
       return identityTest.test(text) || infrastructureTest.test(text) || echoTest.test(text);
     },
-    replaceIdentityTerms: (text: string, publicName: string) => {
+    replaceIdentityTerms: (text: string, publicName: string, onMatch?: (match: string, replacement: string) => void) => {
       if (typeof text !== "string" || !text) return text;
-      return replaceGuarded(text, identityGlobal, publicName);
+      return replaceGuarded(text, identityGlobal, publicName, onMatch);
     },
-    replaceInfrastructureTerms: (text: string, publicBrand: string) => {
+    replaceInfrastructureTerms: (text: string, publicBrand: string, onMatch?: (match: string, replacement: string) => void) => {
       if (typeof text !== "string" || !text) return text;
-      return replaceGuarded(text, infrastructureGlobal, publicBrand);
+      return replaceGuarded(text, infrastructureGlobal, publicBrand, onMatch);
     },
     testIncompleteTermPrefix: (word: string) => {
       if (!prefixPattern || typeof word !== "string" || !word) return false;

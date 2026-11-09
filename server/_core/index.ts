@@ -1,6 +1,8 @@
 import "dotenv/config";
 import express from "express";
 import cors from "cors";
+import fs from "fs";
+import path from "path";
 import rateLimit from "express-rate-limit";
 import { createServer } from "http";
 import net from "net";
@@ -90,6 +92,23 @@ async function startServer() {
   // Healthcheck endpoint for container ingress and monitoring
   app.get("/api/health", (_req, res) => {
     res.status(200).json({ status: "ok", timestamp: new Date().toISOString() });
+  });
+
+  // Direct handler for /favicon.ico for Googlebot, search engines, and browsers
+  app.get("/favicon.ico", (_req, res) => {
+    const candidatePaths = [
+      path.resolve(import.meta.dirname, "../../client/public/favicon.ico"),
+      path.resolve(import.meta.dirname, "../public/favicon.ico"),
+      path.resolve(import.meta.dirname, "public/favicon.ico"),
+    ];
+    for (const p of candidatePaths) {
+      if (fs.existsSync(p)) {
+        res.setHeader("Content-Type", "image/x-icon");
+        res.setHeader("Cache-Control", "public, max-age=86400");
+        return res.sendFile(p);
+      }
+    }
+    res.status(404).end();
   });
 
   // Global baseline protection against Layer 7 volumetric floods (2400 req/min)

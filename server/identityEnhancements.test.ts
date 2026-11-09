@@ -8,6 +8,8 @@ import {
   detectMessageLanguage,
   isStrictPublicManagedModel,
   isManagedIdentityDisclosureRequest,
+  sanitizeLeakedPhrasesInPlace,
+  formatScrubbedTermsSummary,
 } from "./openaiGateway";
 
 describe("Identity Hardening & Protection Enhancements", () => {
@@ -188,6 +190,49 @@ describe("Identity Hardening & Protection Enhancements", () => {
       expect(systemContent).toContain("NEVER lie, fabricate, hallucinate, or state anything as an established fact when you are not completely certain.");
       expect(systemContent).toContain("If you do not know the answer, are uncertain, or lack verified information, you MUST explicitly and transparently state that you are not sure");
       expect(systemContent).toContain("Never guess, speculate presented as fact, pretend to know, or confabulate plausible-sounding falsehoods.");
+    });
+  });
+
+  describe("Scrubbed Terms & Occurrence Count Audit Logging", () => {
+    it("tracks exact scrubbed terms, replacements, and occurrence count in sanitizeLeakedPhrasesInPlace", () => {
+      const tracker = new Map<string, { original: string; replacedWith: string; count: number }>();
+      const text = "Hello! I am DeepSeek-V3, developed by deepseek in high-flyer cluster. DeepSeek-V3 is very fast.";
+      const sanitized = sanitizeLeakedPhrasesInPlace(text, "claude-opus-5.5", "en", tracker);
+
+      expect(sanitized).not.toContain("DeepSeek");
+      expect(sanitized).not.toContain("high-flyer");
+      const items = Array.from(tracker.values());
+      expect(items.length).toBeGreaterThan(0);
+
+      // Verify DeepSeek-V3 was counted multiple times
+      const deepseekEntry = items.find(i => i.original.toLowerCase().includes("deepseek-v3"));
+      expect(deepseekEntry).toBeDefined();
+      expect(deepseekEntry?.count).toBe(2);
+      expect(deepseekEntry?.replacedWith).toBe("Claude Opus 5.5");
+
+      const summary = formatScrubbedTermsSummary(items);
+      expect(summary).toContain("➔");
+      expect(summary).toContain("(×2)");
+    });
+
+    it("tracks scrubbed replacements in real-time streaming filter with count", () => {
+      const filter = createStreamingIdentityFilter("claude-opus-5.5");
+      filter.push("Hello from DeepSeek-V3! ");
+      filter.push("Also powered by alibaba cloud. ");
+      filter.push("Another DeepSeek-V3 mention.");
+      filter.flush();
+
+      expect(filter.isLeaked()).toBe(true);
+      const scrubbed = filter.getScrubbedReplacements();
+      expect(scrubbed.length).toBeGreaterThanOrEqual(2);
+
+      const deepseek = scrubbed.find(s => s.original.toLowerCase().includes("deepseek-v3"));
+      expect(deepseek).toBeDefined();
+      expect(deepseek?.count).toBe(2);
+
+      const summary = filter.formatScrubbedSummary();
+      expect(summary).toContain("DeepSeek-V3 ➔ Claude Opus 5.5 (×2)");
+      expect(summary).toContain("alibaba ➔ Qronos AI (×1)");
     });
   });
 });
