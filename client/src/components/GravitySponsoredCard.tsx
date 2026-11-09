@@ -49,6 +49,12 @@ export function GravitySponsoredCard({ messages = [], className = "" }: GravityS
           </p>
         )}
 
+        {ad.brandImage && (
+          <div className="mb-2.5 rounded-lg overflow-hidden border border-white/10 max-h-36 bg-black/40 flex items-center justify-center">
+            <img src={ad.brandImage} alt={ad.brandName || "Sponsored Ad"} className="w-full h-full object-cover" />
+          </div>
+        )}
+
         <p className="text-zinc-400 font-sans text-xs line-clamp-2 leading-relaxed mb-2.5">
           {ad.adText}
         </p>

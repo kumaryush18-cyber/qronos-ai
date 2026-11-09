@@ -21,6 +21,7 @@ import { registerUpiPayGateway } from "../upiPayGateway";
 import { registerCashfreeGateway } from "../cashfreeGateway";
 import { registerDodoPaymentsGateway } from "../dodoPaymentsGateway";
 import { registerWhopPaymentGateway } from "../whopPaymentGateway";
+import { registerAdsGateway } from "../adsGateway";
 import { startDiscordBotService } from "../discordBotService";
 import { isRequestPayloadTooLarge, requestPayloadTooLargeResponse, TOKENFORGE_JSON_BODY_LIMIT } from "../requestPayload";
 import {
@@ -161,6 +162,7 @@ async function startServer() {
   registerCashfreeGateway(app);
   registerDodoPaymentsGateway(app);
   registerWhopPaymentGateway(app);
+  registerAdsGateway(app);
   // tRPC API with rate limiting (120 req/min)
   app.use(
     "/api/trpc",

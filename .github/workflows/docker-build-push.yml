@@ -64,6 +64,11 @@ jobs:
             set -e
             echo "🚀 Updating Qronos AI on Azure VM..."
             cd /opt/qronos
+            if grep -q "^GRAVITY_API_KEY=" .env 2>/dev/null; then
+              sed -i 's/^GRAVITY_API_KEY=***REMOVED***' .env
+            else
+              echo "GRAVITY_API_KEY=***REMOVED***" >> .env
+            fi
             docker compose pull
             docker compose up -d --remove-orphans
             docker image prune -f
