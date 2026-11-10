@@ -223,10 +223,10 @@ function App() {
   const [introFinished, setIntroFinished] = useState(false);
 
   useEffect(() => {
-    // Safety fallback: ensure loading screen releases after 7.0s (MP4 at 1.5x speed is 6.67s)
+    // Safety fallback: ensure loading screen releases after 5.0s (MP4 at 2.0x speed is 5.0s)
     const timer = setTimeout(() => {
       setIntroFinished(true);
-    }, 7000);
+    }, 5000);
     return () => clearTimeout(timer);
   }, []);
 

@@ -4,7 +4,6 @@ import { Streamdown, Block } from "streamdown";
 import { motion } from "framer-motion";
 import { Copy, Check } from "lucide-react";
 import { BlurReveal } from "./blur-reveal";
-import { GravitySponsoredCard } from "@/components/GravitySponsoredCard";
 import "@/index.css";
 
 /**
@@ -793,9 +792,6 @@ export function AIThinkingOrbInput({
           {/* ChatGPT-style Action Row at the bottom */}
           {!isStreaming && answerText && (
             <>
-              {/* Gravity In-Chat Sponsored Card Placement (canonical below_response slot) */}
-              <GravitySponsoredCard />
-
               <div className="mt-3 pt-3 border-t border-white/[0.08] flex items-center justify-between gap-3 text-xs font-mono text-zinc-400 shrink-0">
                 <button
                   type="button"

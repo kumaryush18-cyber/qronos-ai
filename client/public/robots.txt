@@ -1,0 +1,13 @@
+User-agent: *
+Allow: /
+Allow: /favicon.ico
+Allow: /favicon/
+Allow: /images/
+
+User-agent: Googlebot-Image
+Allow: /
+Allow: /favicon.ico
+Allow: /favicon/
+Allow: /images/
+
+Sitemap: https://qronos.me/sitemap.xml

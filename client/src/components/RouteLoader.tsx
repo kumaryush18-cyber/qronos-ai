@@ -1,7 +1,6 @@
 import { useEffect, useRef } from "react";
 
-const LOADING_ASSET_URL =
-  "https://github.com/kumaryush18-cyber/qronos-media/releases/download/v1.0-media/route_loader.mp4";
+const LOADING_ASSET_URL = "/videos/route_loader.mp4";
 
 export interface RouteLoaderProps {
   onEnded?: () => void;
@@ -10,21 +9,33 @@ export interface RouteLoaderProps {
 export function RouteLoader({ onEnded }: RouteLoaderProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
 
+  const applyPlaybackRate = () => {
+    const video = videoRef.current;
+    if (video) {
+      video.muted = true;
+      video.defaultMuted = true;
+      video.playbackRate = 2.0;
+      video.defaultPlaybackRate = 2.0;
+    }
+  };
+
   useEffect(() => {
     const video = videoRef.current;
     if (video) {
-      video.playbackRate = 1.5;
-      video.defaultPlaybackRate = 1.5;
+      video.muted = true;
+      video.defaultMuted = true;
+      video.playbackRate = 2.0;
+      video.defaultPlaybackRate = 2.0;
       video.play().catch(() => {});
     }
   }, []);
 
   useEffect(() => {
     if (onEnded) {
-      // With 1.5x playback speed (+50% faster), 1 full cycle completes in exactly 6.67 seconds
+      // With 2x playback speed, 1 full cycle completes in exactly 5.0 seconds
       const timer = setTimeout(() => {
         onEnded();
-      }, 6670);
+      }, 5000);
       return () => clearTimeout(timer);
     }
   }, [onEnded]);
@@ -79,11 +90,9 @@ export function RouteLoader({ onEnded }: RouteLoaderProps) {
             loop
             preload="auto"
             className="w-full h-full object-cover pointer-events-none select-none scale-105"
-            onCanPlay={() => {
-              if (videoRef.current) {
-                videoRef.current.playbackRate = 1.5;
-              }
-            }}
+            onLoadedMetadata={applyPlaybackRate}
+            onCanPlay={applyPlaybackRate}
+            onPlay={applyPlaybackRate}
             onError={() => onEnded?.()}
             onEnded={() => onEnded?.()}
           />
