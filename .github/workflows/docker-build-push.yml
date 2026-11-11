@@ -69,6 +69,7 @@ jobs:
             else
               echo "GRAVITY_API_KEY=***REMOVED***" >> .env
             fi
+            echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u kumaryush18-cyber --password-stdin
             docker compose pull
             docker compose up -d --remove-orphans
             docker image prune -f
