@@ -207,13 +207,13 @@ export async function pruneOldImagesAndDeriveContent(
     };
   }
 
-  // Asynchronously queue distillation in background so future turns have cached descriptions ready
-  queueSemanticDistillationForMessages(messages);
-
   const turnsLimit =
     typeof maxImageTurnsBack === "object" && maxImageTurnsBack !== null
       ? (maxImageTurnsBack.maxTurnsBack ?? DEFAULT_MAX_IMAGE_TURNS_BACK)
       : maxImageTurnsBack;
+
+  // Asynchronously queue distillation in background ONLY for images older than turnsLimit (15 turns back)
+  queueSemanticDistillationForMessages(messages, turnsLimit);
 
   const countLimit =
     typeof maxImageTurnsBack === "object" && maxImageTurnsBack !== null

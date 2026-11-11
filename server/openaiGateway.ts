@@ -4311,7 +4311,13 @@ export function sanitizeLeakedPhrasesInPlace(
   return out;
 }
 
-export function publicManagedContent(model: TokenForgeModelId, value: unknown, isDelta = false, langOrContext?: string | DetectedLanguage) {
+export function publicManagedContent(
+  model: TokenForgeModelId,
+  value: unknown,
+  isDelta = false,
+  langOrContext?: string | DetectedLanguage,
+  auditContext?: { userId?: number | null; userInput?: string }
+) {
   if (typeof value !== "string") return value === null ? null : undefined;
 
   const legacyIdentityLeakPattern = model === "claude-opus-5"
@@ -4353,6 +4359,9 @@ export function publicManagedContent(model: TokenForgeModelId, value: unknown, i
   const trimmed = text.trim();
   const cleaned = text.replace(/^\s*(?:(?:Okay|Sure|Alright|Hmm|Well|First|Now)[,\s]+(?:the user|I must|according to|first priority|let me|we need|looking at)[^.\n]*[.\n]+)+/i, "").trim();
 
+  const resolvedUserId = auditContext?.userId ?? null;
+  const resolvedInput = auditContext?.userInput || (typeof langOrContext === "string" && !["ru", "es", "de", "fr", "zh", "ja", "en"].includes(langOrContext) ? langOrContext : "Conversational turn");
+
   // If the whole message is merely an identity statement (short and primarily a disclosure)
   if (trimmed.length < 120 && (leaks(cleaned) || leaks(value))) {
     const fallbackIdentity = publicIdentityForManagedModel(model, lang);
@@ -4360,10 +4369,11 @@ export function publicManagedContent(model: TokenForgeModelId, value: unknown, i
     const matchedKeywords = `${disclosureMatch.trim()} ➔ ${fallbackIdentity} (×1)`;
     try {
       void Promise.resolve(recordSafetyAudit({
+        userId: resolvedUserId,
         model,
         triggerType: "upstream_leak_scrubbed",
         matchedKeywords,
-        userInput: typeof langOrContext === "string" ? langOrContext : "Conversational turn",
+        userInput: resolvedInput,
         outputShown: fallbackIdentity,
       })).catch(() => undefined);
     } catch {}
@@ -4380,10 +4390,11 @@ export function publicManagedContent(model: TokenForgeModelId, value: unknown, i
       : "Upstream Brand Terms Sanitized in Place";
     try {
       void Promise.resolve(recordSafetyAudit({
+        userId: resolvedUserId,
         model,
         triggerType: "upstream_leak_scrubbed",
         matchedKeywords,
-        userInput: typeof langOrContext === "string" ? langOrContext : "Conversational turn",
+        userInput: resolvedInput,
         outputShown: cleanedText,
       })).catch(() => undefined);
     } catch {}
@@ -4485,15 +4496,20 @@ function publicToolCalls(value: unknown, isDelta = false) {
   return calls.length ? calls : undefined;
 }
 
-export function publicAssistantSegment(model: TokenForgeModelId, value: unknown, isDelta = false) {
+export function publicAssistantSegment(
+  model: TokenForgeModelId,
+  value: unknown,
+  isDelta = false,
+  auditContext?: { userId?: number | null; userInput?: string }
+) {
   if (!isRecord(value)) return undefined;
-  const content = publicManagedContent(model, value.content, isDelta);
+  const content = publicManagedContent(model, value.content, isDelta, undefined, auditContext);
   const toolCalls = publicToolCalls(value.tool_calls, isDelta);
   const role = value.role === "assistant" ? "assistant" : undefined;
   const isStrictManaged = isStrictPublicManagedModel(model);
   const rawReasoning = (value as any)?.reasoning_content ?? (value as any)?.reasoning ?? (value as any)?.thinking;
   const reasoningContent = (!isStrictManaged && typeof rawReasoning === "string" && rawReasoning.length > 0)
-    ? publicManagedContent(model, rawReasoning, isDelta)
+    ? publicManagedContent(model, rawReasoning, isDelta, undefined, auditContext)
     : undefined;
   if (content === undefined && !toolCalls && !role && !reasoningContent) return undefined;
   return {
@@ -4590,13 +4606,18 @@ function isManagedProviderFailurePayload(value: unknown) {
  * known vendor fields. This blocks model IDs, fingerprints, provider metadata, reasoning, and
  * future vendor extensions from reaching callers.
  */
-function projectStrictManagedResponse(model: TokenForgeModelId, payload: unknown, requestId?: string) {
+function projectStrictManagedResponse(
+  model: TokenForgeModelId,
+  payload: unknown,
+  requestId?: string,
+  auditContext?: { userId?: number | null; userInput?: string }
+) {
   if (!isRecord(payload) || isManagedProviderFailurePayload(payload)) return publicManagedFailurePayload();
   const rawChoices = Array.isArray(payload.choices) ? payload.choices : [];
   const choices = rawChoices.flatMap((candidate, fallbackIndex) => {
     if (!isRecord(candidate)) return [];
-    const message = publicAssistantSegment(model, candidate.message, false);
-    const delta = publicAssistantSegment(model, candidate.delta, true);
+    const message = publicAssistantSegment(model, candidate.message, false, auditContext);
+    const delta = publicAssistantSegment(model, candidate.delta, true, auditContext);
     const finishReason = candidate.finish_reason;
     return [{
       index: typeof candidate.index === "number" ? candidate.index : fallbackIndex,
@@ -4619,8 +4640,13 @@ function projectStrictManagedResponse(model: TokenForgeModelId, payload: unknown
   };
 }
 
-export function sanitizeModelResponsePayload(model: TokenForgeModelId, payload: unknown, requestId?: string) {
-  return isStrictPublicManagedModel(model) ? projectStrictManagedResponse(model, payload, requestId) : payload;
+export function sanitizeModelResponsePayload(
+  model: TokenForgeModelId,
+  payload: unknown,
+  requestId?: string,
+  auditContext?: { userId?: number | null; userInput?: string }
+) {
+  return isStrictPublicManagedModel(model) ? projectStrictManagedResponse(model, payload, requestId, auditContext) : payload;
 }
 
 export function sanitizeModelSseData(model: TokenForgeModelId, data: string, requestId?: string) {
@@ -5882,13 +5908,14 @@ export function registerOpenAiGateway(app: Express) {
         }
         return errorResponse(res, requestId, 503, message, "provider_unavailable");
       }
-      const publicPayload = sanitizeModelResponsePayload(input.model as TokenForgeModelId, payload, requestId);
+      const auditCtx = { userId: key.userId, userInput: firstUserText };
+      const publicPayload = sanitizeModelResponsePayload(input.model as TokenForgeModelId, payload, requestId, auditCtx);
       let content = textContentFrom(publicPayload);
       const thinking = reasoningContentFrom(publicPayload) || (payload as any)?.choices?.[0]?.message?.reasoning_content;
       const wasReasoningPromoted = Boolean((payload as any)?.choices?.[0]?.message?.isReasoningPromoted);
       const isReasoningOnly = wasReasoningPromoted || ((!content || !content.trim()) && Boolean(thinking && thinking.trim()));
       if (isReasoningOnly && (!content || !content.trim()) && thinking) {
-        const sanitizedThinking = publicManagedContent(input.model as TokenForgeModelId, thinking, false) || publicIdentityForManagedModel(input.model as TokenForgeModelId);
+        const sanitizedThinking = publicManagedContent(input.model as TokenForgeModelId, thinking, false, undefined, auditCtx) || publicIdentityForManagedModel(input.model as TokenForgeModelId);
         content = sanitizedThinking;
         const msg = (publicPayload as any)?.choices?.[0]?.message;
         if (msg) msg.content = sanitizedThinking;
@@ -6235,7 +6262,7 @@ export function registerOpenAiGateway(app: Express) {
       // If stream ended with no visible text content but produced reasoning, emit the reasoning as content
       if (!streamFailed && !streamedContentText.trim() && streamedReasoningText.trim()) {
         isStreamReasoningPromoted = true;
-        const sanitizedReasoning = publicManagedContent(input.model as TokenForgeModelId, streamedReasoningText, false) || publicIdentityForManagedModel(input.model as TokenForgeModelId);
+        const sanitizedReasoning = publicManagedContent(input.model as TokenForgeModelId, streamedReasoningText, false, undefined, { userId: key.userId, userInput: firstUserText }) || publicIdentityForManagedModel(input.model as TokenForgeModelId);
         streamedOutputText = sanitizedReasoning;
         const fallbackChunk = {
           id: `chatcmpl-${requestId}`,

@@ -291,19 +291,25 @@ export async function distillImageSemantics(imageTarget: ExtractedImageTarget): 
 }
 
 /**
- * Asynchronously queues semantic distillation for all images in the conversation.
+ * Asynchronously queues semantic distillation ONLY for images that have aged past the turn limit (e.g. 15 turns back).
+ * Never distills active, recent images in the conversation.
  * Runs in the background (fire-and-forget) so user requests are NEVER delayed.
  */
-export function queueSemanticDistillationForMessages(messages: any[] | undefined): void {
+export function queueSemanticDistillationForMessages(messages: any[] | undefined, maxTurnsBack = 15): void {
   if (!Array.isArray(messages) || messages.length === 0) return;
 
   void (async () => {
     try {
+      const lastIdx = messages.length - 1;
       const allTargets: ExtractedImageTarget[] = [];
       const seen = new Set<string>();
 
-      for (const msg of messages) {
-        const targets = extractImagesFromMessage(msg);
+      for (let idx = 0; idx < messages.length; idx++) {
+        const turnsBack = lastIdx - idx;
+        // Strict boundary: Only distill images that have aged past the active turn threshold (> 15 turns back)
+        if (turnsBack <= maxTurnsBack) continue;
+
+        const targets = extractImagesFromMessage(messages[idx]);
         for (const t of targets) {
           if (!seen.has(t.hash)) {
             seen.add(t.hash);

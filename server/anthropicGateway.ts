@@ -1845,7 +1845,7 @@ export function registerAnthropicMessagesGateway(app: Express) {
       if (!failed && textIndex === null && toolIndexes.size === 0 && streamedReasoningText.trim()) {
         isStreamReasoningPromoted = true;
         textIndex = nextIndex++;
-        const reasoningText = publicManagedContent(model as TokenForgeModelId, streamedReasoningText, false) || publicIdentityForManagedModel(model as TokenForgeModelId);
+        const reasoningText = publicManagedContent(model as TokenForgeModelId, streamedReasoningText, false, undefined, { userId: key.userId }) || publicIdentityForManagedModel(model as TokenForgeModelId);
         writeSse(res, "content_block_start", { type: "content_block_start", index: textIndex, content_block: { type: "text", text: "" } });
         writeSse(res, "content_block_delta", { type: "content_block_delta", index: textIndex, delta: { type: "text_delta", text: reasoningText } });
         writeSse(res, "content_block_stop", { type: "content_block_stop", index: textIndex });
