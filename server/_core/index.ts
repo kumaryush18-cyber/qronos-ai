@@ -22,6 +22,7 @@ import { registerCashfreeGateway } from "../cashfreeGateway";
 import { registerDodoPaymentsGateway } from "../dodoPaymentsGateway";
 import { registerWhopPaymentGateway } from "../whopPaymentGateway";
 import { registerAdsGateway } from "../adsGateway";
+import { registerThradGateway } from "../thradGateway";
 import { startDiscordBotService } from "../discordBotService";
 import { isRequestPayloadTooLarge, requestPayloadTooLargeResponse, TOKENFORGE_JSON_BODY_LIMIT } from "../requestPayload";
 import {
@@ -112,6 +113,25 @@ async function startServer() {
     res.status(404).end();
   });
 
+  // Direct handler for /ads.txt for IAB verification, Thrad, and programmatic DSP crawlers
+  app.get("/ads.txt", (_req, res) => {
+    const candidatePaths = [
+      path.resolve(import.meta.dirname, "../../client/public/ads.txt"),
+      path.resolve(import.meta.dirname, "../public/ads.txt"),
+      path.resolve(import.meta.dirname, "public/ads.txt"),
+      path.resolve(process.cwd(), "client/public/ads.txt"),
+    ];
+    for (const p of candidatePaths) {
+      if (fs.existsSync(p)) {
+        res.setHeader("Content-Type", "text/plain; charset=utf-8");
+        res.setHeader("Cache-Control", "public, max-age=3600");
+        return res.sendFile(p);
+      }
+    }
+    res.setHeader("Content-Type", "text/plain; charset=utf-8");
+    res.status(200).send("thrad.ai, THRAD_PENDING_VERIFICATION, DIRECT\n");
+  });
+
   // Global baseline protection against Layer 7 volumetric floods (2400 req/min)
   app.use(globalIpRateLimit);
 
@@ -163,6 +183,7 @@ async function startServer() {
   registerDodoPaymentsGateway(app);
   registerWhopPaymentGateway(app);
   registerAdsGateway(app);
+  registerThradGateway(app);
   // tRPC API with rate limiting (120 req/min)
   app.use(
     "/api/trpc",

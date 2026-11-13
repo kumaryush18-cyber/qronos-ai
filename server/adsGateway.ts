@@ -1,6 +1,7 @@
 import type { Express, Request, Response } from "express";
 import { randomUUID } from "node:crypto";
 import { fetchGravityAd } from "./gravityAds";
+import { fetchThradBid } from "./thradGateway";
 
 /**
  * Ad gateway providing endpoints for Qronos CLI and terminal sessions:
@@ -11,13 +12,48 @@ export function registerAdsGateway(app: Express) {
   // GET /ads/next - called by Qronos CLI between turns to fetch the next sponsor card
   const handleAdNext = async (req: Request, res: Response) => {
     try {
-      const clientIp = (req.headers["x-forwarded-for"] as string) || req.socket.remoteAddress;
+      const clientIp = ((req.headers["x-forwarded-for"] as string) || req.socket.remoteAddress || "").split(",")[0]?.trim();
       const slot = (req.query.slot as string) || "inline";
+      const userAgent = req.headers["user-agent"] || "";
+      const country = (req.headers["cf-ipcountry"] as string) || (req.headers["x-country"] as string) || "US";
 
       // Contextual prompt from query or headers if provided
       const prompt = (req.query.prompt as string) || (req.headers["x-user-prompt"] as string) || "Coding and AI tools";
-      const messages = [{ role: "user", content: prompt }];
 
+      // 1. Try Thrad programmatic ad if API key is configured
+      if (process.env.THRAD_API_KEY) {
+        const thradAd = await fetchThradBid(
+          {
+            summary: prompt,
+            keywords: ["developer tools", "coding", "software engineering"],
+            messages: [{ role: "user", content: prompt }],
+          },
+          { ip: clientIp, userAgent, country }
+        );
+
+        if (thradAd) {
+          const adId = `thrad_${randomUUID().replace(/-/g, "").slice(0, 12)}`;
+          const clickToken = `ct_${randomUUID().replace(/-/g, "").slice(0, 16)}`;
+
+          return res.status(200).json({
+            ad_id: adId,
+            click_token: clickToken,
+            creative: {
+              headline: thradAd.brandName ? `${thradAd.brandName}: ${thradAd.title}` : thradAd.title,
+              body: thradAd.description,
+              cta: thradAd.ctaText || "Learn More",
+              accent: "#c9ff73",
+            },
+            click_url: thradAd.clickUrl,
+            source: "thrad",
+            imp_url: thradAd.viewableTrackerUrl || thradAd.renderedTrackerUrl || "https://api.thrad.ai",
+            placement: slot,
+          });
+        }
+      }
+
+      // 2. Fallback to Gravity sponsor network
+      const messages = [{ role: "user", content: prompt }];
       const ad = await fetchGravityAd(messages, clientIp);
 
       if (!ad) {

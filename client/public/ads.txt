@@ -1,0 +1,5 @@
+# Qronos AI Ads Authorization
+# IAB Tech Lab ads.txt Specification v1.1
+# Official Publisher: Qronos AI (https://qronos.me)
+# Network Partner: Thrad AI (https://thrad.ai)
+thrad.ai, THRAD_PENDING_VERIFICATION, DIRECT

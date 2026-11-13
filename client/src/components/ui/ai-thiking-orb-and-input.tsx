@@ -4,6 +4,7 @@ import { Streamdown, Block } from "streamdown";
 import { motion } from "framer-motion";
 import { Copy, Check } from "lucide-react";
 import { BlurReveal } from "./blur-reveal";
+import { SponsoredIntelligenceCard, type SponsoredAdData } from "../SponsoredIntelligenceCard";
 import "@/index.css";
 
 /**
@@ -551,6 +552,7 @@ export function AIThinkingOrbInput({
   const [copied, setCopied] = useState(false);
   const [statusText, setStatusText] = useState(COPY.labels[0]);
   const [path, setPath] = useState("");
+  const [sponsoredAd, setSponsoredAd] = useState<SponsoredAdData | null>(null);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const pillRef = useRef<HTMLDivElement>(null);
@@ -689,6 +691,20 @@ export function AIThinkingOrbInput({
       clearInterval(labelTimer);
       setIsStreaming(false);
       setPhase("answered");
+
+      // Fetch contextual sponsored intelligence card
+      try {
+        fetch("/api/ads/thrad/bid", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ prompt: query, assistantResponse: accumulatedText }),
+        })
+          .then((res) => (res.status === 200 ? res.json() : null))
+          .then((ad) => {
+            if (ad) setSponsoredAd(ad);
+          })
+          .catch(() => {});
+      } catch {}
     }
   };
 
@@ -696,6 +712,7 @@ export function AIThinkingOrbInput({
     orbRef.current?.reset();
     setInputText("");
     setAnswerText("");
+    setSponsoredAd(null);
     setIsStreaming(false);
     setCopied(false);
     setStatusText(COPY.labels[0]);
@@ -815,6 +832,9 @@ export function AIThinkingOrbInput({
                   {answerText.length.toLocaleString()} characters
                 </span>
               </div>
+
+              {/* Native Sponsored Intelligence Card */}
+              {sponsoredAd && <SponsoredIntelligenceCard ad={sponsoredAd} />}
             </>
           )}
         </div>
