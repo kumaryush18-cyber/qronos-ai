@@ -7,6 +7,7 @@ export interface StarBorderCardProps extends React.HTMLAttributes<HTMLDivElement
   duration?: number;
   lightColor?: string;
   glow?: boolean;
+  innerClassName?: string;
 }
 
 export function StarBorderCard({
@@ -16,6 +17,7 @@ export function StarBorderCard({
   lightColor = "rgba(255, 255, 255, 0.85)",
   glow = true,
   className,
+  innerClassName,
   style,
   ...props
 }: StarBorderCardProps) {
@@ -74,8 +76,8 @@ export function StarBorderCard({
         />
       )}
 
-      {/* Inner Card Surface */}
-      <div className="relative z-10 h-full w-full rounded-[15px] bg-[#0c0d12]/95 backdrop-blur-xl border border-white/[0.08] transition-all duration-300 group-hover:border-white/20 group-hover:bg-[#0f1118]">
+      {/* Inner Card Surface: Sleek pitch black */}
+      <div className={cn("relative z-10 h-full w-full rounded-[15px] bg-[#010101] backdrop-blur-xl border border-white/[0.08] transition-all duration-300 group-hover:border-white/20", innerClassName)}>
         {children}
       </div>
     </div>

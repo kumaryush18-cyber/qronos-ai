@@ -52,9 +52,22 @@ export function registerAdsGateway(app: Express) {
         }
       }
 
+      // Extract client Gravity context forwarded by Qronos CLI (base64url JSON)
+      let incomingGravityContext: any = undefined;
+      const rawGravityHeader = req.headers["x-gravity-context"];
+      if (typeof rawGravityHeader === "string" && rawGravityHeader.trim()) {
+        try {
+          incomingGravityContext = JSON.parse(Buffer.from(rawGravityHeader, "base64url").toString("utf8"));
+        } catch {
+          try {
+            incomingGravityContext = JSON.parse(Buffer.from(rawGravityHeader, "base64").toString("utf8"));
+          } catch {}
+        }
+      }
+
       // 2. Fallback to Gravity sponsor network
       const messages = [{ role: "user", content: prompt }];
-      const ad = await fetchGravityAd(messages, clientIp);
+      const ad = await fetchGravityAd(messages, clientIp, incomingGravityContext, slot);
 
       if (!ad) {
         return res.status(204).end();
@@ -98,4 +111,38 @@ export function registerAdsGateway(app: Express) {
   app.get("/api/ads/next", handleAdNext);
   app.post("/ads/impression", handleImpression);
   app.post("/api/ads/impression", handleImpression);
+
+  // POST /api/ads/gravity - pure Gravity SDK ad route for Playground and Dashboard
+  app.post("/api/ads/gravity", async (req: Request, res: Response) => {
+    try {
+      const clientIp = ((req.headers["x-forwarded-for"] as string) || req.socket.remoteAddress || "").split(",")[0]?.trim();
+      const { messages = [], placement = "below_response", placement_id = "main" } = req.body || {};
+
+      const ad = await fetchGravityAd(messages, clientIp, undefined, placement === "inline_response" ? "inline" : "banner");
+      if (!ad) {
+        return res.status(200).json({ ads: [] });
+      }
+
+      return res.status(200).json({
+        ads: [
+          {
+            adText: ad.adText,
+            title: ad.title || ad.brandName,
+            cta: ad.cta || "Learn More",
+            brandName: ad.brandName || "Sponsored Partner",
+            url: ad.clickUrl || ad.url,
+            clickUrl: ad.clickUrl || ad.url,
+            impUrl: ad.impUrl,
+            brandImage: ad.brandImage,
+            favicon: ad.favicon,
+            placement: ad.placement,
+            placement_id,
+          },
+        ],
+      });
+    } catch (err) {
+      console.warn("[Ads Gateway] /api/ads/gravity error:", err);
+      return res.status(200).json({ ads: [] });
+    }
+  });
 }

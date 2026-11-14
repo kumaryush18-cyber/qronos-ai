@@ -4,7 +4,8 @@ import { Streamdown, Block } from "streamdown";
 import { motion } from "framer-motion";
 import { Copy, Check } from "lucide-react";
 import { BlurReveal } from "./blur-reveal";
-import { SponsoredIntelligenceCard, type SponsoredAdData } from "../SponsoredIntelligenceCard";
+import { GravityAd, type AdResponse } from "@gravity-ai/react";
+import { StarBorderCard } from "@/components/StarBorderCard";
 import "@/index.css";
 
 /**
@@ -552,7 +553,7 @@ export function AIThinkingOrbInput({
   const [copied, setCopied] = useState(false);
   const [statusText, setStatusText] = useState(COPY.labels[0]);
   const [path, setPath] = useState("");
-  const [sponsoredAd, setSponsoredAd] = useState<SponsoredAdData | null>(null);
+  const [gravityAd, setGravityAd] = useState<AdResponse | null>(null);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const pillRef = useRef<HTMLDivElement>(null);
@@ -692,16 +693,23 @@ export function AIThinkingOrbInput({
       setIsStreaming(false);
       setPhase("answered");
 
-      // Fetch contextual sponsored intelligence card
+      // Fetch contextual Gravity ad
       try {
-        fetch("/api/ads/thrad/bid", {
+        fetch("/api/ads/gravity", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ prompt: query, assistantResponse: accumulatedText }),
+          body: JSON.stringify({
+            messages: [
+              { role: "user", content: query },
+              { role: "assistant", content: accumulatedText.slice(0, 500) },
+            ],
+            placement: "inline_response",
+            placement_id: "main",
+          }),
         })
           .then((res) => (res.status === 200 ? res.json() : null))
-          .then((ad) => {
-            if (ad) setSponsoredAd(ad);
+          .then((data) => {
+            if (data?.ads?.[0]) setGravityAd(data.ads[0]);
           })
           .catch(() => {});
       } catch {}
@@ -712,7 +720,7 @@ export function AIThinkingOrbInput({
     orbRef.current?.reset();
     setInputText("");
     setAnswerText("");
-    setSponsoredAd(null);
+    setGravityAd(null);
     setIsStreaming(false);
     setCopied(false);
     setStatusText(COPY.labels[0]);
@@ -833,8 +841,21 @@ export function AIThinkingOrbInput({
                 </span>
               </div>
 
-              {/* Native Sponsored Intelligence Card */}
-              {sponsoredAd && <SponsoredIntelligenceCard ad={sponsoredAd} />}
+              {/* Native Gravity AI Ad Unit with Rotating Star Light */}
+              {gravityAd && (
+                <div className="w-full mt-4">
+                  <StarBorderCard
+                    lightWidth={140}
+                    duration={6}
+                    lightColor="rgba(201, 255, 115, 0.9)"
+                    className="rounded-2xl shadow-2xl"
+                  >
+                    <div className="p-3.5 sm:p-4 bg-[#010101] rounded-[15px]">
+                      <GravityAd ad={gravityAd} theme="dark" />
+                    </div>
+                  </StarBorderCard>
+                </div>
+              )}
             </>
           )}
         </div>

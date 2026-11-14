@@ -4,6 +4,7 @@ import { QronosGlyph } from "@/components/QronosGlyph";
 import { StarBackgroundSvg } from "@/components/StarButton";
 import { Loader2, ArrowRight } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { GravityAd, type AdResponse } from "@gravity-ai/react";
 
 function OnboardingGitHubLogo() {
   const logoRef = useRef<HTMLDivElement>(null);
@@ -130,6 +131,11 @@ export function SignInCard({
   const btnRef = useRef<HTMLButtonElement>(null);
   const [btnPath, setBtnPath] = useState<string>("");
 
+  // For rotating star light path on card
+  const cardRef = useRef<HTMLDivElement>(null);
+  const [cardPath, setCardPath] = useState<string>("");
+  const [gravityAd, setGravityAd] = useState<AdResponse | null>(null);
+
   useEffect(() => {
     const updateBtnPath = () => {
       if (btnRef.current) {
@@ -144,6 +150,40 @@ export function SignInCard({
     const ro = new ResizeObserver(updateBtnPath);
     if (btnRef.current) ro.observe(btnRef.current);
     return () => ro.disconnect();
+  }, []);
+
+  useEffect(() => {
+    const updateCardPath = () => {
+      if (cardRef.current) {
+        const w = cardRef.current.offsetWidth;
+        const h = cardRef.current.offsetHeight;
+        if (w > 0 && h > 0) {
+          setCardPath(`path('M 0 0 H ${w} V ${h} H 0 V 0')`);
+        }
+      }
+    };
+    updateCardPath();
+    const ro = new ResizeObserver(updateCardPath);
+    if (cardRef.current) ro.observe(cardRef.current);
+    return () => ro.disconnect();
+  }, []);
+
+  // Fetch Gravity ad for signup card
+  useEffect(() => {
+    fetch("/api/ads/gravity", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        messages: [{ role: "user", content: "Developer APIs, cloud databases, and AI coding tools" }],
+        placement: "below_response",
+        placement_id: "main",
+      }),
+    })
+      .then((res) => (res.status === 200 ? res.json() : null))
+      .then((data) => {
+        if (data?.ads?.[0]) setGravityAd(data.ads[0]);
+      })
+      .catch(() => {});
   }, []);
 
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -195,123 +235,41 @@ export function SignInCard({
           onMouseLeave={handleMouseLeave}
           whileHover={{ z: 10 }}
         >
-          <div className="relative group">
-            {/* Ambient Card Outer Glow */}
-            <motion.div
-              className="absolute -inset-[1px] rounded-2xl opacity-0 group-hover:opacity-70 transition-opacity duration-700"
-              animate={{
-                boxShadow: [
-                  "0 0 10px 2px rgba(255,255,255,0.03)",
-                  "0 0 15px 5px rgba(255,255,255,0.06)",
-                  "0 0 10px 2px rgba(255,255,255,0.03)",
-                ],
-                opacity: [0.2, 0.4, 0.2],
-              }}
-              transition={{
-                duration: 4,
-                repeat: Infinity,
-                ease: "easeInOut",
-                repeatType: "mirror",
-              }}
-            />
+          <div
+            ref={cardRef}
+            style={{
+              ["--duration" as any]: 6,
+              ["--light-width" as any]: "180px",
+              ["--light-color" as any]: "rgba(255, 255, 255, 0.95)",
+              ["--path" as any]: cardPath,
+              isolation: "isolate",
+            }}
+            className="relative rounded-2xl p-[1px] overflow-hidden group shadow-2xl transition-all duration-300"
+          >
+            {/* Revolving Orbiting Star Light Beam around Card Perimeter (Matches Get Started Button) */}
+            {cardPath && (
+              <div
+                aria-hidden="true"
+                className="absolute aspect-square inset-0 animate-star-btn pointer-events-none z-0"
+                style={{
+                  offsetPath: "var(--path)",
+                  offsetDistance: "0%",
+                  width: "var(--light-width)",
+                  background:
+                    "radial-gradient(ellipse at center, var(--light-color) 0%, rgba(201, 255, 115, 0.6) 30%, transparent 70%)",
+                  filter: "blur(2px)",
+                }}
+              />
+            )}
 
-            {/* Traveling Light Beams along all 4 Card Borders */}
-            <div className="absolute -inset-[1px] rounded-2xl overflow-hidden pointer-events-none z-0">
-              {/* Top beam */}
-              <motion.div
-                className="absolute top-0 left-0 h-[2.5px] w-[50%] bg-gradient-to-r from-transparent via-white to-transparent opacity-75"
-                initial={{ filter: "blur(2px)" }}
-                animate={{
-                  left: ["-50%", "100%"],
-                  opacity: [0.3, 0.8, 0.3],
-                  filter: ["blur(1px)", "blur(2.5px)", "blur(1px)"],
-                }}
-                transition={{
-                  left: { duration: 2.5, ease: "easeInOut", repeat: Infinity, repeatDelay: 1 },
-                  opacity: { duration: 1.2, repeat: Infinity, repeatType: "mirror" },
-                  filter: { duration: 1.5, repeat: Infinity, repeatType: "mirror" },
-                }}
-              />
-
-              {/* Right beam */}
-              <motion.div
-                className="absolute top-0 right-0 h-[50%] w-[2.5px] bg-gradient-to-b from-transparent via-white to-transparent opacity-75"
-                initial={{ filter: "blur(2px)" }}
-                animate={{
-                  top: ["-50%", "100%"],
-                  opacity: [0.3, 0.8, 0.3],
-                  filter: ["blur(1px)", "blur(2.5px)", "blur(1px)"],
-                }}
-                transition={{
-                  top: { duration: 2.5, ease: "easeInOut", repeat: Infinity, repeatDelay: 1, delay: 0.6 },
-                  opacity: { duration: 1.2, repeat: Infinity, repeatType: "mirror", delay: 0.6 },
-                  filter: { duration: 1.5, repeat: Infinity, repeatType: "mirror", delay: 0.6 },
-                }}
-              />
-
-              {/* Bottom beam */}
-              <motion.div
-                className="absolute bottom-0 right-0 h-[2.5px] w-[50%] bg-gradient-to-r from-transparent via-white to-transparent opacity-75"
-                initial={{ filter: "blur(2px)" }}
-                animate={{
-                  right: ["-50%", "100%"],
-                  opacity: [0.3, 0.8, 0.3],
-                  filter: ["blur(1px)", "blur(2.5px)", "blur(1px)"],
-                }}
-                transition={{
-                  right: { duration: 2.5, ease: "easeInOut", repeat: Infinity, repeatDelay: 1, delay: 1.2 },
-                  opacity: { duration: 1.2, repeat: Infinity, repeatType: "mirror", delay: 1.2 },
-                  filter: { duration: 1.5, repeat: Infinity, repeatType: "mirror", delay: 1.2 },
-                }}
-              />
-
-              {/* Left beam */}
-              <motion.div
-                className="absolute bottom-0 left-0 h-[50%] w-[2.5px] bg-gradient-to-b from-transparent via-white to-transparent opacity-75"
-                initial={{ filter: "blur(2px)" }}
-                animate={{
-                  bottom: ["-50%", "100%"],
-                  opacity: [0.3, 0.8, 0.3],
-                  filter: ["blur(1px)", "blur(2.5px)", "blur(1px)"],
-                }}
-                transition={{
-                  bottom: { duration: 2.5, ease: "easeInOut", repeat: Infinity, repeatDelay: 1, delay: 1.8 },
-                  opacity: { duration: 1.2, repeat: Infinity, repeatType: "mirror", delay: 1.8 },
-                  filter: { duration: 1.5, repeat: Infinity, repeatType: "mirror", delay: 1.8 },
-                }}
-              />
-
-              {/* Corner points */}
-              <motion.div
-                className="absolute top-0 left-0 h-[5px] w-[5px] rounded-full bg-white/50 blur-[1px]"
-                animate={{ opacity: [0.2, 0.5, 0.2] }}
-                transition={{ duration: 2, repeat: Infinity, repeatType: "mirror" }}
-              />
-              <motion.div
-                className="absolute top-0 right-0 h-[6px] w-[6px] rounded-full bg-white/70 blur-[1.5px]"
-                animate={{ opacity: [0.2, 0.5, 0.2] }}
-                transition={{ duration: 2.4, repeat: Infinity, repeatType: "mirror", delay: 0.5 }}
-              />
-              <motion.div
-                className="absolute bottom-0 right-0 h-[6px] w-[6px] rounded-full bg-white/70 blur-[1.5px]"
-                animate={{ opacity: [0.2, 0.5, 0.2] }}
-                transition={{ duration: 2.2, repeat: Infinity, repeatType: "mirror", delay: 1 }}
-              />
-              <motion.div
-                className="absolute bottom-0 left-0 h-[5px] w-[5px] rounded-full bg-white/50 blur-[1px]"
-                animate={{ opacity: [0.2, 0.5, 0.2] }}
-                transition={{ duration: 2.3, repeat: Infinity, repeatType: "mirror", delay: 1.5 }}
-              />
-            </div>
-
-            {/* Frosted Obsidian Glass Card Surface Centered Over Motion Video */}
+            {/* Main Card Surface: Sleek pitch black matching background */}
             <div
               style={{
-                backgroundColor: "oklch(0.13 0 0 / 0.88)",
-                borderColor: "oklch(0.28 0 0)",
-                boxShadow: "0 30px 80px rgba(0,0,0,0.95), inset 0 1px 0 rgba(255,255,255,0.12)",
+                backgroundColor: "#010101",
+                borderColor: "oklch(0.24 0 0)",
+                boxShadow: "0 30px 80px rgba(0,0,0,0.98), inset 0 1px 0 rgba(255,255,255,0.08)",
               }}
-              className="relative backdrop-blur-2xl rounded-2xl p-7 sm:p-8 border shadow-2xl overflow-hidden z-10"
+              className="relative backdrop-blur-2xl rounded-[15px] p-7 sm:p-8 border overflow-hidden z-10"
             >
               {/* Logo and Header with Onboarding GitHub Logo (Double Border Rotating Star Light Design) */}
               <div className="text-center space-y-3 mb-6">
@@ -453,7 +411,7 @@ export function SignInCard({
                     <div className="w-full border-t border-white/10" />
                   </div>
                   <div className="relative flex justify-center text-[10px] uppercase font-mono tracking-wider">
-                    <span className="bg-[#111218] px-2 text-zinc-500">or sign in with password</span>
+                    <span className="bg-[#010101] px-2 text-zinc-500">or sign in with password</span>
                   </div>
                 </div>
 
@@ -510,6 +468,24 @@ export function SignInCard({
                 {isSuccess && (
                   <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-xs text-emerald-300 text-center font-mono">
                     Authentication successful! Entering workspace…
+                  </div>
+                )}
+
+                {/* Gravity Sponsor Unit inside Signup Card */}
+                {gravityAd && (
+                  <div className="mt-4 pt-3.5 border-t border-white/[0.08]">
+                    <div className="flex items-center justify-between pb-1.5 mb-2">
+                      <span className="text-[9px] font-mono uppercase tracking-wider text-zinc-400 font-bold flex items-center gap-1.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-[#c9ff73] animate-pulse" />
+                        <span>Featured Sponsor</span>
+                      </span>
+                      <span className="text-[9px] font-mono text-zinc-600 uppercase tracking-wider">
+                        Sponsored
+                      </span>
+                    </div>
+                    <div className="rounded-xl overflow-hidden bg-[#010101] border border-white/10 p-2.5">
+                      <GravityAd ad={gravityAd} theme="dark" />
+                    </div>
                   </div>
                 )}
 

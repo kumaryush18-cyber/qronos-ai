@@ -76,6 +76,7 @@ import { buildQronosCurl, buildQronosJavaScript, buildQronosPython, QRONOS_API_B
 import { clearOneTimeApiKey, getOneTimeApiKey, rememberOneTimeApiKey } from "../../../shared/oneTimeApiKey";
 import { buildReferralInviteUrl } from "../../../shared/referrals";
 import { EventsWorkspace } from "@/components/events/EventsWorkspace";
+import { GravityAd, type AdResponse } from "@gravity-ai/react";
 
 export const DASHBOARD_VIDEO_URL = "https://github.com/kumaryush18-cyber/qronos-media/releases/download/v1.0-media/dashboard_video.mp4";
 
@@ -1578,6 +1579,55 @@ function OverviewHero({
   );
 }
 
+function DashboardGravityAdCard() {
+  const [ad, setAd] = useState<AdResponse | null>(null);
+
+  useEffect(() => {
+    fetch("/api/ads/gravity", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        messages: [{ role: "user", content: "Developer cloud infrastructure, APIs, and AI agent tools" }],
+        placement: "below_response",
+        placement_id: "main",
+      }),
+    })
+      .then((res) => (res.status === 200 ? res.json() : null))
+      .then((data) => {
+        if (data?.ads?.[0]) setAd(data.ads[0]);
+      })
+      .catch(() => {});
+  }, []);
+
+  if (!ad) return null;
+
+  return (
+    <div className="w-full my-4">
+      <StarBorderCard
+        lightWidth={180}
+        duration={7}
+        lightColor="rgba(201, 255, 115, 0.9)"
+        className="rounded-2xl shadow-2xl"
+      >
+        <div className="p-4 sm:p-5 bg-[#010101] rounded-[15px]">
+          <div className="flex items-center justify-between pb-2.5 mb-2.5 border-b border-white/[0.06]">
+            <div className="flex items-center gap-2">
+              <Zap size={13} className="text-[#c9ff73]" />
+              <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-300 font-bold">
+                Featured Developer Tool
+              </span>
+            </div>
+            <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-wider">
+              Sponsored
+            </span>
+          </div>
+          <GravityAd ad={ad} theme="dark" />
+        </div>
+      </StarBorderCard>
+    </div>
+  );
+}
+
 function DashboardVideoShowcase() {
   const videoRef = useRef<HTMLVideoElement>(null);
 
@@ -1701,7 +1751,10 @@ function Overview({
       {/* 1. Welcome Header Card (Above the video) */}
       <OverviewHero user={user} />
 
-      {/* 2. Standalone Video Showcase on the Dashboard Background */}
+      {/* 2. Gravity Ad Card (Placed just above the video display) */}
+      <DashboardGravityAdCard />
+
+      {/* 3. Standalone Video Showcase on the Dashboard Background */}
       <DashboardVideoShowcase />
 
       {/* 3. Unified Balances & Token Allocation Bento with Traveling Star Beam */}
