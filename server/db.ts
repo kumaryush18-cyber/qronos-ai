@@ -7517,10 +7517,7 @@ export function composeAdminAccountOverview(
     const lastActivity = usage?.lastActivityAt ? new Date(usage.lastActivityAt) : null;
     const emailLower = (account.email ?? "").trim().toLowerCase();
     const isWhitelisted = emailLower === "konchoor@gmail.com" || emailLower === "kumaryush18@gmail.com";
-    const geo = geoRegistry?.[String(account.id)] || {
-      code: emailLower.includes("thrad") || emailLower.includes("gravity") ? "US" : (account.countryCode ?? "IN"),
-      name: emailLower.includes("thrad") || emailLower.includes("gravity") ? "United States" : (account.countryName ?? "India"),
-    };
+    const geo = geoRegistry?.[String(account.id)] || { code: "UN", name: "Global / Unassigned" };
     return {
       ...account,
       creditsEnabled: isWhitelisted ? true : Boolean(account.creditsEnabled),

@@ -23,7 +23,7 @@ import { UserTierBadge, USER_TIER_CONFIGS, UserTier } from "@/components/UserTie
 import { DiscordIcon } from "@/components/LoginWelcomeTour";
 
 function getFlagEmoji(countryCode?: string | null): string {
-  if (!countryCode || countryCode.length !== 2) return "🌐";
+  if (!countryCode || countryCode.length !== 2 || countryCode === "UN" || countryCode === "GL" || countryCode === "XX") return "🌐";
   const code = countryCode.toUpperCase();
   const first = 127397 + code.charCodeAt(0);
   const second = 127397 + code.charCodeAt(1);

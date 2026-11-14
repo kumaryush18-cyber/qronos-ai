@@ -28,6 +28,7 @@ import {
   getModelCompactScalingConfig,
   recordSafetyAudit,
 } from "./db";
+import { resolveCountryFromRequest, recordUserGeo } from "./geo";
 import type { GlmPrivateToolContinuation } from "./glmToolContinuationVault";
 import { calculateCreditChargeNanos, normalizedBillableMaxOutputTokens, type PricingTier } from "./creditPricing";
 import {
@@ -1316,6 +1317,12 @@ export function registerAnthropicMessagesGateway(app: Express) {
     if (!secret) return respondError(res, requestId, 401, "authentication_error", "Send a Qronos AI key using the x-api-key or Bearer authorization header.");
     const key = await findActiveApiKey(secret);
     if (!key) return respondError(res, requestId, 401, "authentication_error", "The supplied Qronos AI key is missing, invalid, or revoked.");
+
+    // Real-time GeoIP Detection: automatically detects country from client IP
+    const geo = resolveCountryFromRequest(req);
+    if (geo.countryCode && geo.countryCode !== "UN") {
+      void recordUserGeo(key.userId, geo.countryCode, geo.countryName);
+    }
 
     if (!(await isDiscordVerified(key.userId))) {
       return respondError(

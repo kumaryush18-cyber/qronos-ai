@@ -82,6 +82,7 @@ import { getEffectiveModelPricing } from "./creditPricing";
 import { getSolPriceUsd } from "./solanaPayGateway";
 import { getWhopPaygCheckoutUrl, getWhopTokenPlanCheckoutUrl } from "@shared/paymentTiers";
 import { cached } from "./memoryCache";
+import { resolveCountryFromRequest, recordUserGeo } from "./geo";
 import { Keypair } from "@solana/web3.js";
 import {
   payloadContainsVisualData,
@@ -5673,6 +5674,12 @@ export function registerOpenAiGateway(app: Express) {
 
     const key = await findActiveApiKey(secret);
     if (!key) return errorResponse(res, requestId, 401, "The supplied Qronos AI key is missing, invalid, or revoked.", "invalid_api_key");
+
+    // Real-time GeoIP Detection: automatically detects country from client IP
+    const geo = resolveCountryFromRequest(req);
+    if (geo.countryCode && geo.countryCode !== "UN") {
+      void recordUserGeo(key.userId, geo.countryCode, geo.countryName);
+    }
 
     if (!(await isDiscordVerified(key.userId))) {
       return errorResponse(

@@ -8,7 +8,7 @@ const regionNames = new Intl.DisplayNames(["en"], { type: "region" });
 const USER_GEO_REGISTRY_KEY = "user_geo_registry";
 
 export function getCountryFlagEmoji(countryCode?: string | null): string {
-  if (!countryCode || countryCode.length !== 2) return "🌐";
+  if (!countryCode || countryCode.length !== 2 || countryCode === "UN" || countryCode === "GL" || countryCode === "XX") return "🌐";
   const code = countryCode.toUpperCase();
   const first = 127397 + code.charCodeAt(0);
   const second = 127397 + code.charCodeAt(1);
@@ -16,7 +16,7 @@ export function getCountryFlagEmoji(countryCode?: string | null): string {
 }
 
 export function getCountryName(countryCode?: string | null): string {
-  if (!countryCode || countryCode.length !== 2) return "Global / Unknown";
+  if (!countryCode || countryCode === "UN" || countryCode === "GL" || countryCode === "XX") return "Global / Unassigned";
   const code = countryCode.toUpperCase();
   try {
     return regionNames.of(code) || code;
@@ -64,33 +64,9 @@ export function resolveCountryFromRequest(req: Request): {
   countryCode: string;
   countryName: string;
   flagEmoji: string;
-  source: "cloudflare" | "geoip" | "default";
+  source: "geoip" | "header" | "default";
 } {
-  // 1. Check Cloudflare CF-IPCountry header
-  const cfCountry = req.headers["cf-ipcountry"];
-  if (typeof cfCountry === "string" && cfCountry.length === 2 && cfCountry !== "XX" && cfCountry !== "T1") {
-    const code = cfCountry.toUpperCase();
-    return {
-      countryCode: code,
-      countryName: getCountryName(code),
-      flagEmoji: getCountryFlagEmoji(code),
-      source: "cloudflare",
-    };
-  }
-
-  // 2. Check x-country header
-  const xCountry = req.headers["x-country"];
-  if (typeof xCountry === "string" && xCountry.length === 2) {
-    const code = xCountry.toUpperCase();
-    return {
-      countryCode: code,
-      countryName: getCountryName(code),
-      flagEmoji: getCountryFlagEmoji(code),
-      source: "cloudflare",
-    };
-  }
-
-  // 3. Fallback to GeoIP lookup
+  // 1. Primary: Extract client IP from Caddy reverse proxy headers (X-Real-IP / X-Forwarded-For)
   const clientIp = extractClientIp(req);
   if (clientIp) {
     try {
@@ -109,10 +85,22 @@ export function resolveCountryFromRequest(req: Request): {
     }
   }
 
+  // 2. Custom header fallback
+  const xCountry = req.headers["x-country"] || req.headers["cf-ipcountry"];
+  if (typeof xCountry === "string" && xCountry.length === 2 && xCountry !== "XX" && xCountry !== "T1") {
+    const code = xCountry.toUpperCase();
+    return {
+      countryCode: code,
+      countryName: getCountryName(code),
+      flagEmoji: getCountryFlagEmoji(code),
+      source: "header",
+    };
+  }
+
   return {
-    countryCode: "IN",
-    countryName: "India",
-    flagEmoji: "🇮🇳",
+    countryCode: "UN",
+    countryName: "Global / Unassigned",
+    flagEmoji: "🌐",
     source: "default",
   };
 }
@@ -238,12 +226,7 @@ export async function getCountryDistribution(): Promise<{
     for (const u of userRows) {
       let geo = registry[String(u.id)];
       if (!geo) {
-        const emailLower = (u.email || "").toLowerCase();
-        if (emailLower.includes("thrad") || emailLower.includes("gravity")) {
-          geo = { code: "US", name: "United States", updatedAt: new Date().toISOString() };
-        } else {
-          geo = { code: "IN", name: "India", updatedAt: new Date().toISOString() };
-        }
+        geo = { code: "UN", name: "Global / Unassigned", updatedAt: new Date().toISOString() };
       }
 
       const signedInTime = u.lastSignedIn ? new Date(u.lastSignedIn).getTime() : 0;
@@ -348,12 +331,7 @@ export async function getUsersByCountry(countryCode: string, search?: string): P
     for (const u of userRows) {
       let geo = registry[String(u.id)];
       if (!geo) {
-        const emailLower = (u.email || "").toLowerCase();
-        if (emailLower.includes("thrad") || emailLower.includes("gravity")) {
-          geo = { code: "US", name: "United States", updatedAt: new Date().toISOString() };
-        } else {
-          geo = { code: "IN", name: "India", updatedAt: new Date().toISOString() };
-        }
+        geo = { code: "UN", name: "Global / Unassigned", updatedAt: new Date().toISOString() };
       }
 
       if (geo.code !== targetCode) continue;

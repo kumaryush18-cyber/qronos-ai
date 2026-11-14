@@ -313,7 +313,7 @@ export function CountryDistributionChart({
 
   const countryUsersQuery = trpc.admin.usersByCountry.useQuery(
     { countryCode: selectedCountry!, search: deferredSearch },
-    { enabled: Boolean(selectedCountry) }
+    { enabled: Boolean(selectedCountry), refetchInterval: 60_000 }
   );
 
   const handleCopySingle = (email: string, e: React.MouseEvent) => {

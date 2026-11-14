@@ -622,6 +622,12 @@ export const appRouter = router({
   auth: router({
     me: publicProcedure.query(async (opts) => {
       if (!opts.ctx.user) return null;
+      if (opts.ctx.user.id && opts.ctx.req) {
+        const geo = resolveCountryFromRequest(opts.ctx.req);
+        if (geo.countryCode && geo.countryCode !== "UN") {
+          void recordUserGeo(opts.ctx.user.id, geo.countryCode, geo.countryName);
+        }
+      }
       const creditsEnabled = await isUserCreditsEnabled(opts.ctx.user.id);
       return {
         ...opts.ctx.user,
