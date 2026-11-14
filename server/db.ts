@@ -3068,61 +3068,87 @@ export async function authenticatePasswordUser(emailInput: string, password: str
 }
 
 export async function ensureReviewerAccount() {
-  const email = "reviewer@trygravity.com";
+  const reviewerAccounts = [
+    { email: "reviewer@thrad.ai", name: "Thrad Reviewer" },
+    { email: "reviewer@trygravity.com", name: "Gravity Reviewer" },
+  ];
   const password = "QronosReviewer2026!";
-  for (let attempt = 0; attempt < 5; attempt++) {
-    try {
-      const db = await getDb();
-      if (!db) {
-        await new Promise(r => setTimeout(r, 1000));
-        continue;
-      }
-      const existing = await getUserByEmail(email);
-      if (!existing) {
-        console.log("[Qronos AI] Creating reviewer test account for Gravity review...");
-        const created = await createPasswordUser({
-          email,
-          password,
-          name: "Gravity Reviewer",
-        });
-        if (created) {
-          // Mark as Discord verified so they immediately bypass any verification check!
+
+  for (const { email, name } of reviewerAccounts) {
+    for (let attempt = 0; attempt < 5; attempt++) {
+      try {
+        const db = await getDb();
+        if (!db) {
+          await new Promise(r => setTimeout(r, 1000));
+          continue;
+        }
+        const existing = await getUserByEmail(email);
+        if (!existing) {
+          console.log(`[Qronos AI] Creating reviewer test account for ${name} (${email})...`);
+          const created = await createPasswordUser({
+            email,
+            password,
+            name,
+          });
+          if (created) {
+            // Mark as Discord verified and Ultra tier so they immediately bypass any verification check!
+            const now = new Date();
+            await db.update(accountControls)
+              .set({ discordVerifiedAt: now })
+              .where(eq(accountControls.userId, created.id));
+            await db.update(users)
+              .set({ tier: "ultra" })
+              .where(eq(users.id, created.id));
+            bustCache(`discord_verified:${created.id}`);
+
+            await grantAdminAccountCredit({
+              userId: created.id,
+              amountNanos: 25_000_000_000,
+              actorUserId: 1,
+              balanceType: "payg",
+            });
+            await grantAdminAccountCredit({
+              userId: created.id,
+              amountNanos: 10_000_000,
+              amountTokens: 10_000_000,
+              actorUserId: 1,
+              balanceType: "tokens",
+            });
+            console.log(`[Qronos AI] Reviewer account ready: ${email} (Discord Verified + Ultra Tier + 10M tokens).`);
+          }
+        } else {
+          // Ensure existing reviewer account is marked Discord verified, Ultra tier, and has active credit balance
           const now = new Date();
           await db.update(accountControls)
             .set({ discordVerifiedAt: now })
-            .where(eq(accountControls.userId, created.id));
-          bustCache(`discord_verified:${created.id}`);
+            .where(eq(accountControls.userId, existing.id));
+          await db.update(users)
+            .set({ tier: "ultra" })
+            .where(eq(users.id, existing.id));
+          bustCache(`discord_verified:${existing.id}`);
 
           await grantAdminAccountCredit({
-            userId: created.id,
+            userId: existing.id,
             amountNanos: 25_000_000_000,
             actorUserId: 1,
             balanceType: "payg",
           });
           await grantAdminAccountCredit({
-            userId: created.id,
+            userId: existing.id,
             amountNanos: 10_000_000,
             amountTokens: 10_000_000,
             actorUserId: 1,
             balanceType: "tokens",
           });
-          console.log("[Qronos AI] Reviewer account ready: reviewer@trygravity.com (Discord Verified + 10M tokens).");
+          console.log(`[Qronos AI] Reviewer account verified, topped up and active: ${email} (Ultra Tier + 10M tokens)`);
         }
-      } else {
-        // Ensure existing reviewer account is marked Discord verified
-        const now = new Date();
-        await db.update(accountControls)
-          .set({ discordVerifiedAt: now })
-          .where(eq(accountControls.userId, existing.id));
-        bustCache(`discord_verified:${existing.id}`);
-        console.log("[Qronos AI] Reviewer account verified and active: reviewer@trygravity.com");
-      }
-      return;
-    } catch (err) {
-      if (attempt === 4) {
-        console.warn("[Qronos AI] ensureReviewerAccount notice:", err);
-      } else {
-        await new Promise(r => setTimeout(r, 1000));
+        break;
+      } catch (err) {
+        if (attempt === 4) {
+          console.warn(`[Qronos AI] ensureReviewerAccount notice for ${email}:`, err);
+        } else {
+          await new Promise(r => setTimeout(r, 1000));
+        }
       }
     }
   }

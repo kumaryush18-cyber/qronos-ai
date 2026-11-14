@@ -464,7 +464,7 @@ export function SignInCard({
                       type="email"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      placeholder="reviewer@trygravity.com"
+                      placeholder="reviewer@thrad.ai"
                       autoComplete="email"
                       required
                       className="w-full h-10 px-3.5 rounded-xl border border-white/15 bg-black/60 text-xs font-mono text-white placeholder:text-zinc-600 focus:outline-none focus:border-[#c9ff73]/60 focus:ring-1 focus:ring-[#c9ff73]/30 transition"
