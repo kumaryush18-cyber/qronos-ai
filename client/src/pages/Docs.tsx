@@ -26,6 +26,7 @@ import {
   Radio,
   Lock,
   Sparkles,
+  Mail,
 } from "lucide-react";
 import "./infergate-docs-legal.css";
 
@@ -352,6 +353,24 @@ claude`}
               Qronos AI manages up to 15 upstream API key slots per provider. When an upstream key returns HTTP 429 or
               503, the request is transparently re-routed to the next available healthy key slot in under 8ms without
               dropping the client connection.
+            </p>
+          </section>
+
+          {/* SECTION: Developer Support & Inquiries */}
+          <section id="support" className="scroll-mt-24 space-y-4 pt-8 border-t border-white/[0.08]">
+            <h2 className="text-2xl font-bold text-white tracking-tight flex items-center gap-2">
+              <Mail size={20} className="text-[#c9ff73]" />
+              <span>Developer Support &amp; Technical Inquiries</span>
+            </h2>
+            <p className="text-sm text-zinc-300 leading-relaxed">
+              Need custom rate limits, custom provider keys, enterprise SLAs, or technical integration assistance? Email our engineering desk directly at{" "}
+              <a
+                href="mailto:contact@qronos.me"
+                className="font-mono text-[#c9ff73] underline underline-offset-4 hover:text-white transition-colors"
+              >
+                contact@qronos.me
+              </a>
+              . We respond rapidly to all developer inquiries.
             </p>
           </section>
 

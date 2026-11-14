@@ -22,6 +22,43 @@ export type AdminAccount = {
   specialReferralAwardedAt: Date | null;
   referralCount: number;
   logUserMessages?: boolean | null;
+  countryCode?: string | null;
+  countryName?: string | null;
+};
+
+export type AdminCountryDistributionItem = {
+  countryCode: string;
+  countryName: string;
+  flagEmoji: string;
+  totalUsers: number;
+  activeUsers7d: number;
+  activeUsers30d: number;
+  activityRatePercent: number;
+};
+
+export type AdminCountryDistributionResponse = {
+  totalTracked: number;
+  totalActive7d: number;
+  globalActiveRate: number;
+  items: AdminCountryDistributionItem[];
+};
+
+export type AdminCountryUserItem = {
+  id: number;
+  name: string | null;
+  email: string | null;
+  tier: string;
+  lastSignedIn: string | null;
+  isActive7d: boolean;
+  createdAt: string;
+};
+
+export type AdminUsersByCountryResponse = {
+  countryCode: string;
+  countryName: string;
+  flagEmoji: string;
+  total: number;
+  users: AdminCountryUserItem[];
 };
 
 export type AdminAuditRecord = {

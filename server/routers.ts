@@ -7,6 +7,7 @@ import {
   computeCacheDiffBetweenEntries,
   exportCacheDebugJsonl,
 } from "./cacheDebugger";
+import { resolveCountryFromRequest, recordUserGeo, getCountryDistribution, getUsersByCountry } from "./geo";
 import { COOKIE_NAME, DEFAULT_SESSION_MAX_AGE_MS } from "@shared/const";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
@@ -701,6 +702,8 @@ export const appRouter = router({
         });
 
         await markUserSignedIn(user.id);
+        const geoEmail = resolveCountryFromRequest(ctx.req);
+        void recordUserGeo(user.id, geoEmail.countryCode, geoEmail.countryName);
 
         return {
           success: true as const,
@@ -749,6 +752,8 @@ export const appRouter = router({
         });
 
         await markUserSignedIn(user.id);
+        const geoPass = resolveCountryFromRequest(ctx.req);
+        void recordUserGeo(user.id, geoPass.countryCode, geoPass.countryName);
 
         return {
           success: true as const,
@@ -1430,6 +1435,19 @@ ${input.intent ? `Requested Notification Type: ${input.intent}` : ""}`;
         return sendDiscordBotTestMessage(input.channelId, input.content);
       }),
     accounts: adminProcedure.input(adminAccountDirectoryInput).query(({ input }) => listAdminAccounts(input)),
+    countryDistribution: adminProcedure.query(async () => {
+      return await getCountryDistribution();
+    }),
+    usersByCountry: adminProcedure
+      .input(
+        z.object({
+          countryCode: z.string().min(1).max(8),
+          search: z.string().optional(),
+        })
+      )
+      .query(async ({ input }) => {
+        return await getUsersByCountry(input.countryCode, input.search);
+      }),
     searchUsersForTier: adminProcedure
       .input(z.object({ query: z.string().default("") }))
       .query(async ({ input }) => {

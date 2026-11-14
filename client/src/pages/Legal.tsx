@@ -119,7 +119,7 @@ const legalContent: Record<LegalVariant, LegalPolicy> = {
       },
       {
         heading: "11. Contact & Inquiries",
-        body: "For inquiries regarding these Terms, enterprise SLAs, or formal legal notices, please reach out via our official Discord developer channel or contact our billing desk directly.",
+        body: "For inquiries regarding these Terms, enterprise SLAs, or formal legal notices, please reach out via email at contact@qronos.me or via our official Discord developer channel.",
       },
     ],
   },
@@ -235,7 +235,7 @@ const legalContent: Record<LegalVariant, LegalPolicy> = {
         heading: "5. Step-by-Step Refund Procedure",
         body: "Submitting a refund request is simple and transparent:",
         bullets: [
-          "Step 1: Contact our billing desk via our official Discord support channel.",
+          "Step 1: Contact our billing desk directly at contact@qronos.me or via our official Discord support channel.",
           "Step 2: Provide your account email, Order ID (e.g., 'TF_...' or card payment reference), transaction date, and the reason for your refund request.",
           "Step 3: Our billing desk reviews and approves qualifying refund submissions within 24 to 48 hours (maximum 1–3 business days).",
           "Step 4: Once approved, the refund is immediately triggered back to your original payment method.",
@@ -256,7 +256,7 @@ const legalContent: Record<LegalVariant, LegalPolicy> = {
       },
       {
         heading: "8. Dispute Resolution Notice",
-        body: "We strongly recommend contacting Qronos AI Support directly before filing a formal bank dispute or chargeback. Our billing desk can verify orders and issue direct refunds significantly faster than third-party dispute arbitrations.",
+        body: "We strongly recommend contacting Qronos AI Support directly at contact@qronos.me before filing a formal bank dispute or chargeback. Our billing desk can verify orders and issue direct refunds significantly faster than third-party dispute arbitrations.",
       },
     ],
   },

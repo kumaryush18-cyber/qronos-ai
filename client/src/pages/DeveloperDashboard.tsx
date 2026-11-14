@@ -1495,23 +1495,23 @@ function OverviewHero({
       <div className="pointer-events-none absolute -bottom-16 left-1/3 h-48 w-48 rounded-full bg-emerald-500/[0.03] blur-2xl" />
 
       {/* Welcome sentence and controls (directly above the video) */}
-      <div className="relative z-10 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
-        <div>
-          <div className="flex items-center gap-2.5 flex-wrap">
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-3 py-1 text-[10px] font-mono font-bold uppercase tracking-wider text-emerald-400">
+      <div className="relative z-10 flex flex-col xl:flex-row xl:items-center xl:justify-between gap-5">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-mono font-bold uppercase tracking-wider text-emerald-400">
               <span className="relative flex h-2 w-2">
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
                 <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400" />
               </span>
               Gateway Operational
             </span>
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[10px] font-mono text-zinc-300">
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[10px] font-mono text-zinc-300">
               <Zap size={11} className="text-zinc-200" />
               Zero Artificial Rate Limits
             </span>
             <UserTierBadge tier={(user as any)?.tier} showTag size="sm" />
             {isDiscordVerified && (
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-[#5865F2]/40 bg-[#5865F2]/15 px-3 py-1 text-[10px] font-mono font-bold uppercase tracking-wider text-[#9ba5f7] shadow-[0_0_12px_rgba(88,101,242,0.25)]">
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-[#5865F2]/40 bg-[#5865F2]/15 px-2.5 py-1 text-[10px] font-mono font-bold uppercase tracking-wider text-[#9ba5f7] shadow-[0_0_12px_rgba(88,101,242,0.25)]">
                 <DiscordIcon className="h-3 w-3 text-[#5865F2]" />
                 <Check size={11} className="text-emerald-400 stroke-[3]" />
                 Discord Verified
@@ -1519,17 +1519,17 @@ function OverviewHero({
             )}
           </div>
 
-          <h1 className="mt-3.5 text-2xl sm:text-4xl font-extrabold tracking-tight text-white flex items-center gap-2.5 flex-wrap">
+          <h1 className="mt-3.5 text-xl sm:text-2xl md:text-3xl font-extrabold tracking-tight text-white leading-snug">
             <span>{firstName ? `Welcome back, ${firstName}` : "Welcome to Qronos AI"}</span>
-            <span className="text-zinc-600 font-light hidden sm:inline">/</span>
-            <span className="text-base sm:text-2xl font-mono text-zinc-400 font-medium">Developer Workspace</span>
+            <span className="text-zinc-600 font-light mx-2">/</span>
+            <span className="text-base sm:text-xl font-mono text-zinc-400 font-medium">Developer Workspace</span>
           </h1>
           <p className="mt-2 max-w-2xl text-xs sm:text-sm text-zinc-400 leading-relaxed">
             Direct high-concurrency model routing mesh. Claude Opus 5, GLM-5.3, and DeepSeek V3 settled transparently with zero platform markup.
           </p>
         </div>
 
-        <div className="flex items-center gap-2.5 flex-wrap shrink-0">
+        <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap xl:shrink-0">
           {!isDiscordVerified && (
             <button type="button" onClick={openDiscordVerifyModal} className="inline-block cursor-pointer focus:outline-none">
               <StarButton
@@ -1538,26 +1538,26 @@ function OverviewHero({
                 starColor="#5865F2"
                 borderWidth={2}
                 duration={3}
-                className="rounded-full border border-[#5865F2]/60 hover:border-[#7289da] px-4 sm:px-5 text-xs font-mono font-bold h-10 shadow-[0_0_24px_rgba(88,101,242,0.4)]"
+                className="rounded-full border border-[#5865F2]/60 hover:border-[#7289da] px-3.5 sm:px-4 text-xs font-mono font-bold h-9 sm:h-10 shadow-[0_0_24px_rgba(88,101,242,0.4)]"
               >
                 <DiscordIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-[#5865F2] mr-1.5" />
                 <span className="text-white">Verify Discord</span>
-                <span className="text-[10px] font-bold uppercase tracking-wider text-amber-300 bg-amber-400/20 border border-amber-400/35 px-1.5 py-0.5 rounded ml-1">
+                <span className="text-[9px] font-bold uppercase tracking-wider text-amber-300 bg-amber-400/20 border border-amber-400/35 px-1 py-0.2 rounded ml-1">
                   10M Free
                 </span>
               </StarButton>
             </button>
           )}
           <Link href="/dashboard/pricing">
-            <StarButton backgroundColor="#010101" className="rounded-full border border-slate-200/50 px-5 text-xs font-mono h-10 shadow-lg">
+            <StarButton backgroundColor="#010101" className="rounded-full border border-slate-200/50 px-4 text-xs font-mono h-9 sm:h-10 shadow-lg">
               <Zap size={13} className="mr-1.5 inline-block text-white" />
-              <span>Recharge & Plans</span>
+              <span>Recharge &amp; Plans</span>
             </StarButton>
           </Link>
           <Link href="/dashboard/playground">
             <Button
               variant="outline"
-              className="h-10 rounded-full border-white/15 bg-black/40 text-xs font-mono text-zinc-200 hover:bg-white/10 hover:text-white px-4 cursor-pointer transition-all"
+              className="h-9 sm:h-10 rounded-full border-white/15 bg-black/40 text-xs font-mono text-zinc-200 hover:bg-white/10 hover:text-white px-3.5 cursor-pointer transition-all"
             >
               <Terminal size={13} className="mr-1.5 text-zinc-400" />
               <span>Prompt Studio</span>
@@ -1566,7 +1566,7 @@ function OverviewHero({
           <Link href="/docs">
             <Button
               variant="outline"
-              className="h-10 rounded-full border-white/10 bg-black/20 text-xs font-mono text-zinc-400 hover:bg-white/5 hover:text-zinc-200 px-3.5 cursor-pointer transition-all"
+              className="h-9 sm:h-10 rounded-full border-white/10 bg-black/20 text-xs font-mono text-zinc-400 hover:bg-white/5 hover:text-zinc-200 px-3 cursor-pointer transition-all"
             >
               <BookOpen size={13} className="mr-1" />
               <span>API Specs</span>
@@ -1591,7 +1591,7 @@ function DashboardVideoShowcase() {
   }, []);
 
   return (
-    <div className="relative my-0 -mx-3 min-[481px]:-mx-4 min-[821px]:-mx-5 lg:-mx-8 w-[calc(100%+1.5rem)] min-[481px]:w-[calc(100%+2rem)] min-[821px]:w-[calc(100%+2.5rem)] lg:w-[calc(100%+4rem)] max-w-none overflow-hidden border-0 bg-black">
+    <div className="relative my-4 w-full overflow-hidden rounded-2xl border border-white/10 bg-black">
       <div className="relative aspect-video w-full overflow-hidden bg-black">
         <video
           ref={videoRef}

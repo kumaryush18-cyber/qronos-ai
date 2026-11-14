@@ -11,6 +11,7 @@ const navItems = [
   { href: "/pricing", label: "Pricing" },
   { href: "/playground", label: "Playground", icon: Terminal },
   { href: "/docs", label: "Docs" },
+  { href: "mailto:contact@qronos.me", label: "Support", isExternal: true },
 ];
 
 export function PublicNav() {
@@ -43,6 +44,18 @@ export function PublicNav() {
             <div className="hidden md:flex items-center gap-9">
               {navItems.map((item) => {
                 const isActive = location === item.href;
+                if (item.isExternal) {
+                  return (
+                    <a
+                      key={item.href}
+                      href={item.href}
+                      className="text-xs uppercase tracking-wider font-mono font-medium transition-colors duration-300 relative group py-1 text-white/70 hover:text-[#c9ff73]"
+                    >
+                      <span>{item.label}</span>
+                      <span className="absolute -bottom-0.5 left-0 h-px transition-all duration-300 bg-[#c9ff73] w-0 group-hover:w-full" />
+                    </a>
+                  );
+                }
                 return (
                   <Link
                     key={item.href}
@@ -128,16 +141,30 @@ export function PublicNav() {
         {mobileMenuOpen && (
           <div className="md:hidden fixed inset-0 top-16 bg-[#08090d]/95 backdrop-blur-2xl z-40 p-6 flex flex-col justify-between">
             <div className="space-y-6 pt-6">
-              {navItems.map((item) => (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  onClick={() => setMobileMenuOpen(false)}
-                  className="block text-2xl font-light text-zinc-200 hover:text-white"
-                >
-                  {item.label}
-                </Link>
-              ))}
+              {navItems.map((item) => {
+                if (item.isExternal) {
+                  return (
+                    <a
+                      key={item.href}
+                      href={item.href}
+                      onClick={() => setMobileMenuOpen(false)}
+                      className="block text-2xl font-light text-zinc-200 hover:text-[#c9ff73]"
+                    >
+                      {item.label}
+                    </a>
+                  );
+                }
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="block text-2xl font-light text-zinc-200 hover:text-white"
+                  >
+                    {item.label}
+                  </Link>
+                );
+              })}
             </div>
             <div className="space-y-3 pb-8">
               {user ? (

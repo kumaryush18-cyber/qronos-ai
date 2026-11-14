@@ -25,6 +25,7 @@ import {
   ArrowRight,
   MessageCircle,
   Percent,
+  Mail,
 } from "lucide-react";
 import { toast } from "sonner";
 import "./infergate-landing.css";
@@ -490,7 +491,7 @@ export function PublicFooter() {
               and settle every token through one unified base URL.
             </p>
           </div>
-          <div className="grid grid-cols-2 gap-10 text-sm sm:grid-cols-3">
+          <div className="grid grid-cols-2 gap-10 text-sm sm:grid-cols-4">
             <div>
               <p className="text-xs uppercase tracking-wider text-zinc-500 font-mono">Product</p>
               <ul className="mt-4 space-y-2 text-zinc-300 text-xs">
@@ -513,6 +514,22 @@ export function PublicFooter() {
                 <li><Link href="/legal/privacy">Privacy Policy</Link></li>
                 <li><Link href="/legal/terms">Terms of Service</Link></li>
                 {showRefundLink && <li><Link href="/legal/refund">Refund Policy</Link></li>}
+              </ul>
+            </div>
+            <div>
+              <p className="text-xs uppercase tracking-wider text-zinc-500 font-mono">Support &amp; Contact</p>
+              <ul className="mt-4 space-y-2 text-zinc-300 text-xs">
+                <li className="flex items-center gap-1.5">
+                  <Mail size={12} className="text-[#c9ff73] shrink-0" />
+                  <a
+                    href="mailto:contact@qronos.me"
+                    className="font-mono text-white hover:text-[#c9ff73] transition-colors underline decoration-white/20 underline-offset-4"
+                  >
+                    contact@qronos.me
+                  </a>
+                </li>
+                <li className="text-zinc-400">Direct Inquiries &amp; SLA</li>
+                <li><Link href="/legal/terms">Enterprise &amp; Billing</Link></li>
               </ul>
             </div>
           </div>

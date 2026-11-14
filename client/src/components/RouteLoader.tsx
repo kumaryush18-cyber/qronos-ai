@@ -67,36 +67,23 @@ export function RouteLoader({ onEnded }: RouteLoaderProps) {
         e.stopPropagation();
       }}
     >
-      {/* Curved Metallic Silver Border Big Icon Container */}
-      <div
-        className="relative flex items-center justify-center w-24 h-24 sm:w-28 sm:h-28 md:w-32 md:h-32 aspect-square p-[2px] rounded-[24px] overflow-hidden"
-        style={{
-          background:
-            "linear-gradient(135deg, #f8fafc 0%, #94a3b8 20%, #ffffff 40%, #475569 65%, #cbd5e1 85%, #64748b 100%)",
-          boxShadow:
-            "0 0 25px rgba(226, 232, 240, 0.15), 0 10px 25px rgba(0, 0, 0, 0.7), inset 0 1px 1.5px rgba(255, 255, 255, 0.7), inset 0 -1px 1.5px rgba(0, 0, 0, 0.8)",
-        }}
-      >
-        {/* Inner black card with curved edges clipping the media */}
-        <div
-          className="w-full h-full rounded-[22px] overflow-hidden flex items-center justify-center bg-[#010101]"
-        >
-          <video
-            ref={videoRef}
-            src={LOADING_ASSET_URL}
-            autoPlay
-            muted
-            playsInline
-            loop
-            preload="auto"
-            className="w-full h-full object-cover pointer-events-none select-none scale-105"
-            onLoadedMetadata={applyPlaybackRate}
-            onCanPlay={applyPlaybackRate}
-            onPlay={applyPlaybackRate}
-            onError={() => onEnded?.()}
-            onEnded={() => onEnded?.()}
-          />
-        </div>
+      {/* Clean Video Container without metallic silver border */}
+      <div className="relative flex items-center justify-center w-24 h-24 sm:w-28 sm:h-28 md:w-32 md:h-32 aspect-square rounded-[24px] overflow-hidden bg-[#010101]">
+        <video
+          ref={videoRef}
+          src={LOADING_ASSET_URL}
+          autoPlay
+          muted
+          playsInline
+          loop
+          preload="auto"
+          className="w-full h-full object-cover pointer-events-none select-none"
+          onLoadedMetadata={applyPlaybackRate}
+          onCanPlay={applyPlaybackRate}
+          onPlay={applyPlaybackRate}
+          onError={() => onEnded?.()}
+          onEnded={() => onEnded?.()}
+        />
       </div>
     </div>
   );

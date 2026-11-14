@@ -17,10 +17,18 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Check, Eye, Loader2, Mail, Power, RefreshCw, Search, Trash2, UsersRound, WalletCards, X } from "lucide-react";
+import { Check, Copy, Eye, Loader2, Mail, Power, RefreshCw, Search, Trash2, UsersRound, WalletCards, X } from "lucide-react";
 import { toast } from "sonner";
 import { UserTierBadge, USER_TIER_CONFIGS, UserTier } from "@/components/UserTierBadge";
 import { DiscordIcon } from "@/components/LoginWelcomeTour";
+
+function getFlagEmoji(countryCode?: string | null): string {
+  if (!countryCode || countryCode.length !== 2) return "🌐";
+  const code = countryCode.toUpperCase();
+  const first = 127397 + code.charCodeAt(0);
+  const second = 127397 + code.charCodeAt(1);
+  return String.fromCodePoint(first, second);
+}
 
 export function AccountRow({
   account,
@@ -41,6 +49,7 @@ export function AccountRow({
   const [deleteConfirmation, setDeleteConfirmation] = useState("");
   const [resetVerificationOpen, setResetVerificationOpen] = useState(false);
   const [resetVerificationConfirmation, setResetVerificationConfirmation] = useState("");
+  const [emailCopied, setEmailCopied] = useState(false);
   const isCurrentAdmin = account.id === activeAdminId;
   const confirmationPhrase = `DELETE ACCOUNT ${account.id}`;
   const resetVerificationPhrase = `RESET DISCORD VERIFICATION ${account.id}`;
@@ -154,8 +163,42 @@ export function AccountRow({
       className="grid gap-3 border-t border-white/8 py-4 xl:grid-cols-[1.1fr_.75fr_.95fr_auto] xl:items-center"
     >
       <div className="min-w-0">
-        <p className="truncate text-xs font-bold text-white">{account.name || "Unnamed account"}</p>
-        <p className="mt-1 truncate text-[10px] text-[#8f90a2]">{account.email || "No email available"}</p>
+        <div className="flex items-center gap-2 min-w-0 flex-wrap">
+          <p className="truncate text-xs font-bold text-white">{account.name || "Unnamed account"}</p>
+          {account.countryCode && (
+            <span
+              title={`User Country: ${account.countryName || account.countryCode}`}
+              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-white/[0.06] border border-white/10 text-[10px] font-mono text-zinc-300 hover:border-white/20 transition-all shrink-0"
+            >
+              <span className="text-xs leading-none">{getFlagEmoji(account.countryCode)}</span>
+              <span className="font-semibold text-white/90">{account.countryName || account.countryCode}</span>
+            </span>
+          )}
+        </div>
+        <div className="mt-1 flex items-center gap-1.5 min-w-0">
+          <p className="truncate text-[10px] text-[#8f90a2] font-mono">{account.email || "No email available"}</p>
+          {account.email && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                if (!account.email) return;
+                navigator.clipboard.writeText(account.email);
+                setEmailCopied(true);
+                toast.success(`Copied ${account.email} to clipboard`);
+                setTimeout(() => setEmailCopied(false), 2000);
+              }}
+              title="Copy email address"
+              className="p-0.5 rounded hover:bg-white/10 text-zinc-400 hover:text-white transition-colors cursor-pointer inline-flex items-center justify-center shrink-0"
+            >
+              {emailCopied ? (
+                <Check size={11} className="text-emerald-400 stroke-[2.5]" />
+              ) : (
+                <Copy size={11} className="text-zinc-400 hover:text-white" />
+              )}
+            </button>
+          )}
+        </div>
         <div className="mt-2 flex flex-wrap gap-1.5 items-center">
           <div className="inline-flex items-center gap-1.5 rounded-md border border-white/10 bg-black/30 px-1.5 py-0.5">
             <UserTierBadge tier={account.tier} size="xs" showTag />

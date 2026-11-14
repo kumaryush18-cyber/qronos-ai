@@ -22,6 +22,7 @@ import {
   AlertTriangle,
   ArrowLeft,
   ChartNoAxesCombined,
+  Globe,
   KeyRound,
   Loader2,
   LogOut,
@@ -46,7 +47,7 @@ import {
   ManagedModelOverviewItem,
 } from "@/components/admin/types";
 import { formatTokens, Metric, SectionHeader } from "@/components/admin/common/AdminCommon";
-import { AdminUsageChart, EmailProviderChart } from "@/components/admin/overview/AdminCharts";
+import { AdminUsageChart, EmailProviderChart, CountryDistributionChart } from "@/components/admin/overview/AdminCharts";
 import { AccountsSection } from "@/components/admin/accounts/AccountsSection";
 import { DiscordBypassSection } from "@/components/admin/overview/DiscordBypassSection";
 import { UnoRouterToggleCard } from "@/components/admin/overview/UnoRouterToggleCard";
@@ -114,6 +115,10 @@ export default function AdminDashboard({ initialSection }: { initialSection?: Ad
   const auditExport = trpc.admin.auditExport.useQuery(undefined, { enabled: false });
   const announcement = trpc.admin.announcement.useQuery(undefined, { enabled: isAdminSession });
   const specialReferralCampaign = trpc.admin.specialReferralCampaign.useQuery(undefined, {
+    enabled: isAdminSession,
+    refetchInterval: 60_000,
+  });
+  const countryDistribution = trpc.admin.countryDistribution.useQuery(undefined, {
     enabled: isAdminSession,
     refetchInterval: 60_000,
   });
@@ -628,6 +633,24 @@ export default function AdminDashboard({ initialSection }: { initialSection?: Ad
                 />
                 <div className="mt-5">
                   <EmailProviderChart providers={emailProviders} loading={overview.isLoading} />
+                </div>
+              </div>
+            </div>
+          </StarBorderCard>
+
+          <StarBorderCard lightWidth={180} duration={8} className="rounded-3xl h-full xl:col-span-2">
+            <div className="p-5 sm:p-6 bg-[#0c0d12]/95 rounded-[23px] h-full flex flex-col justify-between">
+              <div>
+                <SectionHeader
+                  icon={<Globe size={17} className="text-[#c9ff73]" />}
+                  title="Geographic User & Active Engagement Breakdown"
+                  detail="Live user counts by country with 7-day active usage tracking and regional activity rates."
+                />
+                <div className="mt-5">
+                  <CountryDistributionChart
+                    distribution={countryDistribution.data}
+                    loading={countryDistribution.isLoading}
+                  />
                 </div>
               </div>
             </div>

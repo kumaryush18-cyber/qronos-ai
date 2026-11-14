@@ -20,7 +20,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { useIsMobile } from "@/hooks/useMobile";
-import { ArrowLeftRight, Boxes, ChartNoAxesCombined, Check, ChevronDown, CreditCard, FlaskConical, Gift, KeyRound, LayoutDashboard, LifeBuoy, LogOut, PanelLeft, Receipt, Settings2, Shield, Sparkles, Terminal, Trophy, UserRound } from "lucide-react";
+import { ArrowLeftRight, Boxes, ChartNoAxesCombined, Check, ChevronDown, CreditCard, FlaskConical, Gift, KeyRound, LayoutDashboard, LifeBuoy, LogOut, Mail, PanelLeft, Receipt, Settings2, Shield, Sparkles, Terminal, Trophy, UserRound } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
@@ -252,20 +252,12 @@ function DashboardLayoutContent({
       <SidebarInset className="dashboard-inset">
         <header className="dashboard-topbar">
           <div className="dashboard-topbar__brand">
-            {isMobile && <SidebarTrigger className="dashboard-topbar__trigger shrink-0" />}
-            <Link href="/dashboard" className="dashboard-topbar__logo shrink-0" aria-label="Qronos AI dashboard home">
-              <QronosGlyph size={24} className="dashboard-topbar__glyph" />
-              <span className="hidden min-[480px]:inline">Qronos <span>AI</span></span>
-            </Link>
-            <span className="dashboard-topbar__divider hidden sm:block" />
-            <span className="dashboard-topbar__section hidden sm:inline-block truncate max-w-[120px] md:max-w-[200px]">{activeMenuItem?.label ?? "Workspace"}</span>
+            <SidebarTrigger className="dashboard-topbar__trigger shrink-0" />
+            <span className="dashboard-topbar__section font-mono text-xs text-zinc-300 font-bold uppercase tracking-wider">
+              {activeMenuItem?.label ?? "Workspace"}
+            </span>
           </div>
           <div className="dashboard-topbar__actions">
-            <Link href="/dashboard/playground" className="hidden md:inline-block hover:text-white transition-colors">Playground</Link>
-            <Link href="/models" className="hidden md:inline-block hover:text-white transition-colors">Models</Link>
-            <Link href="/dashboard/pricing" className="hidden md:inline-block hover:text-white transition-colors">Pricing</Link>
-            <Link href="/docs" className="hidden lg:inline-block hover:text-white transition-colors">Documentation</Link>
-
             {/* Discord Verification Status Button / Badge */}
             {isDiscordVerified ? (
               <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full bg-[#5865F2]/10 border border-[#5865F2]/25 text-[10px] font-mono font-bold text-[#9ba5f7] shadow-[0_0_12px_rgba(88,101,242,0.15)] shrink-0">
@@ -340,6 +332,12 @@ function DashboardLayoutContent({
                   <ArrowLeftRight className="mr-2 h-3.5 w-3.5 text-zinc-400" />
                   <span>Transactions</span>
                 </DropdownMenuItem>
+                <DropdownMenuItem asChild className="cursor-pointer text-xs font-mono py-2 rounded-xl hover:bg-white/[0.08]">
+                  <a href="mailto:contact@qronos.me" className="flex items-center w-full">
+                    <Mail className="mr-2 h-3.5 w-3.5 text-zinc-400" />
+                    <span>Support: contact@qronos.me</span>
+                  </a>
+                </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => void handleSignOut()} className="cursor-pointer text-xs font-mono py-2 rounded-xl text-red-400 focus:text-red-300 hover:bg-red-500/10 mt-1 border-t border-white/[0.06]">
                   <LogOut className="mr-2 h-3.5 w-3.5" />
                   <span>Sign out</span>
@@ -361,6 +359,12 @@ function DashboardLayoutContent({
             <Link href="/legal/terms">Terms of Service</Link>
             <Link href="/legal/privacy">Privacy Policy</Link>
             {showRefundPolicy && <Link href="/legal/refund">Refund Policy</Link>}
+            <a
+              href="mailto:contact@qronos.me"
+              className="inline-flex items-center gap-1 text-[#c9ff73] hover:underline"
+            >
+              Support (contact@qronos.me)
+            </a>
             <a
               href="https://discord.gg/PGVmBGht7r"
               target="_blank"

@@ -64,12 +64,13 @@ import { decryptGlmToolContinuation, encryptGlmToolContinuation, type GlmPrivate
 import { decryptProviderRuntimeConfig, encryptProviderRuntimeConfig } from "./providerRuntimeConfigVault";
 import { cached, bustCache, setCached } from "./memoryCache";
 import { QRONOS_REFERRAL_SIGNUP_TOKENS, QRONOS_REFERRAL_SIGNUP_INVITER_TOKENS, QRONOS_REFERRAL_SIGNUP_NEW_USER_TOKENS, TOKENFORGE_REFERRAL_REWARD_NANOS, isSpecialReferralCampaignCode, normalizeReferralCode } from "../shared/referrals";
+import { getUserGeoRegistry, recordUserGeo } from "./geo";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 let _pool: mysql.Pool | null = null;
 let _dbHealthy = false;
 let _lastDbHealthCheckTime = 0;
-const DB_HEALTH_CHECK_COOLDOWN_MS = 60_000;
+const DB_HEALTH_CHECK_COOLDOWN_MS = 2_000;
 
 export function resetDatabasePool() {
   if (_pool) {
@@ -2322,10 +2323,10 @@ export async function getDb(): Promise<ReturnType<typeof drizzle> | null> {
     }
   }
 
-  // Verify health with a lightweight ping bounded by a 3-second timeout so it never hangs
+  // Verify health with a lightweight ping bounded by an 8-second timeout so it handles remote TLS handshakes
   _lastDbHealthCheckTime = now;
   try {
-    await (_pool as any).query({ sql: "SELECT 1", timeout: 3000 });
+    await (_pool as any).query({ sql: "SELECT 1", timeout: 8000 });
     _dbHealthy = true;
     if (!_startupMigrationsRan) {
       _startupMigrationsRan = true;
@@ -3142,6 +3143,13 @@ export async function ensureReviewerAccount() {
           });
           console.log(`[Qronos AI] Reviewer account verified, topped up and active: ${email} (Ultra Tier + 10M tokens)`);
         }
+
+        // Tag initial geo country for reviewer account
+        const targetUser = existing || (await getUserByEmail(email));
+        if (targetUser) {
+          const reviewerGeo = email.includes("thrad") || email.includes("gravity") ? { code: "US", name: "United States" } : { code: "IN", name: "India" };
+          await recordUserGeo(targetUser.id, reviewerGeo.code, reviewerGeo.name);
+        }
         break;
       } catch (err) {
         if (attempt === 4) {
@@ -3152,6 +3160,14 @@ export async function ensureReviewerAccount() {
       }
     }
   }
+
+  // Tag initial geo country for admin account
+  try {
+    const adminUser = await getUserByEmail("kumaryush18@gmail.com");
+    if (adminUser) {
+      await recordUserGeo(adminUser.id, "IN", "India");
+    }
+  } catch {}
 }
 
 function hashLoginIdentifier(email: string) {
@@ -7456,6 +7472,8 @@ export type AdminAccountBase = {
   specialReferralSlot?: number | null;
   specialReferralAwardedAt?: Date | null;
   referralCount?: number | null;
+  countryCode?: string | null;
+  countryName?: string | null;
 };
 
 export type AdminAccountUsage = {
@@ -7488,13 +7506,21 @@ export function normalizeAdminAccountDirectoryInput(input: AdminAccountDirectory
 }
 
 /** Combines separately aggregated sensitive account data without returning any API-key material. */
-export function composeAdminAccountOverview(accounts: AdminAccountBase[], usageRows: AdminAccountUsage[]) {
+export function composeAdminAccountOverview(
+  accounts: AdminAccountBase[],
+  usageRows: AdminAccountUsage[],
+  geoRegistry?: Record<string, { code: string; name: string }>
+) {
   const usageByUser = new Map(usageRows.map(row => [row.userId, row]));
   return accounts.map(account => {
     const usage = usageByUser.get(account.id);
     const lastActivity = usage?.lastActivityAt ? new Date(usage.lastActivityAt) : null;
     const emailLower = (account.email ?? "").trim().toLowerCase();
     const isWhitelisted = emailLower === "konchoor@gmail.com" || emailLower === "kumaryush18@gmail.com";
+    const geo = geoRegistry?.[String(account.id)] || {
+      code: emailLower.includes("thrad") || emailLower.includes("gravity") ? "US" : (account.countryCode ?? "IN"),
+      name: emailLower.includes("thrad") || emailLower.includes("gravity") ? "United States" : (account.countryName ?? "India"),
+    };
     return {
       ...account,
       creditsEnabled: isWhitelisted ? true : Boolean(account.creditsEnabled),
@@ -7506,6 +7532,8 @@ export function composeAdminAccountOverview(accounts: AdminAccountBase[], usageR
       totalTokens: Number(usage?.totalTokens ?? 0),
       lifetimeSpendNanos: Number(usage?.lifetimeSpendNanos ?? 0),
       referralCount: Number(account.referralCount ?? 0),
+      countryCode: geo.code,
+      countryName: geo.name,
       lastActivityAt: lastActivity && !Number.isNaN(lastActivity.getTime()) ? lastActivity : null,
     };
   });
@@ -7581,7 +7609,27 @@ export async function listAdminAccounts(input: AdminAccountDirectoryInput = {}) 
           ? [desc(specialReferralClaims.awardedAt), desc(specialReferralClaims.reservedAt), desc(users.createdAt), desc(users.id)]
         : [desc(users.createdAt), desc(users.id)];
   const accounts = await db
-    .select({ id: users.id, name: users.name, email: users.email, tier: users.tier, creditsEnabled: users.creditsEnabled, createdAt: users.createdAt, lastSignedIn: users.lastSignedIn, suspended: accountControls.isSuspended, suspicious: accountControls.isSuspicious, requestLimit: accountControls.dailyRequestLimit, tokenLimit: accountControls.dailyTokenLimit, logUserMessages: accountControls.logUserMessages, balanceNanos: creditAccounts.balanceNanos, paygBalanceNanos: creditAccounts.paygBalanceNanos, codingPlanTokens: creditAccounts.codingPlanTokens, discordVerifiedAt: accountControls.discordVerifiedAt, specialReferralSlot: specialReferralClaims.slotNumber, specialReferralAwardedAt: specialReferralClaims.awardedAt, referralCount })
+    .select({
+      id: users.id,
+      name: users.name,
+      email: users.email,
+      tier: users.tier,
+      creditsEnabled: users.creditsEnabled,
+      createdAt: users.createdAt,
+      lastSignedIn: users.lastSignedIn,
+      suspended: accountControls.isSuspended,
+      suspicious: accountControls.isSuspicious,
+      requestLimit: accountControls.dailyRequestLimit,
+      tokenLimit: accountControls.dailyTokenLimit,
+      logUserMessages: accountControls.logUserMessages,
+      balanceNanos: creditAccounts.balanceNanos,
+      paygBalanceNanos: creditAccounts.paygBalanceNanos,
+      codingPlanTokens: creditAccounts.codingPlanTokens,
+      discordVerifiedAt: accountControls.discordVerifiedAt,
+      specialReferralSlot: specialReferralClaims.slotNumber,
+      specialReferralAwardedAt: specialReferralClaims.awardedAt,
+      referralCount,
+    })
     .from(users)
     .leftJoin(accountControls, eq(users.id, accountControls.userId))
     .leftJoin(creditAccounts, eq(users.id, creditAccounts.userId))
@@ -7591,26 +7639,29 @@ export async function listAdminAccounts(input: AdminAccountDirectoryInput = {}) 
     .limit(query.pageSize)
     .offset((page - 1) * query.pageSize);
   const userIds = accounts.map(account => account.id);
-  const usageRows = userIds.length
-    ? await db.select({
-        userId: dailyUsage.userId,
-        requestCount: sql<number>`coalesce(sum(${dailyUsage.requestCount}), 0)`,
-        totalTokens: sql<number>`coalesce(sum(${dailyUsage.totalTokens}), 0)`,
-        lifetimeSpendNanos: sql<number>`coalesce((
-          select sum(abs(${creditLedger.amountNanos}))
-          from ${creditLedger}
-          where ${creditLedger.userId} = ${dailyUsage.userId}
-            and ${creditLedger.kind} = 'usage_debit'
-            and (${creditLedger.referenceId} is null or ${creditLedger.referenceId} not like 'reservation%')
-        ), 0)`,
-        lastActivityAt: sql<Date | null>`max(${dailyUsage.updatedAt})`
-      })
-      .from(dailyUsage)
-      .where(inArray(dailyUsage.userId, userIds))
-      .groupBy(dailyUsage.userId)
-    : [];
+  const [usageRows, geoRegistry] = await Promise.all([
+    userIds.length
+      ? db.select({
+          userId: dailyUsage.userId,
+          requestCount: sql<number>`coalesce(sum(${dailyUsage.requestCount}), 0)`,
+          totalTokens: sql<number>`coalesce(sum(${dailyUsage.totalTokens}), 0)`,
+          lifetimeSpendNanos: sql<number>`coalesce((
+            select sum(abs(${creditLedger.amountNanos}))
+            from ${creditLedger}
+            where ${creditLedger.userId} = ${dailyUsage.userId}
+              and ${creditLedger.kind} = 'usage_debit'
+              and (${creditLedger.referenceId} is null or ${creditLedger.referenceId} not like 'reservation%')
+          ), 0)`,
+          lastActivityAt: sql<Date | null>`max(${dailyUsage.updatedAt})`
+        })
+        .from(dailyUsage)
+        .where(inArray(dailyUsage.userId, userIds))
+        .groupBy(dailyUsage.userId)
+      : [],
+    getUserGeoRegistry(),
+  ]);
 
-  return { items: composeAdminAccountOverview(accounts, usageRows), total: Number(total), page, pageSize: query.pageSize, pageCount };
+  return { items: composeAdminAccountOverview(accounts, usageRows, geoRegistry), total: Number(total), page, pageSize: query.pageSize, pageCount };
 }
 
 export type AdminAccountModelUsageRow = {

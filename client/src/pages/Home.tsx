@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { Link } from "wouter";
+import { motion } from "framer-motion";
 import { PublicNav } from "@/components/PublicNav";
 import { QronosGlyph } from "@/components/QronosGlyph";
 import { VortexHourglass } from "@/components/VortexHourglass";
@@ -29,7 +30,8 @@ import {
   Flame,
   Globe,
   Sliders,
-  Server
+  Server,
+  Mail
 } from "lucide-react";
 import "./infergate-landing.css";
 import { QRONOS_LOGOS } from "@/lib/logos";
@@ -432,9 +434,18 @@ function PlatformExplainerCards() {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
       {PLATFORM_EXPLAINERS.map((item, idx) => (
-        <div
+        <motion.div
           key={idx}
-          className="group relative rounded-2xl border border-white/[0.08] bg-[#0c0d12]/90 backdrop-blur-xl p-5 sm:p-6 flex flex-col justify-between hover:border-white/25 transition-all duration-300 shadow-2xl hover:shadow-[0_0_30px_rgba(255,255,255,0.06)]"
+          initial={{ opacity: 0, y: 36, filter: "blur(6px)" }}
+          whileInView={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+          viewport={{ once: true, margin: "-50px" }}
+          transition={{
+            duration: 0.7,
+            delay: idx * 0.15,
+            ease: [0.16, 1, 0.3, 1],
+          }}
+          whileHover={{ y: -4, transition: { duration: 0.25 } }}
+          className="group relative rounded-2xl border border-white/[0.08] bg-[#0c0d12]/90 backdrop-blur-xl p-5 sm:p-6 flex flex-col justify-between hover:border-white/25 transition-all duration-300 shadow-2xl hover:shadow-[0_12px_35px_rgba(255,255,255,0.08)]"
         >
           <div>
             {/* 16:9 Aspect Ratio Image Preview */}
@@ -471,7 +482,7 @@ function PlatformExplainerCards() {
               </span>
             ))}
           </div>
-        </div>
+        </motion.div>
       ))}
     </div>
   );
@@ -517,7 +528,12 @@ export default function Home() {
         </div>
 
         <div className="relative z-10 w-full max-w-[1400px] mx-auto px-4 py-28 sm:px-8 sm:py-32 lg:px-14 lg:py-40">
-          <div className="mx-auto flex max-w-full flex-col items-center text-center">
+          <motion.div
+            initial={{ opacity: 0, y: 24 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
+            className="mx-auto flex max-w-full flex-col items-center text-center"
+          >
             {/* Crypto Top-up Pill */}
             <div className="mb-6 flex flex-wrap items-center justify-center gap-2.5">
               <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/[0.05] border border-white/10 text-xs font-mono text-zinc-300 backdrop-blur-md">
@@ -562,7 +578,7 @@ export default function Home() {
                 </button>
               </Link>
             </div>
-          </div>
+          </motion.div>
         </div>
 
         {/* AI Model Companies Logo Marquee */}
@@ -593,7 +609,13 @@ export default function Home() {
           FEATURES — stateful execution, live schedule preview
       ========================================================= */}
       <section id="features" className="relative overflow-hidden pt-24 lg:pt-32 bg-[#010101]">
-        <div className="mx-auto max-w-[1344px] px-6 lg:px-0">
+        <motion.div
+          initial={{ opacity: 0, y: 32 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: "-60px" }}
+          transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
+          className="mx-auto max-w-[1344px] px-4 sm:px-6 md:px-8 lg:px-12"
+        >
           <div className="max-w-3xl">
             <p className="text-xs font-mono uppercase tracking-[0.2em] text-zinc-500">Stateful execution.</p>
             <h2 className="mt-4 text-[clamp(2rem,5vw,4rem)] font-display leading-[0.98] tracking-tight text-white">
@@ -648,14 +670,20 @@ export default function Home() {
               </a>
             </div>
           )}
-        </div>
+        </motion.div>
       </section>
 
       {/* =========================================================
           HOW IT WORKS — durable autonomy, live pipeline
       ========================================================= */}
       <section id="how-it-works" className="relative overflow-hidden py-24 lg:py-32 bg-[#010101]">
-        <div className="mx-auto max-w-[1344px] px-6 lg:px-0">
+        <motion.div
+          initial={{ opacity: 0, y: 32 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: "-60px" }}
+          transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
+          className="mx-auto max-w-[1344px] px-4 sm:px-6 md:px-8 lg:px-12"
+        >
           <div className="max-w-3xl">
             <p className="text-xs font-mono uppercase tracking-[0.2em] text-zinc-500">Durable autonomy.</p>
             <h2 className="mt-4 text-[clamp(2rem,5vw,4rem)] font-display leading-[0.98] tracking-tight text-white">
@@ -670,22 +698,35 @@ export default function Home() {
               { step: "01", title: "Schedule on signals, not clocks", body: "Wake agents on webhooks, cron, database changes, or custom application triggers with zero polling overhead." },
               { step: "02", title: "Resume with complete context", body: "Every execution picks up where the previous run left off, carrying forward conversational memory, tool outputs, and state." },
               { step: "03", title: "Run with built-in guardrails", body: "Enforce strict spending limits, sub-8ms failover across API keys, and hardware-grade cryptographic isolation." },
-            ].map((s) => (
-              <div key={s.step} className="rounded-2xl border border-white/10 bg-white/[0.02] p-6 hover:border-white/20 transition-all">
+            ].map((s, idx) => (
+              <motion.div
+                key={s.step}
+                initial={{ opacity: 0, y: 24 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true, margin: "-40px" }}
+                transition={{ duration: 0.55, delay: idx * 0.12, ease: [0.16, 1, 0.3, 1] }}
+                className="rounded-2xl border border-white/10 bg-white/[0.02] p-6 hover:border-white/20 transition-all hover:scale-[1.01]"
+              >
                 <p className="font-mono text-xs text-zinc-500">{s.step}</p>
                 <h3 className="mt-6 text-xl font-semibold text-white">{s.title}</h3>
                 <p className="mt-3 text-sm leading-relaxed text-zinc-400">{s.body}</p>
-              </div>
+              </motion.div>
             ))}
           </div>
-        </div>
+        </motion.div>
       </section>
 
       {/* =========================================================
           INSIGHTS — live telemetry
       ========================================================= */}
       <section id="insights" className="relative overflow-hidden py-24 lg:py-32 bg-[#010101]">
-        <div className="mx-auto max-w-[1344px] px-6 lg:px-0">
+        <motion.div
+          initial={{ opacity: 0, y: 32 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: "-60px" }}
+          transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
+          className="mx-auto max-w-[1344px] px-4 sm:px-6 md:px-8 lg:px-12"
+        >
           <div className="max-w-3xl">
             <p className="text-xs font-mono uppercase tracking-[0.2em] text-zinc-500">Insights</p>
             <h2 className="mt-4 text-[clamp(2rem,5vw,4rem)] font-display leading-[0.98] tracking-tight text-white">
@@ -696,32 +737,38 @@ export default function Home() {
             </p>
           </div>
           <div className="mt-14 grid grid-cols-2 gap-4 md:grid-cols-4">
-            <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-5">
+            <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-5 hover:border-white/20 transition-all">
               <p className="text-xs text-zinc-500">Total tokens processed</p>
               <p className="mt-2 font-mono text-2xl font-light text-white"><AnimatedCounter value={totalTokens} /></p>
             </div>
-            <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-5">
+            <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-5 hover:border-white/20 transition-all">
               <p className="text-xs text-zinc-500">Verified models</p>
               <p className="mt-2 font-mono text-2xl font-light text-white">{QRONOS_MODELS.length}</p>
             </div>
-            <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-5">
+            <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-5 hover:border-white/20 transition-all">
               <p className="text-xs text-zinc-500">Failover latency</p>
               <p className="mt-2 font-mono text-2xl font-light text-white">&lt; 8ms</p>
             </div>
-            <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-5">
+            <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-5 hover:border-white/20 transition-all">
               <p className="text-xs text-zinc-500">Key slots per provider</p>
               <p className="mt-2 font-mono text-2xl font-light text-white">15</p>
             </div>
           </div>
-        </div>
+        </motion.div>
       </section>
 
       {/* =========================================================
           PLATFORM EXPLAINERS — core architecture & features
       ========================================================= */}
       <section className="relative overflow-hidden py-24 lg:py-32 bg-[#010101]">
-        <div className="mx-auto max-w-[1344px] px-6 lg:px-0">
-          <div className="max-w-3xl mb-14">
+        <div className="mx-auto max-w-[1344px] px-4 sm:px-6 md:px-8 lg:px-12">
+          <motion.div
+            initial={{ opacity: 0, y: 30, filter: "blur(4px)" }}
+            whileInView={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+            viewport={{ once: true, margin: "-60px" }}
+            transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
+            className="max-w-3xl mb-14"
+          >
             <p className="text-xs font-mono uppercase tracking-[0.2em] text-zinc-500">How Qronos Works</p>
             <h2 className="mt-4 text-[clamp(2rem,5vw,4rem)] font-display leading-[0.98] tracking-tight bg-gradient-to-b from-white via-zinc-200 to-zinc-400 bg-clip-text text-transparent">
               Built for speed. Powered by crypto.
@@ -729,7 +776,7 @@ export default function Home() {
             <p className="mt-4 text-base text-zinc-400 leading-relaxed">
               Route to any model with automatic provider failover, crypto-native top-ups, and native Anthropic compatibility.
             </p>
-          </div>
+          </motion.div>
           <div>
             <PlatformExplainerCards />
           </div>
@@ -740,7 +787,7 @@ export default function Home() {
           PRICING
       ========================================================= */}
       <section id="pricing" className="relative overflow-hidden py-24 lg:py-32 bg-[#010101]">
-        <div className="mx-auto max-w-[1344px] px-6 lg:px-0">
+        <div className="mx-auto max-w-[1344px] px-4 sm:px-6 md:px-8 lg:px-12">
           <div className="max-w-3xl">
             <div className="flex items-center gap-3 flex-wrap">
               <p className="text-xs font-mono uppercase tracking-[0.2em] text-zinc-500">Pricing</p>
@@ -783,7 +830,7 @@ export default function Home() {
           TESTIMONIALS — Teams moving faster with autonomous work
       ========================================================= */}
       <section id="customers" className="relative overflow-hidden py-24 lg:py-32 bg-[#010101]">
-        <div className="mx-auto max-w-[1344px] px-6 lg:px-0">
+        <div className="mx-auto max-w-[1344px] px-4 sm:px-6 md:px-8 lg:px-12">
           <div className="max-w-3xl">
             <p className="text-xs font-mono uppercase tracking-[0.2em] text-zinc-500">Customers</p>
             <h2 className="mt-4 text-[clamp(2rem,5vw,4rem)] font-display leading-[0.98] tracking-tight text-white">
@@ -849,7 +896,13 @@ export default function Home() {
           CLOSING CTA
       ========================================================= */}
       <section className="relative overflow-hidden py-28 lg:py-36 bg-[#010101] border-t border-white/[0.08]">
-        <div className="mx-auto max-w-3xl px-6 text-center">
+        <motion.div
+          initial={{ opacity: 0, y: 32 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: "-60px" }}
+          transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
+          className="mx-auto max-w-3xl px-6 text-center"
+        >
           <div className="mb-6 flex justify-center -space-x-2">
             {[
               "/images/agent-logos/gemini.png",
@@ -891,14 +944,14 @@ export default function Home() {
               </button>
             </Link>
           </div>
-        </div>
+        </motion.div>
       </section>
 
       {/* =========================================================
           FOOTER
       ========================================================= */}
       <footer className="relative bg-[#010101] border-t border-white/10">
-        <div className="mx-auto max-w-[1344px] px-6 py-14 lg:px-0">
+        <div className="mx-auto max-w-[1344px] px-4 sm:px-6 md:px-8 lg:px-12 py-14">
           <div className="flex flex-col gap-10 md:flex-row md:justify-between">
             <div className="max-w-sm">
               <div className="flex items-center gap-3">
@@ -914,9 +967,9 @@ export default function Home() {
                 The universal LLM gateway. Route, pool, and settle every token through one unified base URL.
               </p>
             </div>
-            <div className="grid grid-cols-2 gap-10 text-sm sm:grid-cols-3">
+            <div className="grid grid-cols-2 gap-10 text-sm sm:grid-cols-4">
               <div>
-                <p className="text-xs uppercase tracking-wider text-zinc-500">Product</p>
+                <p className="text-xs uppercase tracking-wider text-zinc-500 font-mono">Product</p>
                 <ul className="mt-4 space-y-2 text-zinc-300">
                   <li><Link href="/models">Models</Link></li>
                   <li><Link href="/pricing">Pricing</Link></li>
@@ -924,18 +977,40 @@ export default function Home() {
                 </ul>
               </div>
               <div>
-                <p className="text-xs uppercase tracking-wider text-zinc-500">Developers</p>
+                <p className="text-xs uppercase tracking-wider text-zinc-500 font-mono">Developers</p>
                 <ul className="mt-4 space-y-2 text-zinc-300">
                   <li><Link href="/docs">Documentation</Link></li>
                   <li><Link href="/docs">API reference</Link></li>
                 </ul>
               </div>
               <div>
-                <p className="text-xs uppercase tracking-wider text-zinc-500">Legal</p>
+                <p className="text-xs uppercase tracking-wider text-zinc-500 font-mono">Legal</p>
                 <ul className="mt-4 space-y-2 text-zinc-300">
                   <li><Link href="/privacy">Privacy</Link></li>
                   <li><Link href="/terms">Terms</Link></li>
                   <li><Link href="/security">Security</Link></li>
+                </ul>
+              </div>
+              <div>
+                <p className="text-xs uppercase tracking-wider text-zinc-500 font-mono">Support &amp; Contact</p>
+                <ul className="mt-4 space-y-2 text-zinc-300">
+                  <li className="flex items-center gap-1.5">
+                    <Mail size={13} className="text-[#c9ff73] shrink-0" />
+                    <a
+                      href="mailto:contact@qronos.me"
+                      className="font-mono text-xs text-white hover:text-[#c9ff73] transition-colors underline decoration-white/20 underline-offset-4"
+                    >
+                      contact@qronos.me
+                    </a>
+                  </li>
+                  <li className="text-xs text-zinc-400">
+                    Direct Email Support
+                  </li>
+                  <li>
+                    <Link href="/terms" className="text-xs text-zinc-400 hover:text-white transition-colors">
+                      Enterprise &amp; Billing
+                    </Link>
+                  </li>
                 </ul>
               </div>
             </div>
