@@ -38,7 +38,7 @@ export type TokenForgeModelDefinition = {
   identityWatchTerms?: readonly string[];
 };
 
-export const TOKENFORGE_MODEL_CATALOGUE = [
+export const QRONOS_MODEL_CATALOGUE = [
   {
     id: "claude-opus-5.5",
     displayName: "Claude Opus 5.5",
@@ -240,6 +240,8 @@ export const TOKENFORGE_MODEL_CATALOGUE = [
   },
 ] as const satisfies readonly TokenForgeModelDefinition[];
 
+export const TOKENFORGE_MODEL_CATALOGUE = QRONOS_MODEL_CATALOGUE;
+export const QRONOS_DEFAULT_MODEL_IDS = QRONOS_MODEL_CATALOGUE.map(model => model.id);
 export type TokenForgeModelId = string;
 
 export const TOKENFORGE_DEFAULT_MODEL_IDS = TOKENFORGE_MODEL_CATALOGUE.map(model => model.id);

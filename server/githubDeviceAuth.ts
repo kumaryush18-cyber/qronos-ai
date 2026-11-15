@@ -11,7 +11,7 @@ import {
 } from "./db";
 import { apiKeys, users } from "../drizzle/schema";
 import { and, eq } from "drizzle-orm";
-import { TOKENFORGE_MODEL_CATALOGUE } from "./modelCatalogue";
+import { QRONOS_MODEL_CATALOGUE } from "./modelCatalogue";
 
 interface DeviceSession {
   sessionId: string;
@@ -291,10 +291,19 @@ export function registerGitHubDeviceAuth(app: Express) {
 
   // 4. GET /client-version - Handshake endpoint for CLI version and model routing
   const handleClientVersion = (_req: Request, res: Response) => {
-    const models = TOKENFORGE_MODEL_CATALOGUE.map((m) => ({
-      id: m.id,
-      name: `${m.displayName} (${m.providerName})`,
-    }));
+    const models = QRONOS_MODEL_CATALOGUE.map((m) => {
+      const isFree =
+        !m.isPremium &&
+        (m.inputUsdPerMillion <= 0.20 ||
+          m.id.includes("flash") ||
+          m.id.includes("glm") ||
+          m.id.includes("qwen"));
+      const tag = isFree ? " [FREE]" : " [PAID]";
+      return {
+        id: m.id,
+        name: `${m.displayName} (${m.providerName})${tag}`,
+      };
+    });
 
     return res.status(200).json({
       min: "1.0.0",
