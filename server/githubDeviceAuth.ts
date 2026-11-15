@@ -327,11 +327,11 @@ export function registerGitHubDeviceAuth(app: Express) {
         cap_usd_today: 10,
         tier: "established",
         credit_usd: paygDollars,
-        allowance_credits: tokens,
+        allowance_credits: Math.max(tokens, 10_000_000),
         remaining_credits_today: tokens,
         refill_at: new Date(Date.now() + 86400000).toISOString(),
         lane: "standard",
-        bonus_credits: tokens,
+        bonus_credits: 0,
       });
     } catch (err: any) {
       console.warn("[Device Auth] /me error:", err);
@@ -362,11 +362,11 @@ export function registerGitHubDeviceAuth(app: Express) {
         remaining_usd_today: tokens > 0 ? tokens / 1_000_000 : 0,
         credit_usd: paygDollars,
         credit_credits: tokens,
-        allowance_credits: tokens,
+        allowance_credits: Math.max(tokens, 10_000_000),
         remaining_credits_today: tokens,
         refill_at: new Date(Date.now() + 86400000).toISOString(),
         lane: "standard",
-        bonus_credits: tokens,
+        bonus_credits: 0,
         request_count_today: 0,
         prompt_tokens_today: 0,
         completion_tokens_today: 0,
