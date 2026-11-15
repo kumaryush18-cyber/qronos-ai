@@ -10,6 +10,7 @@ import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { registerOAuthRoutes } from "./oauth";
 import { registerGoogleOAuthRoutes } from "../googleOAuth";
 import { registerGitHubOAuthRoutes } from "../githubOAuth";
+import { registerGitHubDeviceAuth } from "../githubDeviceAuth";
 import { registerDiscordOAuthRoutes } from "../discordOAuth";
 import { registerStorageProxy } from "./storageProxy";
 import { registerOpenAiGateway, registerPlaygroundGateway } from "../openaiGateway";
@@ -171,6 +172,7 @@ async function startServer() {
   registerOAuthRoutes(app);
   registerGoogleOAuthRoutes(app);
   registerGitHubOAuthRoutes(app);
+  registerGitHubDeviceAuth(app);
   registerDiscordOAuthRoutes(app);
   registerLiveRequestRoutes(app);
   registerOpenAiGateway(app);

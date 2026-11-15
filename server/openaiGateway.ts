@@ -10,6 +10,7 @@ import {
   releaseBaiCredentialCapacityLease,
   releaseBailuWebshareProxySlot,
   findActiveApiKey,
+  ensureDailyCodingTokens,
   getCreditProfile,
   getClaudeFable5NvidiaRuntimeConfig,
   getClaudeOpus5RuntimeConfig,
@@ -5344,7 +5345,11 @@ export function registerOpenAiGateway(app: Express) {
       return errorResponse(res, requestId, 401, "The supplied Qronos AI key is missing, invalid, or revoked.", "invalid_api_key");
     }
 
-    if (!(await isDiscordVerified(key.userId))) {
+    // Refresh daily 10M tokens if past midnight
+    void ensureDailyCodingTokens(key.userId);
+
+    const isCliKey = key.label === "Qronos CLI" || (key as any).keyGroup === "coding_plan";
+    if (!isCliKey && !(await isDiscordVerified(key.userId))) {
       return errorResponse(
         res,
         requestId,

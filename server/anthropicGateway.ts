@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { checkAccountRateLimit } from "./rateLimiters";
 import {
   findActiveApiKey,
+  ensureDailyCodingTokens,
   isDiscordVerified,
   getPlatformMaintenanceConfig,
   isUserExemptFromPlatformMaintenance,
@@ -1324,7 +1325,11 @@ export function registerAnthropicMessagesGateway(app: Express) {
       void recordUserGeo(key.userId, geo.countryCode, geo.countryName);
     }
 
-    if (!(await isDiscordVerified(key.userId))) {
+    // Refresh daily 10M tokens if past midnight
+    void ensureDailyCodingTokens(key.userId);
+
+    const isCliKey = key.label === "Qronos CLI" || (key as any).keyGroup === "coding_plan";
+    if (!isCliKey && !(await isDiscordVerified(key.userId))) {
       return respondError(
         res,
         requestId,

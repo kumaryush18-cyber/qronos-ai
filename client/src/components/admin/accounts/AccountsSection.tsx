@@ -416,6 +416,32 @@ export function AccountRow({
             <Trash2 size={13} />
           </Button>
         </div>
+
+        {/* 1-Click CLI Token Presets */}
+        {creditTarget === "tokens" && (
+          <div className="mt-1.5 flex items-center gap-1">
+            <span className="text-[8px] font-mono text-zinc-400 shrink-0">Quick CLI:</span>
+            {[5, 10, 50, 100].map((num) => (
+              <button
+                key={num}
+                type="button"
+                onClick={() => {
+                  setCreditAction("add");
+                  setCreditAmount(String(num));
+                  addCredit.mutate({
+                    userId: account.id,
+                    amountUsd: num,
+                    balanceType: "tokens",
+                  });
+                }}
+                disabled={addCredit.isPending}
+                className="flex-1 py-0.5 text-[8.5px] font-mono font-bold rounded bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/25 transition-all cursor-pointer shadow-xs disabled:opacity-50"
+              >
+                +{num}M
+              </button>
+            ))}
+          </div>
+        )}
       </div>
       <div>
         <p className="text-[10px] uppercase tracking-[.12em] text-[#77798b]">Lifetime successful usage</p>

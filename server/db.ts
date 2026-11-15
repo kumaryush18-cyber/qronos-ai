@@ -8643,6 +8643,61 @@ export async function dismissCreditGiveawayNotification(input: { userId: number;
   return Number(result[0].affectedRows ?? 0) > 0;
 }
 
+/**
+ * Automatically refreshes the user's daily CLI coding plan allowance to 10M tokens at 12:00 AM (midnight) every day.
+ * Any leftover is refreshed back to 10,000,000 tokens once per calendar day.
+ */
+export async function ensureDailyCodingTokens(userId: number): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  const todayStr = utcUsageDate();
+  const refId = `daily_cli_refresh:${todayStr}:${userId}`;
+
+  // Check if this account was already refreshed today
+  const existingRefresh = (
+    await db
+      .select({ id: creditLedger.id })
+      .from(creditLedger)
+      .where(and(eq(creditLedger.userId, userId), eq(creditLedger.referenceId, refId)))
+      .limit(1)
+  )[0];
+
+  if (existingRefresh) return;
+
+  try {
+    await db.transaction(async (tx) => {
+      const acc = (
+        await tx
+          .select()
+          .from(creditAccounts)
+          .where(eq(creditAccounts.userId, userId))
+          .limit(1)
+      )[0];
+
+      if (!acc) return;
+
+      // Refresh leftover tokens back to 10,000,000 (10M Tokens)
+      await tx
+        .update(creditAccounts)
+        .set({ codingPlanTokens: 10_000_000 })
+        .where(eq(creditAccounts.userId, userId));
+
+      await tx.insert(creditLedger).values({
+        userId,
+        kind: "daily_refresh",
+        amountNanos: 0,
+        balanceAfterNanos: 10_000_000,
+        referenceId: refId,
+      });
+    });
+  } catch (err: any) {
+    // Duplicate key on race condition is safe to ignore
+    if (err?.code !== "ER_DUP_ENTRY") {
+      console.warn(`[Daily Refresh] Race or warning for user #${userId}:`, err?.message || err);
+    }
+  }
+}
+
 /** Adds a positive administrator credit grant and immutable wallet-ledger record for an existing account. */
 export async function grantAdminAccountCredit(input: {
   userId: number;
