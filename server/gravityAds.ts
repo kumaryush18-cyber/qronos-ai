@@ -35,12 +35,7 @@ function getGravityClients() {
     timeoutMs: 4000,
     relevancy: 0.2,
   });
-  const sandbox = new Gravity({
-    apiKey,
-    alwaysReturn: true,
-    timeoutMs: 3000,
-  });
-  return { live, sandbox };
+  return { live };
 }
 
 export async function fetchGravityAd(
@@ -84,24 +79,24 @@ export async function fetchGravityAd(
     // Align with registered dashboard placement IDs ('inline_response' and 'below_response' with id 'main')
     const placementType = slot === "inline" ? "inline_response" : "below_response";
     const placementConfig = [{ placement: placementType, placement_id: "main" }];
-    const { live, sandbox } = getGravityClients();
+    const { live } = getGravityClients();
 
-    // 1. Attempt Live Monetized Auction
+    // 1. Attempt Live Monetized Auction Only
     try {
       const liveRes = await live.getAds(reqMock, formattedMessages, placementConfig);
       const liveAds = liveRes?.ads || [];
       if (liveAds.length > 0) {
         const ad = liveAds[0] as any;
         return {
-          adText: ad.adText || ad.text || DEFAULT_SANDBOX_AD.adText,
-          title: ad.title || ad.brandName || DEFAULT_SANDBOX_AD.title,
-          cta: ad.cta || DEFAULT_SANDBOX_AD.cta,
+          adText: ad.adText || ad.text || "",
+          title: ad.title || ad.brandName || "Featured Partner",
+          cta: ad.cta || "Learn More",
           brandName: ad.brandName || ad.brand || "Sponsored Partner",
-          url: ad.clickUrl || ad.url || DEFAULT_SANDBOX_AD.url,
-          favicon: ad.favicon || DEFAULT_SANDBOX_AD.favicon,
-          brandImage: ad.brandImage || ad.image || DEFAULT_SANDBOX_AD.brandImage,
+          url: ad.clickUrl || ad.url,
+          favicon: ad.favicon,
+          brandImage: ad.brandImage || ad.image,
           impUrl: ad.impUrl || "https://trygravity.ai",
-          clickUrl: ad.clickUrl || ad.url || DEFAULT_SANDBOX_AD.url,
+          clickUrl: ad.clickUrl || ad.url,
           placement: ad.placement || placementType,
           isTest: false,
         };
@@ -110,31 +105,10 @@ export async function fetchGravityAd(
       console.warn("[Gravity Ads] Live auction attempt error:", liveErr);
     }
 
-    // 2. Fallback to Sandbox Test Ad so terminal slot always fills nicely
-    try {
-      const sandboxRes = await sandbox.getAds(reqMock, formattedMessages, placementConfig);
-      const sandboxAds = sandboxRes?.ads || [];
-      if (sandboxAds.length > 0) {
-        const ad = sandboxAds[0] as any;
-        return {
-          adText: ad.adText || ad.text || DEFAULT_SANDBOX_AD.adText,
-          title: ad.title || ad.brandName || DEFAULT_SANDBOX_AD.title,
-          cta: ad.cta || DEFAULT_SANDBOX_AD.cta,
-          brandName: ad.brandName || ad.brand || "Sponsored Partner",
-          url: ad.clickUrl || ad.url || DEFAULT_SANDBOX_AD.url,
-          favicon: ad.favicon || DEFAULT_SANDBOX_AD.favicon,
-          brandImage: ad.brandImage || ad.image || DEFAULT_SANDBOX_AD.brandImage,
-          impUrl: ad.impUrl || "https://trygravity.ai",
-          clickUrl: ad.clickUrl || ad.url || DEFAULT_SANDBOX_AD.url,
-          placement: ad.placement || placementType,
-          isTest: true,
-        };
-      }
-    } catch {}
-
-    return DEFAULT_SANDBOX_AD;
+    // No live billable sponsor returned: return null so no fake test ad is shown
+    return null;
   } catch (err) {
-    console.warn("[Gravity Ads] Fetching ad fallback:", err);
-    return DEFAULT_SANDBOX_AD;
+    console.warn("[Gravity Ads] Fetching ad error:", err);
+    return null;
   }
 }
