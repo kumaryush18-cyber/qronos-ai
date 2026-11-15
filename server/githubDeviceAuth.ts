@@ -11,6 +11,7 @@ import {
 } from "./db";
 import { apiKeys, users } from "../drizzle/schema";
 import { and, eq } from "drizzle-orm";
+import { TOKENFORGE_MODEL_CATALOGUE } from "./modelCatalogue";
 
 interface DeviceSession {
   sessionId: string;
@@ -290,18 +291,17 @@ export function registerGitHubDeviceAuth(app: Express) {
 
   // 4. GET /client-version - Handshake endpoint for CLI version and model routing
   const handleClientVersion = (_req: Request, res: Response) => {
+    const models = TOKENFORGE_MODEL_CATALOGUE.map((m) => ({
+      id: m.id,
+      name: `${m.displayName} (${m.providerName})`,
+    }));
+
     return res.status(200).json({
       min: "1.0.0",
-      latest: "1.0.0",
+      latest: "1.0.1",
       model: "claude-sonnet-5.5",
       notice: "⚡ Welcome to Qronos CLI — autonomous AI coding agent. 10M tokens active.",
-      models: [
-        { id: "claude-sonnet-5.5", name: "Claude Sonnet 5.5" },
-        { id: "claude-opus-5", name: "Claude Opus 5" },
-        { id: "claude-fable-5.2", name: "Claude Fable 5.2" },
-        { id: "deepseek-v4-flash", name: "DeepSeek V4 Flash" },
-        { id: "gpt-4o", name: "GPT-4o" },
-      ],
+      models,
     });
   };
 

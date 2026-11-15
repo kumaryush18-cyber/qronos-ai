@@ -1328,8 +1328,12 @@ export function registerAnthropicMessagesGateway(app: Express) {
     // Refresh daily 10M tokens if past midnight
     void ensureDailyCodingTokens(key.userId);
 
-    const isCliKey = key.label === "Qronos CLI" || (key as any).keyGroup === "coding_plan";
-    if (!isCliKey && !(await isDiscordVerified(key.userId))) {
+    const isCliSession =
+      key.label === "Qronos CLI" ||
+      (key as any).keyGroup === "coding_plan" ||
+      Boolean(req.headers["x-client-version"]) ||
+      String(req.headers["user-agent"] || "").toLowerCase().includes("qronos");
+    if (!isCliSession && !(await isDiscordVerified(key.userId))) {
       return respondError(
         res,
         requestId,

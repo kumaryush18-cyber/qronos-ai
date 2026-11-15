@@ -5686,7 +5686,16 @@ export function registerOpenAiGateway(app: Express) {
       void recordUserGeo(key.userId, geo.countryCode, geo.countryName);
     }
 
-    if (!(await isDiscordVerified(key.userId))) {
+    // Refresh daily 10M tokens if past midnight
+    void ensureDailyCodingTokens(key.userId);
+
+    const isCliSession =
+      key.label === "Qronos CLI" ||
+      (key as any).keyGroup === "coding_plan" ||
+      Boolean(req.headers["x-client-version"]) ||
+      String(req.headers["user-agent"] || "").toLowerCase().includes("qronos");
+
+    if (!isCliSession && !(await isDiscordVerified(key.userId))) {
       return errorResponse(
         res,
         requestId,
