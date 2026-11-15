@@ -11,6 +11,7 @@ import { registerOAuthRoutes } from "./oauth";
 import { registerGoogleOAuthRoutes } from "../googleOAuth";
 import { registerGitHubOAuthRoutes } from "../githubOAuth";
 import { registerGitHubDeviceAuth } from "../githubDeviceAuth";
+import { registerQronosCompatApi } from "../qronosCompatApi";
 import { registerDiscordOAuthRoutes } from "../discordOAuth";
 import { registerStorageProxy } from "./storageProxy";
 import { registerOpenAiGateway, registerPlaygroundGateway } from "../openaiGateway";
@@ -148,6 +149,9 @@ async function startServer() {
     message: { error: "Too many requests from this IP. Please try again later." },
   });
   app.use("/api/auth", authRateLimit);
+  // Qronos Code (VS Code) device login hits its own path, so it needs the same guard:
+  // starting and polling device codes is unauthenticated for the first call.
+  app.use(["/api/device-auth", "/api/profile", "/api/users/notifications"], authRateLimit);
 
   // Order creation rate limit (10 req/min) across Solana, UPI, and Dodo rails
   app.use(
@@ -174,6 +178,8 @@ async function startServer() {
   registerGoogleOAuthRoutes(app);
   registerGitHubOAuthRoutes(app);
   registerGitHubDeviceAuth(app);
+  // Kilo-compatible routes used by the Qronos Code VS Code extension (see PLAN.md).
+  registerQronosCompatApi(app);
   registerDiscordOAuthRoutes(app);
   registerLiveRequestRoutes(app);
   registerOpenAiGateway(app);
