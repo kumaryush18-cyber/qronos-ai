@@ -28,6 +28,8 @@ export type LiveRequest = {
   modelId: string;
   status: "success" | "rejected" | "provider_error" | "cancelled";
   source: "api" | "playground";
+  /** qronos_change - code = Qronos Code extension, cli = Qronos CLI, api = anything else */
+  client?: "code" | "cli" | "api";
   stream: boolean;
   inputTokens: number;
   outputTokens: number;
@@ -185,6 +187,7 @@ export default function LiveRequestLog() {
   // Filters
   const [outcomeFilter, setOutcomeFilter] = useState<string>("all");
   const [sourceFilter, setSourceFilter] = useState<string>("all");
+  const [clientFilter, setClientFilter] = useState<string>("all"); // qronos_change - Code vs CLI
   const [nonSuccessOnly, setNonSuccessOnly] = useState<boolean>(false);
   const [selectedProvider, setSelectedProvider] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState<string>("");
@@ -398,6 +401,11 @@ export default function LiveRequestLog() {
         if (src !== sourceFilter) return false;
       }
 
+      if (clientFilter !== "all") {
+        const client = row.client || "api";
+        if (client !== clientFilter) return false;
+      }
+
       if (selectedProvider) {
         const p = (row.provider || "Default").split("(")[0].trim();
         if (p !== selectedProvider) return false;
@@ -415,7 +423,7 @@ export default function LiveRequestLog() {
 
       return true;
     });
-  }, [rows, nonSuccessOnly, outcomeFilter, sourceFilter, selectedProvider, searchQuery]);
+  }, [rows, nonSuccessOnly, outcomeFilter, sourceFilter, clientFilter, selectedProvider, searchQuery]);
 
   return (
     <section
@@ -881,6 +889,23 @@ export default function LiveRequestLog() {
                         >
                           <Terminal size={9} className="text-emerald-400" />
                           API
+                        </span>
+                      )}
+                      {/* qronos_change - which client sent it */}
+                      {row.client === "code" && (
+                        <span
+                          className="ml-1 inline-flex items-center gap-1 rounded border border-sky-400/40 bg-sky-500/15 px-1.5 py-0.5 text-[9px] font-bold text-sky-300"
+                          title="Request sent by the Qronos Code VS Code extension"
+                        >
+                          QRONOS CODE
+                        </span>
+                      )}
+                      {row.client === "cli" && (
+                        <span
+                          className="ml-1 inline-flex items-center gap-1 rounded border border-amber-400/40 bg-amber-500/15 px-1.5 py-0.5 text-[9px] font-bold text-amber-300"
+                          title="Request sent by the Qronos CLI"
+                        >
+                          CLI
                         </span>
                       )}
                     </td>

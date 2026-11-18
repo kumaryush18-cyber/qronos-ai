@@ -29,6 +29,7 @@ import {
   getModelCompactScalingConfig,
   recordSafetyAudit,
 } from "./db";
+import { resolveClientTag } from "./clientTag"; // qronos_change - editor vs CLI tagging
 import { resolveCountryFromRequest, recordUserGeo } from "./geo";
 import type { GlmPrivateToolContinuation } from "./glmToolContinuationVault";
 import { calculateCreditChargeNanos, normalizedBillableMaxOutputTokens, type PricingTier } from "./creditPricing";
@@ -1123,6 +1124,7 @@ async function handleNativeTokenRouterMessagesRequest(req: Request, res: Respons
       apiKeyId: key.id,
       modelId: model,
       source: "api",
+      client,
       stream: false,
       status: "success",
       ...tokens,
@@ -1282,6 +1284,7 @@ async function handleNativeTokenRouterMessagesRequest(req: Request, res: Respons
       apiKeyId: key.id,
       modelId: model,
       source: "api",
+      client,
       stream: true,
       status: clientDisconnected ? "cancelled" : (failed ? "provider_error" : "success"),
       ...tokens,
@@ -1314,6 +1317,8 @@ async function handleNativeTokenRouterMessagesRequest(req: Request, res: Respons
 export function registerAnthropicMessagesGateway(app: Express) {
   app.post("/v1/messages", async (req: Request, res: Response) => {
     const requestId = `qronos_msg_${randomUUID().replaceAll("-", "")}`;
+    // qronos_change - editor extension vs terminal CLI, for the admin live panel.
+    const client = resolveClientTag(req);
     const secret = anthropicApiKey(req);
     if (!secret) return respondError(res, requestId, 401, "authentication_error", "Send a Qronos AI key using the x-api-key or Bearer authorization header.");
     const key = await findActiveApiKey(secret);

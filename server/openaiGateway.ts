@@ -79,6 +79,7 @@ import {
   getUsageSummary,
   getReferralOverview,
 } from "./db";
+import { resolveClientTag } from "./clientTag"; // qronos_change - editor vs CLI tagging
 import { getEffectiveModelPricing } from "./creditPricing";
 import { getSolPriceUsd } from "./solanaPayGateway";
 import { getWhopPaygCheckoutUrl, getWhopTokenPlanCheckoutUrl } from "@shared/paymentTiers";
@@ -5674,6 +5675,8 @@ export function registerOpenAiGateway(app: Express) {
 
   app.post("/v1/chat/completions", async (req: Request, res) => {
     const requestId = `qronos_req_${randomUUID().replaceAll("-", "")}`;
+    // qronos_change - editor extension vs terminal CLI, for the admin live panel.
+    const client = resolveClientTag(req);
     const secret = bearer(req);
     if (!secret) return errorResponse(res, requestId, 401, "Send a Qronos AI key using the Bearer authorization header.", "invalid_api_key");
 
@@ -5987,6 +5990,7 @@ export function registerOpenAiGateway(app: Express) {
         apiKeyId: key.id,
         modelId: input.model,
         source: "api",
+        client,
         stream: false,
         status: "success",
         ...tokens,
@@ -6382,6 +6386,7 @@ export function registerOpenAiGateway(app: Express) {
         apiKeyId: key.id,
         modelId: input.model,
         source: "api",
+        client,
         stream: true,
         status: clientDisconnected ? "cancelled" : (streamFailed ? "provider_error" : "success"),
         ...tokens,

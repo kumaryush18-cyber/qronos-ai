@@ -6,6 +6,8 @@ export type LiveRequestEvent = {
   modelId: string;
   status: "success" | "rejected" | "provider_error" | "cancelled";
   source: "api" | "playground";
+  /** Which client sent the request: the editor extension, the terminal CLI, or an unknown API caller. */
+  client?: "code" | "cli" | "api";
   stream: boolean;
   inputTokens: number;
   outputTokens: number;

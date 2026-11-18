@@ -189,6 +189,22 @@ const legalContent: Record<LegalVariant, LegalPolicy> = {
         heading: "8. Security Safeguards & Encryption",
         body: "All external network communications use TLS 1.3 encryption. Upstream provider credentials and state vaults are encrypted at rest using AES-256-GCM authenticated encryption with random IVs.",
       },
+      {
+        heading: "9. Qronos Code Editor Extension",
+        body: "The Qronos Code extension for Visual Studio Code runs on your machine and connects to the Qronos AI gateway. This section describes what the extension itself sends and stores, separately from API usage through the gateway.",
+        bullets: [
+          "Workspace content: the agent reads files you ask it to work on and sends only the content required for the current request to the model provider you selected. File contents are not uploaded in bulk, and no background scan leaves your machine unless codebase indexing is enabled in settings.",
+          "Prompts and tool output: your messages, tool results and command output travel to the selected model provider for the duration of the request. They are not retained by Qronos AI after the response is delivered, in line with section 3.",
+          "Local storage: authentication credentials, session history, settings and logs are written to ~/.local/share/qronos (Linux/macOS) or %LOCALAPPDATA%\\qronos (Windows) on your own disk. Removing the extension or signing out deletes the credentials; you can delete the directory at any time to remove everything.",
+          "GitHub sign-in: the extension uses the GitHub device flow. Qronos AI receives your GitHub account identifier, username and verified email address to create or link your account, and receives no access to your repositories.",
+          "Web search: search queries are sent to third-party search providers (currently Exa and Parallel) to return results. The query text leaves your machine; the pages you open are fetched by the extension.",
+          "Sponsor messages: the chat panel may request a sponsored placement from Gravity, which receives the placement identifier and general session information needed to serve an ad. No prompts or file contents are sent with that request.",
+          "Custom providers and MCP servers: if you configure your own model endpoint or MCP server, the extension sends requests directly to that endpoint under the credentials you supply. Those third parties are outside Qronos AI's control and are governed by their own policies.",
+          "Telemetry: product telemetry is limited to feature usage and error events, and it can be disabled in VS Code settings (qronos-code.new.telemetry or the global telemetry.telemetryLevel setting). Prompts, file contents and command output are never included in telemetry events.",
+        ],
+        callout: "The extension does not train models on your code, does not run a background crawler of your workspace, and does not send repository contents to Qronos AI as a whole. Every outbound request is triggered by an action in your session.",
+        calloutType: "emerald",
+      },
     ],
   },
 

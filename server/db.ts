@@ -7037,6 +7037,8 @@ export async function recordUsage(input: {
   modelId: string;
   status: "success" | "rejected" | "provider_error" | "cancelled";
   source?: "api" | "playground";
+  /** Editor extension vs terminal CLI vs unknown API caller, forwarded to the live panel only. */
+  client?: "code" | "cli" | "api";
   stream?: boolean;
   inputTokens?: number;
   outputTokens?: number;
@@ -7135,6 +7137,7 @@ export async function recordUsage(input: {
     modelId: input.modelId,
     status: input.status,
     source: (input.source ?? "api") as "api" | "playground",
+    client: input.client,
     stream: input.stream ?? false,
     inputTokens,
     outputTokens,
