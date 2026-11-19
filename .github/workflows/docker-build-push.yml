@@ -56,20 +56,39 @@ jobs:
     steps:
       - name: Deploy via SSH to Azure VM
         uses: appleboy/ssh-action@v1.2.0
+        # Secrets are passed as environment variables, never written into this
+        # file or into the workflow log: ssh-action masks them.
+        env:
+          GRAVITY_API_KEY: ***REMOVED*** secrets.GRAVITY_API_KEY }}
+          ROUTER_INITIAL_PASSWORD: ***REMOVED*** secrets.ROUTER_INITIAL_PASSWORD }}
+          GHCR_PAT: ${{ secrets.GHCR_PAT }}
         with:
           host: ${{ secrets.AZURE_VM_HOST }}
           username: ${{ secrets.AZURE_VM_USER }}
           key: ${{ secrets.AZURE_VM_SSH_KEY }}
+          envs: GRAVITY_API_KEY,ROUTER_INITIAL_PASSWORD,GHCR_PAT
           script: |
             set -e
             echo "🚀 Updating Qronos AI on Azure VM..."
             cd /opt/qronos
-            if grep -q "^GRAVITY_API_KEY=" .env 2>/dev/null; then
-              sed -i 's/^GRAVITY_API_KEY=***REMOVED***' .env
-            else
-              echo "GRAVITY_API_KEY=***REMOVED***" >> .env
-            fi
-            echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u kumaryush18-cyber --password-stdin
+            # Upsert one KEY=value line without ever printing the value.
+            upsert() {
+              key="$1"
+              value="$2"
+              if [ -z "$value" ]; then
+                echo "::warning::$key is empty in GitHub secrets; keeping the value already on the VM"
+                return 0
+              fi
+              touch .env
+              if grep -q "^${key}=" .env 2>/dev/null; then
+                sed -i "s|^${key}=.*|${key}=${value}|" .env
+              else
+                printf '%s=%s\n' "$key" "$value" >> .env
+              fi
+            }
+            upsert GRAVITY_API_KEY "$GRAVITY_API_KEY"
+            upsert ROUTER_INITIAL_PASSWORD "$ROUTER_INITIAL_PASSWORD"
+            echo "$GHCR_PAT" | docker login ghcr.io -u kumaryush18-cyber --password-stdin
             docker compose pull
             docker compose up -d --remove-orphans
             docker image prune -f

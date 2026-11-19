@@ -21,7 +21,10 @@ services:
     restart: always
     environment:
       - PORT=10000
-      - INITIAL_PASSWORD=changeme123
+      # Comes from the GitHub secret ROUTER_INITIAL_PASSWORD, written into .env
+      # by the deploy workflow. Compose refuses to start when it is missing, so
+      # the default "changeme123" can never reach a live host again.
+      - INITIAL_PASSWORD=${ROUTER_INITIAL_PASSWORD:***REMOVED*** ROUTER_INITIAL_PASSWORD in .env}
       - DATA_DIR=/data
     volumes:
       - router_data:/data
