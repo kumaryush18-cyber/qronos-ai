@@ -58,6 +58,7 @@ import { getFxqidianCredentialPool } from "./fxqidianCredentials";
 import { getTokenRouterCredentialPool } from "./tokenRouterCredentials";
 import { clearProviderCredentialTelemetryGroup, getCredentialSlotTelemetry, getProviderCredentialTelemetry, type CredentialTelemetryProvider } from "./providerCredentialTelemetry";
 import { publishLiveRequest, type LiveRequestEvent } from "./liveRequestBus";
+import { clientTagFromApiKey } from "./clientTag";
 import { encryptOrcaRouterCredential } from "./orcaRouterCredentialVault";
 import { decryptBaiReasoningContinuation, encryptBaiReasoningContinuation } from "./baiReasoningContinuationVault";
 import { decryptGlmToolContinuation, encryptGlmToolContinuation, type GlmPrivateToolContinuation } from "./glmToolContinuationVault";
@@ -7187,15 +7188,23 @@ export async function getRecentLiveRequests(limit = 25): Promise<LiveRequestEven
       provider: usageEvents.provider,
       createdAt: usageEvents.createdAt,
       userName: users.name,
+      apiKeyLabel: apiKeys.label,
+      apiKeyGroup: apiKeys.keyGroup,
     })
     .from(usageEvents)
     .leftJoin(users, eq(usageEvents.userId, users.id))
+    .leftJoin(apiKeys, eq(usageEvents.apiKeyId, apiKeys.id))
     .orderBy(desc(usageEvents.createdAt))
     .limit(bounded);
   return rows.map(row => ({
     requestId: row.requestId,
     userId: row.userId,
     apiKeyId: row.apiKeyId ?? undefined,
+    // Which client the stored row came from: guessed from the key it used, so
+    // old rows show the right badge too (the column is not stored for usage rows).
+    client: row.source === "playground"
+      ? undefined
+      : clientTagFromApiKey({ label: row.apiKeyLabel, keyGroup: row.apiKeyGroup }),
     modelId: row.modelId,
     status: row.status,
     source: row.source,

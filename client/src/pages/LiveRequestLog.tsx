@@ -20,6 +20,7 @@ import {
   X,
   ArrowUpDown,
   Terminal,
+  Code2,
 } from "lucide-react";
 
 export type LiveRequest = {
@@ -676,6 +677,22 @@ export default function LiveRequestLog() {
             <Filter size={11} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none" />
           </div>
 
+          {/* qronos_change - Client Filter (CLI vs VS Code extension vs SDK) */}
+          <div className="relative">
+            <select
+              aria-label="Filter by client"
+              value={clientFilter}
+              onChange={(e) => setClientFilter(e.target.value)}
+              className="h-8 pl-3 pr-7 rounded-xl border border-white/10 bg-black/60 text-xs font-mono text-zinc-300 focus:outline-none focus:border-white/30 cursor-pointer appearance-none"
+            >
+              <option value="all" className="bg-neutral-900 text-white">All Clients</option>
+              <option value="cli" className="bg-neutral-900 text-white">Qronos CLI Only</option>
+              <option value="code" className="bg-neutral-900 text-white">Qronos Code Only</option>
+              <option value="api" className="bg-neutral-900 text-white">API Only</option>
+            </select>
+            <Filter size={11} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none" />
+          </div>
+
           {/* Active Provider Filter Indicator */}
           {selectedProvider && (
             <div className="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-[#c9ff73]/15 border border-[#c9ff73]/30 text-[#c9ff73] text-xs font-mono">
@@ -882,30 +899,31 @@ export default function LiveRequestLog() {
                           <Play size={9} className="fill-purple-300/40 text-purple-300" />
                           PLAYGROUND
                         </span>
+                      ) : row.client === "cli" ? (
+                        /* qronos_change - terminal CLI, not a generic API caller */
+                        <span
+                          className="inline-flex items-center gap-1 rounded border border-amber-400/40 bg-amber-500/15 px-1.5 py-0.5 text-[9px] font-bold text-amber-300"
+                          title="Request sent by the Qronos CLI (x-qronos-client: cli)"
+                        >
+                          <Terminal size={9} className="text-amber-300" />
+                          QRONOS CLI
+                        </span>
+                      ) : row.client === "code" ? (
+                        /* qronos_change - VS Code extension */
+                        <span
+                          className="inline-flex items-center gap-1 rounded border border-sky-400/40 bg-sky-500/15 px-1.5 py-0.5 text-[9px] font-bold text-sky-300"
+                          title="Request sent by the Qronos Code VS Code extension"
+                        >
+                          <Code2 size={9} className="text-sky-300" />
+                          QRONOS CODE
+                        </span>
                       ) : (
                         <span
                           className="inline-flex items-center gap-1 rounded border border-emerald-400/30 bg-emerald-500/10 px-1.5 py-0.5 text-[9px] font-semibold text-emerald-400"
-                          title="Request executed via API Key / SDK / CLI"
+                          title="Request executed via API Key / SDK"
                         >
                           <Terminal size={9} className="text-emerald-400" />
                           API
-                        </span>
-                      )}
-                      {/* qronos_change - which client sent it */}
-                      {row.client === "code" && (
-                        <span
-                          className="ml-1 inline-flex items-center gap-1 rounded border border-sky-400/40 bg-sky-500/15 px-1.5 py-0.5 text-[9px] font-bold text-sky-300"
-                          title="Request sent by the Qronos Code VS Code extension"
-                        >
-                          QRONOS CODE
-                        </span>
-                      )}
-                      {row.client === "cli" && (
-                        <span
-                          className="ml-1 inline-flex items-center gap-1 rounded border border-amber-400/40 bg-amber-500/15 px-1.5 py-0.5 text-[9px] font-bold text-amber-300"
-                          title="Request sent by the Qronos CLI"
-                        >
-                          CLI
                         </span>
                       )}
                     </td>
