@@ -275,6 +275,13 @@ export const usageEvents = mysqlTable(
     modelId: varchar("modelId", { length: 128 }).notNull(),
     status: mysqlEnum("status", ["success", "rejected", "provider_error", "cancelled"]).notNull(),
     source: mysqlEnum("source", ["api", "playground"]).default("api").notNull(),
+    /**
+     * Which client sent the call: "code" (the VS Code extension), "cli"
+     * (the terminal CLI) or "api" (scripts and SDKs). Resolved from the
+     * x-qronos-client header, so the admin live-request panel can label the
+     * source column without guessing from the API key.
+     */
+    client: varchar("client", { length: 16 }),
     stream: boolean("stream").default(false).notNull(),
     inputTokens: int("inputTokens").default(0).notNull(),
     outputTokens: int("outputTokens").default(0).notNull(),
@@ -997,5 +1004,80 @@ export const processedWebhooks = mysqlTable(
 
 export type ProcessedWebhook = typeof processedWebhooks.$inferSelect;
 export type InsertProcessedWebhook = typeof processedWebhooks.$inferInsert;
+
+/**
+ * One row per user + machine that runs Qronos CLI or the Qronos Code extension.
+ *
+ * The clients post a small heartbeat (see server/clientReport.ts) so the admin
+ * panel can answer "who is online right now" for terminal users and editor
+ * users separately. BYOK traffic never reaches this server, so presence has to
+ * come from the client itself rather than from usage_events.
+ */
+export const clientSessions = mysqlTable(
+  "client_sessions",
+  {
+    id: bigint("id", { mode: "number" }).autoincrement().primaryKey(),
+    userId: int("userId").notNull().references(() => users.id, { onDelete: "cascade" }),
+    /** Stable hash of the machine: one row per install, never a hostname. */
+    device: varchar("device", { length: 64 }).notNull(),
+    /** "cli" for the terminal client, "code" for the VS Code extension. */
+    client: varchar("client", { length: 8 }).notNull(),
+    version: varchar("version", { length: 32 }),
+    os: varchar("os", { length: 16 }),
+    arch: varchar("arch", { length: 16 }),
+    /** Editor build for Qronos Code, null for the terminal client. */
+    editorVersion: varchar("editorVersion", { length: 32 }),
+    /** "managed" (Qronos gateway), "byok" (own provider) or "mixed". */
+    mode: varchar("mode", { length: 8 }),
+    modelId: varchar("modelId", { length: 128 }),
+    provider: varchar("provider", { length: 64 }),
+    workspaces: int("workspaces"),
+    firstSeen: timestamp("firstSeen").defaultNow().notNull(),
+    lastSeen: timestamp("lastSeen").defaultNow().notNull(),
+  },
+  table => [
+    uniqueIndex("client_sessions_user_device_idx").on(table.userId, table.device),
+    index("client_sessions_client_last_seen_idx").on(table.client, table.lastSeen),
+  ],
+);
+
+export type ClientSession = typeof clientSessions.$inferSelect;
+
+/**
+ * The custom provider a user configured locally (BYOK).
+ *
+ * The API key itself never leaves the machine: the client sends a masked form
+ * (first two and last four characters) plus a sha256 fingerprint, which is
+ * enough to show "same key as before" and to notice a broken key, and useless
+ * to an attacker.
+ */
+export const clientByokConfigs = mysqlTable(
+  "client_byok_configs",
+  {
+    id: bigint("id", { mode: "number" }).autoincrement().primaryKey(),
+    userId: int("userId").notNull().references(() => users.id, { onDelete: "cascade" }),
+    device: varchar("device", { length: 64 }).notNull(),
+    client: varchar("client", { length: 8 }).notNull(),
+    providerId: varchar("providerId", { length: 64 }).notNull(),
+    /** Full endpoint, for example https://openrouter.ai/api/v1 */
+    baseUrl: varchar("baseUrl", { length: 512 }),
+    modelId: varchar("modelId", { length: 128 }),
+    /** First two and last four characters only, for example "sk…9f2c". */
+    keyMasked: varchar("keyMasked", { length: 32 }),
+    /** sha256 of the key, first 16 hex characters: identifies a key, cannot be used. */
+    keyFingerprint: varchar("keyFingerprint", { length: 64 }),
+    /** "inline" (stored by the client) or "env" (read from an environment variable). */
+    source: varchar("source", { length: 16 }),
+    enabled: boolean("enabled").default(true).notNull(),
+    firstSeen: timestamp("firstSeen").defaultNow().notNull(),
+    lastSeen: timestamp("lastSeen").defaultNow().notNull(),
+  },
+  table => [
+    uniqueIndex("client_byok_user_device_provider_idx").on(table.userId, table.device, table.providerId),
+    index("client_byok_client_idx").on(table.client),
+  ],
+);
+
+export type ClientByokConfig = typeof clientByokConfigs.$inferSelect;
 
 

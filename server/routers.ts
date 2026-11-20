@@ -192,6 +192,7 @@ import {
 } from "./discordBotService";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { invalidateSessionAuthCache, sdk } from "./_core/sdk";
+import { getClientOverview, getClientUsers, getClientModelMix, getClientByokConfigs, getUserClientDetail, pruneClientTelemetry } from "./clientTelemetry";
 import { systemRouter } from "./_core/systemRouter";
 import { adminProcedure, protectedProcedure, publicProcedure, router, verifiedDeveloperProcedure } from "./_core/trpc";
 import { configuredEmailAllowlist } from "./localAuth";
@@ -1069,6 +1070,40 @@ export const appRouter = router({
       return { success: true } as const;
     }),
     overview: adminProcedure.query(() => getAdminOverview()),
+    /**
+     * Qronos CLI / Qronos Code tabs.
+     *
+     * Presence and the BYOK view come from the client heartbeat
+     * (server/clientReport.ts). Requests and tokens come from usage_events.
+     * BYOK traffic never reaches this server, so the heartbeat is the only
+     * source for that side.
+     */
+    clients: router({
+      overview: adminProcedure
+        .input(z.object({ client: z.enum(["cli", "code"]), window: z.number().int().min(1).max(129600).default(15) }))
+        .query(({ input }) => getClientOverview(input.client, input.window)),
+      users: adminProcedure
+        .input(
+          z.object({
+            client: z.enum(["cli", "code"]),
+            window: z.number().int().min(1).max(129600).default(1440),
+            limit: z.number().int().min(1).max(500).default(100),
+          }),
+        )
+        .query(({ input }) => getClientUsers(input.client, input.window, input.limit)),
+      models: adminProcedure
+        .input(z.object({ client: z.enum(["cli", "code"]), window: z.number().int().min(1).max(129600).default(1440) }))
+        .query(({ input }) => getClientModelMix(input.client, input.window)),
+      byok: adminProcedure
+        .input(z.object({ client: z.enum(["cli", "code"]).optional(), limit: z.number().int().min(1).max(500).default(200) }))
+        .query(({ input }) => getClientByokConfigs(input.client, input.limit)),
+      detail: adminProcedure
+        .input(z.object({ userId: z.number().int().positive() }))
+        .query(({ input }) => getUserClientDetail(input.userId)),
+      prune: adminProcedure
+        .input(z.object({ days: z.number().int().min(7).max(365).default(90) }))
+        .mutation(({ input }) => pruneClientTelemetry(input.days)),
+    }),
     listNotifications: adminProcedure.query(async () => {
       return await listAdminNotifications();
     }),

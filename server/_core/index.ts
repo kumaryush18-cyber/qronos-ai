@@ -16,6 +16,7 @@ import { registerDiscordOAuthRoutes } from "../discordOAuth";
 import { registerStorageProxy } from "./storageProxy";
 import { registerOpenAiGateway, registerPlaygroundGateway } from "../openaiGateway";
 import { registerLiveRequestRoutes } from "./liveRequests";
+import { registerClientReportRoutes } from "../clientReport";
 import { registerAnthropicMessagesGateway } from "../anthropicGateway";
 import { registerManagedFailureLogRetention } from "../managedFailureLogRetention";
 import { registerSolanaPayGateway } from "../solanaPayGateway";
@@ -182,6 +183,7 @@ async function startServer() {
   registerQronosCompatApi(app);
   registerDiscordOAuthRoutes(app);
   registerLiveRequestRoutes(app);
+  registerClientReportRoutes(app);
   registerOpenAiGateway(app);
   registerAnthropicMessagesGateway(app);
   registerPlaygroundGateway(app);

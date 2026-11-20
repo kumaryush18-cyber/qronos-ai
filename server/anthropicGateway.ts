@@ -1124,7 +1124,6 @@ async function handleNativeTokenRouterMessagesRequest(req: Request, res: Respons
       apiKeyId: key.id,
       modelId: model,
       source: "api",
-      client,
       stream: false,
       status: "success",
       ...tokens,
@@ -1284,7 +1283,6 @@ async function handleNativeTokenRouterMessagesRequest(req: Request, res: Respons
       apiKeyId: key.id,
       modelId: model,
       source: "api",
-      client,
       stream: true,
       status: clientDisconnected ? "cancelled" : (failed ? "provider_error" : "success"),
       ...tokens,
@@ -1552,6 +1550,7 @@ export function registerAnthropicMessagesGateway(app: Express) {
           apiKeyId: key.id,
           modelId: model,
           source: "api",
+          client,
           stream: Boolean(input.stream),
           status: "rejected",
           sourceIpHash: ipHash,
@@ -1565,7 +1564,7 @@ export function registerAnthropicMessagesGateway(app: Express) {
       const message = publicProviderErrorMessage();
       const rawError = providerContext.rawErrorMessage || (error instanceof Error ? error.message : "Anthropic Messages provider request did not complete");
       await settleReservedCredit({ userId: key.userId, requestId, reservedNanos, finalChargeNanos: 0, releaseReason: "Anthropic Messages provider request did not complete" });
-      await recordUsage({ requestId, userId: key.userId, apiKeyId: key.id, modelId: model, source: "api", stream: Boolean(input.stream), status: "provider_error", sourceIpHash: ipHash, provider: finalizeProviderLabel(providerContext.providerLabel, providerContext), latencyMs: Date.now() - startedAt, errorMessage: message, rawErrorMessage: rawError });
+      await recordUsage({ requestId, userId: key.userId, apiKeyId: key.id, modelId: model, source: "api", client, stream: Boolean(input.stream), status: "provider_error", sourceIpHash: ipHash, provider: finalizeProviderLabel(providerContext.providerLabel, providerContext), latencyMs: Date.now() - startedAt, errorMessage: message, rawErrorMessage: rawError });
       return respondError(res, requestId, 503, "api_error", message);
     }
     // The upstream accepted the request and returned headers; retain only the hosting request ceiling for body/SSE completion.
@@ -1586,6 +1585,7 @@ export function registerAnthropicMessagesGateway(app: Express) {
           apiKeyId: key.id,
           modelId: model,
           source: "api",
+          client,
           stream: Boolean(input.stream),
           status: "rejected",
           sourceIpHash: ipHash,
@@ -1621,7 +1621,7 @@ export function registerAnthropicMessagesGateway(app: Express) {
         const rawError = providerContext.rawErrorMessage
           || (payload?.error?.message ? `[${providerContext.providerLabel || 'Upstream'} HTTP ${upstream.status}] ${payload.error.message}` : `[${providerContext.providerLabel || 'Upstream'}] HTTP ${upstream.status} returned by upstream provider`);
         await settleReservedCredit({ userId: key.userId, requestId, reservedNanos, finalChargeNanos: 0, releaseReason: "Anthropic Messages provider returned an error" });
-        await recordUsage({ requestId, userId: key.userId, apiKeyId: key.id, modelId: model, source: "api", stream: Boolean(input.stream), status: "provider_error", sourceIpHash: ipHash, provider: finalizeProviderLabel(providerContext.providerLabel, providerContext), latencyMs: Date.now() - startedAt, errorMessage: message, rawErrorMessage: rawError });
+        await recordUsage({ requestId, userId: key.userId, apiKeyId: key.id, modelId: model, source: "api", client, stream: Boolean(input.stream), status: "provider_error", sourceIpHash: ipHash, provider: finalizeProviderLabel(providerContext.providerLabel, providerContext), latencyMs: Date.now() - startedAt, errorMessage: message, rawErrorMessage: rawError });
         const status = publicProviderFailureStatus(upstream.status);
         return respondError(res, requestId, status, "api_error", message);
       }
@@ -1635,7 +1635,7 @@ export function registerAnthropicMessagesGateway(app: Express) {
         const message = publicProviderErrorMessage();
         const rawError = providerContext.rawErrorMessage || `[${providerContext.providerLabel || 'Upstream'}] Empty or zero-output response returned by provider.`;
         await settleReservedCredit({ userId: key.userId, requestId, reservedNanos, finalChargeNanos: 0, keyGroup, releaseReason: "Anthropic Messages provider returned an invalid response" });
-        await recordUsage({ requestId, userId: key.userId, apiKeyId: key.id, modelId: model, source: "api", stream: false, status: "provider_error", sourceIpHash: ipHash, provider: finalizeProviderLabel(providerContext.providerLabel, providerContext), latencyMs: Date.now() - startedAt, errorMessage: message, rawErrorMessage: rawError });
+        await recordUsage({ requestId, userId: key.userId, apiKeyId: key.id, modelId: model, source: "api", client, stream: false, status: "provider_error", sourceIpHash: ipHash, provider: finalizeProviderLabel(providerContext.providerLabel, providerContext), latencyMs: Date.now() - startedAt, errorMessage: message, rawErrorMessage: rawError });
         return respondError(res, requestId, 503, "api_error", message);
       }
       try {
@@ -1719,6 +1719,7 @@ export function registerAnthropicMessagesGateway(app: Express) {
           apiKeyId: key.id,
           modelId: model,
           source: "api",
+          client,
           stream: false,
           status: "success",
           ...tokens,
@@ -1764,7 +1765,7 @@ export function registerAnthropicMessagesGateway(app: Express) {
         const message = publicProviderErrorMessage();
         const rawError = `[Translation Error] ${error instanceof Error ? error.message : "Anthropic Messages response translation failed"}`;
         await settleReservedCredit({ userId: key.userId, requestId, reservedNanos, finalChargeNanos: 0, keyGroup, releaseReason: "Anthropic Messages response translation failed" });
-        await recordUsage({ requestId, userId: key.userId, apiKeyId: key.id, modelId: model, source: "api", stream: false, status: "provider_error", sourceIpHash: ipHash, provider: finalizeProviderLabel(providerContext.providerLabel, providerContext), latencyMs: Date.now() - startedAt, errorMessage: message, rawErrorMessage: rawError });
+        await recordUsage({ requestId, userId: key.userId, apiKeyId: key.id, modelId: model, source: "api", client, stream: false, status: "provider_error", sourceIpHash: ipHash, provider: finalizeProviderLabel(providerContext.providerLabel, providerContext), latencyMs: Date.now() - startedAt, errorMessage: message, rawErrorMessage: rawError });
         return respondError(res, requestId, 503, "api_error", message);
       }
     }

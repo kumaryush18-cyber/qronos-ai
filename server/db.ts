@@ -48,6 +48,8 @@ import {
   discordBotMessages,
   discordMemberProfiles,
   discordChannelSummaries,
+  clientSessions,
+  clientByokConfigs,
 } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 import { hashPassword, isPermanentEmailAddress, normalizeEmail, nextFailedLoginState, normalizeEmailAllowlistEntries, retryAfterSeconds, verifyPassword } from "./localAuth";
@@ -7160,11 +7162,12 @@ export async function recordUsage(input: {
 }
 
 /** Returns the most recent usage events for the admin live request log snapshot. */
-export async function getRecentLiveRequests(limit = 25): Promise<LiveRequestEvent[]> {
+export async function getRecentLiveRequests(limit = 25, onlyUserId?: number): Promise<LiveRequestEvent[]> {
   const db = await getDb();
   if (!db) return [];
   const bounded = Math.min(Math.max(Math.floor(limit), 1), 100);
-  const rows = await db
+  const selectRows = (withClient: boolean) =>
+    db
     .select({
       requestId: usageEvents.requestId,
       userId: usageEvents.userId,
@@ -7172,6 +7175,9 @@ export async function getRecentLiveRequests(limit = 25): Promise<LiveRequestEven
       modelId: usageEvents.modelId,
       status: usageEvents.status,
       source: usageEvents.source,
+      // The client column arrives with a migration; until then the panel still
+      // works and falls back to the API-key guess.
+      client: withClient ? usageEvents.client : sql<string | null>`null`,
       stream: usageEvents.stream,
       inputTokens: usageEvents.inputTokens,
       outputTokens: usageEvents.outputTokens,
@@ -7194,17 +7200,30 @@ export async function getRecentLiveRequests(limit = 25): Promise<LiveRequestEven
     .from(usageEvents)
     .leftJoin(users, eq(usageEvents.userId, users.id))
     .leftJoin(apiKeys, eq(usageEvents.apiKeyId, apiKeys.id))
+    .where(onlyUserId === undefined ? undefined : eq(usageEvents.userId, onlyUserId))
     .orderBy(desc(usageEvents.createdAt))
     .limit(bounded);
+
+  let rows: Awaited<ReturnType<typeof selectRows>>;
+  try {
+    rows = await selectRows(true);
+  } catch (err) {
+    console.warn("[getRecentLiveRequests] client column missing, falling back:", err);
+    rows = await selectRows(false);
+  }
   return rows.map(row => ({
     requestId: row.requestId,
     userId: row.userId,
     apiKeyId: row.apiKeyId ?? undefined,
     // Which client the stored row came from: guessed from the key it used, so
     // old rows show the right badge too (the column is not stored for usage rows).
+    // The header tag is stored with the row; older rows fall back to a guess
+    // from the API key, which is all the old data allows.
     client: row.source === "playground"
       ? undefined
-      : clientTagFromApiKey({ label: row.apiKeyLabel, keyGroup: row.apiKeyGroup }),
+      : (row.client === "code" || row.client === "cli" || row.client === "api"
+          ? row.client
+          : clientTagFromApiKey({ label: row.apiKeyLabel, keyGroup: row.apiKeyGroup })),
     modelId: row.modelId,
     status: row.status,
     source: row.source,
@@ -7244,6 +7263,7 @@ export async function getUsageLogs(input: { userId: number; modelId?: string; so
       requestId: usageEvents.requestId,
       createdAt: usageEvents.createdAt,
       source: usageEvents.source,
+      client: usageEvents.client,
       stream: usageEvents.stream,
       status: usageEvents.status,
       modelId: usageEvents.modelId,

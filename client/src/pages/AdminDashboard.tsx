@@ -2,6 +2,7 @@ import AdminSupport from "./admin/Support";
 import React, { useState, useEffect, useMemo } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import LiveRequestLog from "./LiveRequestLog";
+import AdminClientPanel from "./AdminClientPanel";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -96,6 +97,8 @@ export type AdminSection =
   | "operations"
   | "announcement"
   | "activity"
+  | "qronos-cli"
+  | "qronos-code"
   | "live"
   | "live-chat";
 
@@ -494,6 +497,8 @@ export default function AdminDashboard({ initialSection }: { initialSection?: Ad
             "operations",
             "announcement",
             "activity",
+            "qronos-cli",
+            "qronos-code",
             "live",
             "live-chat",
           ] as const
@@ -545,6 +550,10 @@ export default function AdminDashboard({ initialSection }: { initialSection?: Ad
               ? "Operations"
               : item === "announcement"
               ? "Announcement"
+              : item === "qronos-cli"
+              ? "Qronos CLI"
+              : item === "qronos-code"
+              ? "Qronos Code"
               : item === "live"
               ? "Live requests"
               : item === "live-chat"
@@ -720,6 +729,12 @@ export default function AdminDashboard({ initialSection }: { initialSection?: Ad
           exporting={auditExport.isFetching}
         />
 
+      )}
+      {section === "qronos-cli" && (
+        <AdminClientPanel kind="cli" />
+      )}
+      {section === "qronos-code" && (
+        <AdminClientPanel kind="code" />
       )}
       {section === "live" && (
         <div className="space-y-6">

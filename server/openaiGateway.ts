@@ -5854,7 +5854,7 @@ export function registerOpenAiGateway(app: Express) {
       const message = publicProviderErrorMessage();
       const rawError = providerContext.rawErrorMessage || (error instanceof Error ? error.message : "Provider request did not complete");
       await settleReservedCredit({ userId: key.userId, requestId, reservedNanos, finalChargeNanos: 0, releaseReason: "Provider request did not complete" });
-      await recordUsage({ requestId, userId: key.userId, apiKeyId: key.id, modelId: input.model, source: "api", stream: Boolean(input.stream), status: "provider_error", sourceIpHash: ipHash, provider: finalizeProviderLabel(providerContext.providerLabel, providerContext), latencyMs: Date.now() - startedAt, errorMessage: message, rawErrorMessage: rawError });
+      await recordUsage({ requestId, userId: key.userId, apiKeyId: key.id, modelId: input.model, source: "api", client, stream: Boolean(input.stream), status: "provider_error", sourceIpHash: ipHash, provider: finalizeProviderLabel(providerContext.providerLabel, providerContext), latencyMs: Date.now() - startedAt, errorMessage: message, rawErrorMessage: rawError });
       return errorResponse(res, requestId, 503, message, "provider_unavailable");
     }
 
@@ -5888,7 +5888,7 @@ export function registerOpenAiGateway(app: Express) {
       const rawError = providerContext.rawErrorMessage
         || (payload?.error?.message ? `[${providerContext.providerLabel || 'Upstream'} HTTP ${upstream.status}] ${payload.error.message}` : `[${providerContext.providerLabel || 'Upstream'}] HTTP ${upstream.status} returned by upstream provider`);
       await settleReservedCredit({ userId: key.userId, requestId, reservedNanos, finalChargeNanos: 0, releaseReason: "Provider request was not completed" });
-      await recordUsage({ requestId, userId: key.userId, apiKeyId: key.id, modelId: input.model, source: "api", stream: Boolean(input.stream), status: "provider_error", sourceIpHash: ipHash, provider: finalizeProviderLabel(providerContext.providerLabel, providerContext), latencyMs: Date.now() - startedAt, errorMessage: message, rawErrorMessage: rawError });
+      await recordUsage({ requestId, userId: key.userId, apiKeyId: key.id, modelId: input.model, source: "api", client, stream: Boolean(input.stream), status: "provider_error", sourceIpHash: ipHash, provider: finalizeProviderLabel(providerContext.providerLabel, providerContext), latencyMs: Date.now() - startedAt, errorMessage: message, rawErrorMessage: rawError });
       const status = publicProviderFailureStatus(upstream.status);
       return errorResponse(res, requestId, status, message, "provider_unavailable");
     }
@@ -5901,7 +5901,7 @@ export function registerOpenAiGateway(app: Express) {
         const message = publicProviderErrorMessage();
         const rawError = providerContext.rawErrorMessage || `[${providerContext.providerLabel || 'Upstream'}] Empty or zero-output response returned by provider.`;
         await settleReservedCredit({ userId: key.userId, requestId, reservedNanos, finalChargeNanos: 0, releaseReason: "Provider response was invalid" });
-        await recordUsage({ requestId, userId: key.userId, apiKeyId: key.id, modelId: input.model, source: "api", stream: false, status: "provider_error", sourceIpHash: ipHash, provider: finalizeProviderLabel(providerContext.providerLabel, providerContext), latencyMs: Date.now() - startedAt, errorMessage: message, rawErrorMessage: rawError });
+        await recordUsage({ requestId, userId: key.userId, apiKeyId: key.id, modelId: input.model, source: "api", client, stream: false, status: "provider_error", sourceIpHash: ipHash, provider: finalizeProviderLabel(providerContext.providerLabel, providerContext), latencyMs: Date.now() - startedAt, errorMessage: message, rawErrorMessage: rawError });
         if ((input.model === "claude-opus-5" || input.model === "claude-opus-5.5" || input.model === "gpt-6-astra") && providerContext.providerLabel) {
           const diagnostic = isClaudeOpus5ZeroOutputFailure(payload)
             ? `${input.model === "gpt-6-astra" ? "GPT-6 Astra" : "The provider"} returned a successful response with zero output tokens or no assistant output.`
