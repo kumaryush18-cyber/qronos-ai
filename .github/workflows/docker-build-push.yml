@@ -90,6 +90,14 @@ jobs:
             upsert ROUTER_INITIAL_PASSWORD "$ROUTER_INITIAL_PASSWORD"
             echo "$GHCR_PAT" | docker login ghcr.io -u kumaryush18-cyber --password-stdin
             docker compose pull
+            # Additive schema for the admin client tabs. The script skips anything
+            # that already exists, so a repeated deploy is harmless. It must run
+            # against the freshly pulled image, before the app starts.
+            if docker compose run --rm --no-deps app node scripts/ensure-client-telemetry.mjs; then
+              echo "✅ client telemetry schema ready"
+            else
+              echo "::warning::client telemetry schema was not applied; the client tabs stay empty until it is"
+            fi
             docker compose up -d --remove-orphans
             docker image prune -f
             echo "✅ Deployment completed successfully!"
