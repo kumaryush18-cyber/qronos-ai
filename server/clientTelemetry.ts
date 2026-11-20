@@ -26,6 +26,32 @@ export type ClientMode = "managed" | "byok" | "mixed";
 
 const KINDS: ClientKind[] = ["cli", "code"];
 
+/**
+ * Until `bun run db:push` has created client_sessions / client_byok_configs on a
+ * deployed database, every query against them throws "table doesn't exist".
+ * The admin panel must survive that: a missing table means "no telemetry yet",
+ * not a broken dashboard, so the deploy order cannot take the panel down.
+ * The answer is cached for a minute so it costs one cheap query, not one per tab.
+ */
+let tablesReady: { at: number; ok: boolean } | null = null;
+
+async function clientTablesReady(): Promise<boolean> {
+  if (tablesReady && Date.now() - tablesReady.at < 60_000) return tablesReady.ok;
+  const db = await getDb();
+  if (!db) return false;
+  let ok = true;
+  try {
+    await db.select({ id: clientSessions.id }).from(clientSessions).limit(1);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (!/does not exist|no such table|undefined_table|42P01|ER_NO_SUCH_TABLE/i.test(message)) throw error;
+    ok = false;
+    console.warn("[client-telemetry] client tables missing; run `bun run db:push` to enable these tabs");
+  }
+  tablesReady = { at: Date.now(), ok };
+  return ok;
+}
+
 export function isClientKind(value: unknown): value is ClientKind {
   return value === "cli" || value === "code";
 }
@@ -65,6 +91,9 @@ export interface ClientReport {
 export async function upsertClientReport(userId: number, report: ClientReport): Promise<void> {
   const db = await getDb();
   if (!db || !isClientKind(report.client)) return;
+  // Before the migration lands the heartbeat is simply dropped; the client keeps
+  // sending and the tables fill in as soon as `bun run db:push` has run.
+  if (!(await clientTablesReady())) return;
   const now = new Date();
   const clamp = (value: string | undefined, max: number) => (value ? value.slice(0, max) : undefined);
 
@@ -160,7 +189,7 @@ export async function getClientOverview(client: ClientKind, windowMinutes = 15):
     byokUsers: 0,
   };
   const db = await getDb();
-  if (!db) return empty;
+  if (!db || !(await clientTablesReady())) return empty;
   const cutoff = cutoffOf(windowMinutes);
   const nowCutoff = cutoffOf(15);
 
@@ -226,7 +255,7 @@ export async function getClientUsers(
   limit = 100,
 ): Promise<ClientUserRow[]> {
   const db = await getDb();
-  if (!db) return [];
+  if (!db || !(await clientTablesReady())) return [];
   const cutoff = cutoffOf(windowMinutes);
   const bounded = Math.max(1, Math.min(limit, 500));
 
@@ -368,7 +397,7 @@ export interface ClientByokRow {
 
 export async function getClientByokConfigs(client?: ClientKind, limit = 200): Promise<ClientByokRow[]> {
   const db = await getDb();
-  if (!db) return [];
+  if (!db || !(await clientTablesReady())) return [];
   const rows = await db
     .select({
       id: clientByokConfigs.id,
@@ -402,7 +431,7 @@ export async function getClientByokConfigs(client?: ClientKind, limit = 200): Pr
 
 export async function getUserClientDetail(userId: number) {
   const db = await getDb();
-  if (!db) return { sessions: [], byok: [], recent: [] };
+  if (!db || !(await clientTablesReady())) return { sessions: [], byok: [], recent: [] };
   const sessions = await db
     .select()
     .from(clientSessions)
@@ -422,7 +451,7 @@ export async function getUserClientDetail(userId: number) {
 /** Drop heartbeat rows for machines that have not reported in `days` days. */
 export async function pruneClientTelemetry(days = 90): Promise<number> {
   const db = await getDb();
-  if (!db) return 0;
+  if (!db || !(await clientTablesReady())) return 0;
   const cutoff = new Date(Date.now() - Math.max(1, days) * 86_400_000);
   const sessions = await db.delete(clientSessions).where(sql`${clientSessions.lastSeen} < ${cutoff}`);
   const byok = await db.delete(clientByokConfigs).where(sql`${clientByokConfigs.lastSeen} < ${cutoff}`);
