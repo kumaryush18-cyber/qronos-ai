@@ -671,8 +671,11 @@ export async function startDiscordBotService(): Promise<boolean> {
   if (client?.isReady()) return true;
   if (isStarting) return false;
 
-  const FALLBACK_DISCORD_BOT_TOKEN = "***REMOVED***";
-  const botToken = (process.env.DISCORD_BOT_TOKEN || ENV.discordBotToken || FALLBACK_DISCORD_BOT_TOKEN).trim();
+  // The token comes from the environment only. It was briefly hardcoded here as a
+  // fallback, which put a live bot token in the repository and in every image
+  // built from it. A missing token now means "stay idle", never "use the one in
+  // the source": a secret in code cannot be rotated without a release.
+  const botToken = (process.env.DISCORD_BOT_TOKEN || ENV.discordBotToken || "").trim();
   if (!botToken) {
     console.log("[DiscordBot] No DISCORD_BOT_TOKEN found; bot service idle.");
     return false;

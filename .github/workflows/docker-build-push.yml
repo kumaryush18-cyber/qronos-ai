@@ -62,11 +62,12 @@ jobs:
           GRAVITY_API_KEY: ***REMOVED*** secrets.GRAVITY_API_KEY }}
           ROUTER_INITIAL_PASSWORD: ***REMOVED*** secrets.ROUTER_INITIAL_PASSWORD }}
           GHCR_PAT: ${{ secrets.GHCR_PAT }}
+          DISCORD_BOT_TOKEN: ***REMOVED*** secrets.DISCORD_BOT_TOKEN }}
         with:
           host: ${{ secrets.AZURE_VM_HOST }}
           username: ${{ secrets.AZURE_VM_USER }}
           key: ${{ secrets.AZURE_VM_SSH_KEY }}
-          envs: GRAVITY_API_KEY,ROUTER_INITIAL_PASSWORD,GHCR_PAT
+          envs: GRAVITY_API_KEY,ROUTER_INITIAL_PASSWORD,GHCR_PAT,DISCORD_BOT_TOKEN
           script: |
             set -e
             echo "🚀 Updating Qronos AI on Azure VM..."
@@ -88,6 +89,9 @@ jobs:
             }
             upsert GRAVITY_API_KEY "$GRAVITY_API_KEY"
             upsert ROUTER_INITIAL_PASSWORD "$ROUTER_INITIAL_PASSWORD"
+            # The Discord bot token lives only here: GitHub secret -> .env on the
+            # VM -> the container. The image never carries it.
+            upsert DISCORD_BOT_TOKEN "$DISCORD_BOT_TOKEN"
             echo "$GHCR_PAT" | docker login ghcr.io -u kumaryush18-cyber --password-stdin
             docker compose pull
             # Additive schema for the admin client tabs. The script skips anything
