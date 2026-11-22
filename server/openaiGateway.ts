@@ -1382,6 +1382,15 @@ async function forwardDedicatedGlm53Request(input: ChatInput, signal: AbortSigna
   if (resolution.multimodalResponse) return resolution.multimodalResponse;
   const candidateProviders = resolution.candidates;
 
+  // "Not one provider has a key" is a different problem from "the provider said
+  // no", and the administrator can act on the first one. Saying it out loud beats
+  // a generic "temporarily unavailable" that sends him looking for a fault.
+  if (candidateProviders.length > 0 && candidateProviders.every(provider => provider.apiKeys.length === 0)) {
+    throw new Error(
+      `Qronos AI ${displayName} has no API key saved. Add a credential for this model in the admin provider panel.`
+    );
+  }
+
   let lastError: unknown = null;
   let lastStatus: number | null = null;
 

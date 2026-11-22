@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  defaultUniversalModelRuntime,
   getUniversalModelRuntimeConfig,
   getUniversalModelProviderSettings,
   updateUniversalModelProviderSettings,
@@ -70,5 +71,28 @@ describe("Universal Model Providers & Credential Observability", () => {
     expect(models.length).toBeGreaterThan(0);
     const configured = models.find(m => m.modelId === "test-llama-4-pro");
     expect(configured?.configured).toBe(true);
+  });
+});
+
+describe("a provider with no saved credential", () => {
+  it("carries no key at all, instead of an invented placeholder", () => {
+    // The old default was the literal "sk-qronos-placeholder". It went upstream,
+    // the provider answered 401 "invalid api key", and the administrator was told
+    // his freshly pasted key was bad when in truth it had never been saved.
+    const previous = process.env.TOKENROUTER_API_KEY;
+    const previousPool = process.env.TOKENROUTER_API_KEYS;
+    const previousOpenAi = process.env.OPENAI_API_KEY;
+    delete process.env.TOKENROUTER_API_KEY;
+    delete process.env.TOKENROUTER_API_KEYS;
+    delete process.env.OPENAI_API_KEY;
+    try {
+      const runtime = defaultUniversalModelRuntime("mercury-3");
+      expect(runtime.providers[0]!.apiKeys).toEqual([]);
+      expect(JSON.stringify(runtime)).not.toContain("placeholder");
+    } finally {
+      if (previous !== undefined) process.env.TOKENROUTER_API_KEY = previous;
+      if (previousPool !== undefined) process.env.TOKENROUTER_API_KEYS = previousPool;
+      if (previousOpenAi !== undefined) process.env.OPENAI_API_KEY = previousOpenAi;
+    }
   });
 });

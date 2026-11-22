@@ -102,9 +102,15 @@ export function defaultUniversalModelRuntime(modelId: string): UniversalModelRun
   const normalized = modelId.trim().toLowerCase();
   const modelDef = getTokenForgeModel(normalized);
   const tokenRouterKeys = getTokenRouterCredentialPool();
+  // Never invent a key. The old fallback was the literal string
+  // "sk-qronos-placeholder", and when an administrator had not really saved a
+  // credential the gateway still sent it upstream: the provider answered 401
+  // "invalid api key", and that looked like a bad key the admin had just pasted
+  // when in truth nothing had been saved. An empty pool makes
+  // forwardUniversalModelRequest say "not configured", which is the truth.
   const defaultKeys = tokenRouterKeys.length
     ? tokenRouterKeys
-    : [process.env.OPENAI_API_KEY?.trim() || "sk-qronos-placeholder"];
+    : (process.env.OPENAI_API_KEY?.trim() ? [process.env.OPENAI_API_KEY.trim()] : []);
 
   const defaultBaseUrl = process.env.TOKENROUTER_BASE_URL?.trim() || "https://api.tokenrouter.io/v1";
   const defaultUpstreamModel = modelDef?.upstreamModelId || modelDef?.id || normalized;
