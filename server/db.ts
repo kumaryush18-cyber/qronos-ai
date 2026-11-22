@@ -4094,7 +4094,7 @@ function gpt6AstraRuntimeFromEnvironment(): Gpt6AstraRuntimePayload {
       enabled: true,
       baseUrl: process.env.TOKENROUTER_BASE_URL?.trim() || "https://api.tokenrouter.io/v1",
       model: process.env.GPT6_ASTRA_MODEL?.trim() || "gpt-6-astra",
-      apiKeys: tokenRouterKeys.length ? tokenRouterKeys : [process.env.OPENAI_API_KEY?.trim() || "***REMOVED***"],
+      apiKeys: tokenRouterKeys.length ? tokenRouterKeys : [process.env.OPENAI_API_KEY?.trim() || ""],
     }], []),
   };
 }
@@ -4231,7 +4231,7 @@ export function kimiK3RuntimeFromEnvironment(): KimiK3RuntimePayload {
       enabled: true,
       baseUrl: process.env.TOKENROUTER_BASE_URL?.trim() || "https://api.tokenrouter.io/v1",
       model: process.env.KIMI_K3_MODEL?.trim() || "kimi-k3",
-      apiKeys: tokenRouterKeys.length ? tokenRouterKeys : [process.env.OPENAI_API_KEY?.trim() || "***REMOVED***"],
+      apiKeys: tokenRouterKeys.length ? tokenRouterKeys : [process.env.OPENAI_API_KEY?.trim() || ""],
     }], []),
   };
 }

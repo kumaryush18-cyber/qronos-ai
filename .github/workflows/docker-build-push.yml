@@ -59,10 +59,10 @@ jobs:
         # Secrets are passed as environment variables, never written into this
         # file or into the workflow log: ssh-action masks them.
         env:
-          GRAVITY_API_KEY: ***REMOVED*** secrets.GRAVITY_API_KEY }}
-          ROUTER_INITIAL_PASSWORD: ***REMOVED*** secrets.ROUTER_INITIAL_PASSWORD }}
+          GRAVITY_API_KEY: ${{ secrets.GRAVITY_API_KEY }}
+          ROUTER_INITIAL_PASSWORD: ${{ secrets.ROUTER_INITIAL_PASSWORD }}
           GHCR_PAT: ${{ secrets.GHCR_PAT }}
-          DISCORD_BOT_TOKEN: ***REMOVED*** secrets.DISCORD_BOT_TOKEN }}
+          DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
         with:
           host: ${{ secrets.AZURE_VM_HOST }}
           username: ${{ secrets.AZURE_VM_USER }}
