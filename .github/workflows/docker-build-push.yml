@@ -63,11 +63,12 @@ jobs:
           ROUTER_INITIAL_PASSWORD: ${{ secrets.ROUTER_INITIAL_PASSWORD }}
           GHCR_PAT: ${{ secrets.GHCR_PAT }}
           DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
         with:
           host: ${{ secrets.AZURE_VM_HOST }}
           username: ${{ secrets.AZURE_VM_USER }}
           key: ${{ secrets.AZURE_VM_SSH_KEY }}
-          envs: GRAVITY_API_KEY,ROUTER_INITIAL_PASSWORD,GHCR_PAT,DISCORD_BOT_TOKEN
+          envs: GRAVITY_API_KEY,ROUTER_INITIAL_PASSWORD,GHCR_PAT,DISCORD_BOT_TOKEN,DATABASE_URL
           script: |
             set -e
             echo "🚀 Updating Qronos AI on Azure VM..."
@@ -92,6 +93,9 @@ jobs:
             # The Discord bot token lives only here: GitHub secret -> .env on the
             # VM -> the container. The image never carries it.
             upsert DISCORD_BOT_TOKEN "$DISCORD_BOT_TOKEN"
+            # The database URL is a secret: GitHub secret -> .env on the VM ->
+            # the container. A new cluster can be switched in one deploy.
+            upsert DATABASE_URL "$DATABASE_URL"
             echo "$GHCR_PAT" | docker login ghcr.io -u kumaryush18-cyber --password-stdin
             docker compose pull
             # Additive schema for the admin client tabs. The script skips anything
@@ -101,6 +105,13 @@ jobs:
               echo "✅ client telemetry schema ready"
             else
               echo "::warning::client telemetry schema was not applied; the client tabs stay empty until it is"
+            fi
+            # Additive schema for the free-pi token pool in the admin panel.
+            # Same rule: skip what exists, never alter or drop anything.
+            if docker compose run --rm --no-deps app node scripts/ensure-freepi-slots.mjs; then
+              echo "✅ free-pi credential table ready"
+            else
+              echo "::warning::free-pi credential table was not applied; the free-pi admin tab stays empty until it is"
             fi
             docker compose up -d --remove-orphans
             docker image prune -f

@@ -20,6 +20,7 @@ import {
   Sonnet46ProviderBalancerPanel,
 } from "./ProvidersSection";
 import { OrcaRouterCredentialPanel } from "./OrcaRouterCredentialPanel";
+import { FreepiCredentialPanel } from "./FreepiCredentialPanel";
 import { UniversalModelProviderBalancer } from "./UniversalModelProviderBalancer";
 
 export function PinnedUserRoutingPolicyCard() {
@@ -102,7 +103,8 @@ export type ManagedProviderTabId =
   | "kimi"
   | "metrics"
   | "render-nim"
-  | "orca";
+  | "orca"
+  | "freepi";
 
 export function ManagedProviderSelector({
   keyMetrics,
@@ -263,6 +265,18 @@ export function ManagedProviderSelector({
         >
           OrcaRouter pool
         </Button>
+        <Button
+          size="sm"
+          variant={activeTab === "freepi" ? "default" : "ghost"}
+          onClick={() => setActiveTab("freepi")}
+          className={
+            activeTab === "freepi"
+              ? "bg-[#c9ff73] text-[#17210d] hover:bg-[#d8ff91]"
+              : "text-[#b7b8c7] hover:bg-white/8 hover:text-white"
+          }
+        >
+          free-pi tokens
+        </Button>
       </div>
 
       {activeTab === "universal" && (
@@ -283,6 +297,7 @@ export function ManagedProviderSelector({
       {activeTab === "metrics" && <AllProviderKeyMetricsOverviewPanel keyMetrics={keyMetrics} />}
       {activeTab === "render-nim" && <RenderNimProxySwarmPanel />}
       {activeTab === "orca" && <OrcaRouterCredentialPanel />}
+      {activeTab === "freepi" && <FreepiCredentialPanel />}
     </div>
   );
 }

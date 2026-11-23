@@ -102,6 +102,9 @@ import {
   setMaintenanceCountdown,
   getOrCreateAdminSessionPrincipal,
   replaceOrcaRouterCredentialPool,
+  listFreepiCredentialSlotSummaries,
+  setFreepiCredentialSlot,
+  removeFreepiCredentialSlot,
   getClaudeFable5NvidiaProviderSettings,
   updateClaudeFable5NvidiaProviderSettings,
   getRecentClaudeFable5FailureLogs,
@@ -200,6 +203,7 @@ import { CLAUDE_OPUS5_PROVIDER_SLUG, CLUSTER_PROTOCOL_PROVIDER_SLUG, FXQIDIAN_PR
 import { PUBLIC_PROVIDER_ERROR_MESSAGE, runPlaygroundCompletion, TokenForgePlaygroundError, tokenForgeRequestIpHash } from "./openaiGateway";
 import { verifyAdminPasscode } from "./adminPasscode";
 import { getOrcaRouterCredentialPoolStatus, getOrcaRouterSlotRequestCounts, invalidateOrcaRouterCredentialPool, ORCA_ROUTER_CREDENTIAL_POOL_SIZE, validateOrcaRouterCredential } from "./orcaRouterCredentials";
+import { FREEPI_CREDENTIAL_POOL_SIZE, invalidateFreepiCredentialPool, validateFreepiCredential } from "./freepiCredentials";
 import { buildSpecialReferralCampaignUrl } from "../shared/referrals";
 import { listUserDodoPayments, listAllDodoPayments, syncDodoPaymentsFromApi } from "./dodoPaymentsGateway";
 import { getAllEffectiveModelPricing } from "./creditPricing";
@@ -281,6 +285,13 @@ const maintenanceCountdownInput = z.object({
 }).nullable();
 const orcaRouterCredentialPoolInput = z.object({
   credentials: z.array(z.string().trim().min(20, "Enter a complete OrcaRouter credential").max(512)).length(ORCA_ROUTER_CREDENTIAL_POOL_SIZE, `Provide exactly ${ORCA_ROUTER_CREDENTIAL_POOL_SIZE} OrcaRouter credentials`),
+});
+/** One free-pi token into one slot. `replaced` only labels the audit row. */
+const freepiCredentialSlotInput = z.object({
+  slot: z.number().int().min(0).max(FREEPI_CREDENTIAL_POOL_SIZE - 1),
+  token: z.string().trim().min(1, "Paste the free-pi token").max(4096),
+  label: z.string().trim().max(64).optional(),
+  replaced: z.boolean().optional(),
 });
 const claudeFable5ProviderGroupInput = z.object({
   id: z.string().trim().regex(/^[a-z0-9][a-z0-9_-]{0,63}$/i, "Use letters, numbers, hyphens, or underscores for the provider ID"),
@@ -2255,6 +2266,54 @@ ${input.intent ? `Requested Notification Type: ${input.intent}` : ""}`;
         }
       }),
     announcement: adminProcedure.query(() => getAnnouncementText()),
+    freepiCredentials: adminProcedure.query(async () => ({
+      poolSize: FREEPI_CREDENTIAL_POOL_SIZE,
+      slots: await listFreepiCredentialSlotSummaries(),
+    })),
+    /**
+     * Saves one token into one slot, after free-pi itself confirmed it.
+     *
+     * This is the "add a token" and "replace an expired token" action in one:
+     * a slot that already holds a token is simply overwritten.
+     */
+    saveFreepiCredential: adminProcedure
+      .input(freepiCredentialSlotInput)
+      .mutation(async ({ ctx, input }) => {
+        try {
+          await validateFreepiCredential(input.token);
+        } catch (error) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: error instanceof Error ? error.message : "free-pi refused this token" });
+        }
+        const slots = await setFreepiCredentialSlot({
+          slot: input.slot,
+          token: input.token,
+          label: input.label ?? null,
+          updatedByUserId: ctx.user.id,
+        });
+        invalidateFreepiCredentialPool();
+        await writeAuditEvent({
+          actorUserId: ctx.user.id,
+          action: input.replaced === true ? "provider.freepi.token_replaced" : "provider.freepi.token_added",
+          entityType: "provider",
+          entityId: "free-pi",
+          metadata: { slot: input.slot, validation: "server_probe" },
+        });
+        return { slots };
+      }),
+    removeFreepiCredential: adminProcedure
+      .input(z.object({ slot: z.number().int().min(0).max(FREEPI_CREDENTIAL_POOL_SIZE - 1) }))
+      .mutation(async ({ ctx, input }) => {
+        const slots = await removeFreepiCredentialSlot(input.slot);
+        invalidateFreepiCredentialPool();
+        await writeAuditEvent({
+          actorUserId: ctx.user.id,
+          action: "provider.freepi.token_removed",
+          entityType: "provider",
+          entityId: "free-pi",
+          metadata: { slot: input.slot },
+        });
+        return { slots };
+      }),
     setAnnouncement: adminProcedure.input(announcementInput).mutation(async ({ ctx, input }) => {
       const text = await setAnnouncementText(input.text, ctx.user.id);
       await writeAuditEvent({

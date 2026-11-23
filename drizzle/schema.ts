@@ -528,6 +528,33 @@ export const orcaRouterCredentialSlots = mysqlTable(
   table => [uniqueIndex("orcarouter_credential_slots_slot_unique_idx").on(table.slot)],
 );
 
+/**
+ * Server-encrypted, administrator-managed free-pi tokens.
+ *
+ * A free-pi token is the credential behind the four free models (Particle,
+ * DeepSeek V4.1 Flash, GLM 5.3 Flash, DeepSeek V4 Flash). It is a secret: the
+ * plaintext is only ever decrypted for a request the server itself makes, or
+ * for an administrator's own CLI. The admin panel shows the last six
+ * characters of a SHA-256 fingerprint and nothing else.
+ */
+export const freepiCredentialSlots = mysqlTable(
+  "freepi_credential_slots",
+  {
+    id: bigint("id", { mode: "number" }).autoincrement().primaryKey(),
+    slot: int("slot").notNull(),
+    label: varchar("label", { length: 64 }),
+    ciphertext: text("ciphertext").notNull(),
+    iv: varchar("iv", { length: 32 }).notNull(),
+    authTag: varchar("authTag", { length: 32 }).notNull(),
+    keyFingerprint: varchar("keyFingerprint", { length: 16 }).notNull(),
+    lastValidatedAt: timestamp("lastValidatedAt").notNull(),
+    updatedByUserId: int("updatedByUserId").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => [uniqueIndex("freepi_credential_slots_slot_unique_idx").on(table.slot)],
+);
+
 /** Singleton-like platform settings keyed by a stable, audited identifier. */
 export const platformSettings = mysqlTable("platform_settings", {
   settingKey: varchar("settingKey", { length: 96 }).primaryKey(),

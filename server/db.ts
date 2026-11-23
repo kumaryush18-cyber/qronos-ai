@@ -29,6 +29,7 @@ import {
   modelConfigs,
   oauthIdentities,
   orcaRouterCredentialSlots,
+  freepiCredentialSlots,
   passwordCredentials,
   platformSettings,
   preProvisionedAccounts,
@@ -62,6 +63,7 @@ import { clearProviderCredentialTelemetryGroup, getCredentialSlotTelemetry, getP
 import { publishLiveRequest, type LiveRequestEvent } from "./liveRequestBus";
 import { clientTagFromApiKey } from "./clientTag";
 import { encryptOrcaRouterCredential } from "./orcaRouterCredentialVault";
+import { encryptFreepiCredential } from "./freepiCredentialVault";
 import { decryptBaiReasoningContinuation, encryptBaiReasoningContinuation } from "./baiReasoningContinuationVault";
 import { decryptGlmToolContinuation, encryptGlmToolContinuation, type GlmPrivateToolContinuation } from "./glmToolContinuationVault";
 import { decryptProviderRuntimeConfig, encryptProviderRuntimeConfig } from "./providerRuntimeConfigVault";
@@ -172,6 +174,14 @@ type AccountDeletionDatabase = Pick<NonNullable<Awaited<ReturnType<typeof getDb>
 type CreditSettlementDatabase = Pick<NonNullable<Awaited<ReturnType<typeof getDb>>>, "select" | "transaction">;
 export type EmailAllowlistConfig = { entries: string[]; updatedAt: Date; updatedByUserId: number | null };
 export type OrcaRouterCredentialSlotSummary = { slot: number; fingerprintSuffix: string; lastValidatedAt: Date; updatedAt: Date; updatedByUserId: number | null };
+export type FreepiCredentialSlotSummary = {
+  slot: number;
+  label: string | null;
+  fingerprintSuffix: string;
+  lastValidatedAt: Date;
+  updatedAt: Date;
+  updatedByUserId: number | null;
+};
 export type AdminEmailProviderCount = { provider: string; accountCount: number };
 export type UserWithDiscordVerification = typeof users.$inferSelect & { discordVerifiedAt: Date | null };
 import type { UserTier } from "../drizzle/schema";
@@ -3329,6 +3339,85 @@ export async function replaceOrcaRouterCredentialPool(credentials: readonly stri
     }
   });
   return listOrcaRouterCredentialSlotSummaries();
+}
+
+/** The free-pi slots as the panel sees them: label, fingerprint suffix, when it was checked. */
+export async function listFreepiCredentialSlotSummaries(): Promise<FreepiCredentialSlotSummary[]> {
+  const db = await getDb();
+  if (!db) return [];
+  const rows = await db.select({
+    slot: freepiCredentialSlots.slot,
+    label: freepiCredentialSlots.label,
+    keyFingerprint: freepiCredentialSlots.keyFingerprint,
+    lastValidatedAt: freepiCredentialSlots.lastValidatedAt,
+    updatedAt: freepiCredentialSlots.updatedAt,
+    updatedByUserId: freepiCredentialSlots.updatedByUserId,
+  }).from(freepiCredentialSlots).orderBy(freepiCredentialSlots.slot);
+  return rows.map(row => ({
+    slot: row.slot,
+    label: row.label ?? null,
+    fingerprintSuffix: row.keyFingerprint.slice(-6),
+    lastValidatedAt: row.lastValidatedAt,
+    updatedAt: row.updatedAt,
+    updatedByUserId: row.updatedByUserId,
+  }));
+}
+
+/** Ciphertext rows for the decrypting pool. Server-side only. */
+export async function loadFreepiCredentialSlotCiphertexts() {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select({
+    slot: freepiCredentialSlots.slot,
+    label: freepiCredentialSlots.label,
+    ciphertext: freepiCredentialSlots.ciphertext,
+    iv: freepiCredentialSlots.iv,
+    authTag: freepiCredentialSlots.authTag,
+  }).from(freepiCredentialSlots).orderBy(freepiCredentialSlots.slot);
+}
+
+/** Writes one slot, replacing whatever was there. Validation happens before this call. */
+export async function setFreepiCredentialSlot(input: {
+  slot: number;
+  token: string;
+  label?: string | null;
+  updatedByUserId: number;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("Qronos AI database is unavailable");
+  const encrypted = encryptFreepiCredential(input.token);
+  const label = input.label?.trim().slice(0, 64) || null;
+  const values = {
+    slot: input.slot,
+    label,
+    ciphertext: encrypted.ciphertext,
+    iv: encrypted.iv,
+    authTag: encrypted.authTag,
+    keyFingerprint: encrypted.keyFingerprint,
+    lastValidatedAt: new Date(),
+    updatedByUserId: input.updatedByUserId,
+  };
+  await db.insert(freepiCredentialSlots).values(values).onDuplicateKeyUpdate({
+    set: {
+      label: values.label,
+      ciphertext: values.ciphertext,
+      iv: values.iv,
+      authTag: values.authTag,
+      keyFingerprint: values.keyFingerprint,
+      lastValidatedAt: values.lastValidatedAt,
+      updatedByUserId: values.updatedByUserId,
+      updatedAt: new Date(),
+    },
+  });
+  return listFreepiCredentialSlotSummaries();
+}
+
+/** Empties one slot. The pool simply has one fewer token. */
+export async function removeFreepiCredentialSlot(slot: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Qronos AI database is unavailable");
+  await db.delete(freepiCredentialSlots).where(eq(freepiCredentialSlots.slot, slot));
+  return listFreepiCredentialSlotSummaries();
 }
 
 /** Returns the currently published public announcement, normalized so whitespace-only values remain unpublished. */
