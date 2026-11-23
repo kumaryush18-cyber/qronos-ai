@@ -76,7 +76,9 @@ jobs:
             # Upsert one KEY=value line without ever printing the value.
             upsert() {
               key="$1"
-              value="$2"
+              # A secret that arrives with a trailing CR/LF would write a broken
+              # line into .env (the value then contains a newline). Strip it.
+              value=$(printf '%s' "$2" | tr -d '\r\n')
               if [ -z "$value" ]; then
                 echo "::warning::$key is empty in GitHub secrets; keeping the value already on the VM"
                 return 0
@@ -96,6 +98,11 @@ jobs:
             # The database URL is a secret: GitHub secret -> .env on the VM ->
             # the container. A new cluster can be switched in one deploy.
             upsert DATABASE_URL "$DATABASE_URL"
+            # Proof that the value landed, without ever printing the password:
+            # only the host and the database name are shown.
+            if grep -q '^DATABASE_URL=' .env; then
+              echo "db target: $(grep '^DATABASE_URL=' .env | sed -E 's|^DATABASE_URL=[^@]*@||; s|\?.*$||')"
+            fi
             echo "$GHCR_PAT" | docker login ghcr.io -u kumaryush18-cyber --password-stdin
             docker compose pull
             # Additive schema for the admin client tabs. The script skips anything
