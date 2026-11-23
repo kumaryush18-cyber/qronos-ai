@@ -97,11 +97,21 @@ jobs:
             upsert DISCORD_BOT_TOKEN "$DISCORD_BOT_TOKEN"
             # The database URL is a secret: GitHub secret -> .env on the VM ->
             # the container. A new cluster can be switched in one deploy.
+            # The app reads CUSTOM_DATABASE_URL before DATABASE_URL
+            # (server/_core/env.ts). A stale custom value on the VM would keep the
+            # old cluster alive no matter what this secret says, so the deploy
+            # removes the custom line and writes the one real URL.
+            if grep -q '^CUSTOM_DATABASE_URL=' .env 2>/dev/null; then
+              sed -i '/^CUSTOM_DATABASE_URL=/d' .env
+              echo "removed the stale CUSTOM_DATABASE_URL line"
+            fi
             upsert DATABASE_URL "$DATABASE_URL"
             # Proof that the value landed, without ever printing the password:
             # only the host and the database name are shown.
-            if grep -q '^DATABASE_URL=' .env; then
-              echo "db target: $(grep '^DATABASE_URL=' .env | sed -E 's|^DATABASE_URL=[^@]*@||; s|\?.*$||')"
+            if grep -q '^CUSTOM_DATABASE_URL=' .env 2>/dev/null; then
+              echo "db target: $(grep '^CUSTOM_DATABASE_URL=' .env | sed -E 's|^[^=]*=[^@]*@||; s|\?.*$||') (custom)"
+            else
+              echo "db target: $(grep '^DATABASE_URL=' .env | sed -E 's|^[^=]*=[^@]*@||; s|\?.*$||')"
             fi
             echo "$GHCR_PAT" | docker login ghcr.io -u kumaryush18-cyber --password-stdin
             docker compose pull
