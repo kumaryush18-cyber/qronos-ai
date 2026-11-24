@@ -275,7 +275,7 @@ export function ManagedProviderSelector({
               : "text-[#b7b8c7] hover:bg-white/8 hover:text-white"
           }
         >
-          free-pi tokens
+          Free model keys
         </Button>
       </div>
 

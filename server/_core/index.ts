@@ -12,6 +12,7 @@ import { registerGoogleOAuthRoutes } from "../googleOAuth";
 import { registerGitHubOAuthRoutes } from "../githubOAuth";
 import { registerGitHubDeviceAuth } from "../githubDeviceAuth";
 import { registerFreepiCliTokenRoutes } from "../freepiCliTokens";
+import { registerFreepiRoutingRoutes } from "../freepiRoutingRoute";
 import { registerQronosCompatApi } from "../qronosCompatApi";
 import { registerDiscordOAuthRoutes } from "../discordOAuth";
 import { registerStorageProxy } from "./storageProxy";
@@ -182,6 +183,7 @@ async function startServer() {
   registerGitHubDeviceAuth(app);
   // The free-pi token pool, read by the CLI of any signed-in user.
   registerFreepiCliTokenRoutes(app);
+  registerFreepiRoutingRoutes(app);
   // Kilo-compatible routes used by the Qronos Code VS Code extension (see PLAN.md).
   registerQronosCompatApi(app);
   registerDiscordOAuthRoutes(app);

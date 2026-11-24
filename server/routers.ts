@@ -204,6 +204,14 @@ import { PUBLIC_PROVIDER_ERROR_MESSAGE, runPlaygroundCompletion, TokenForgePlayg
 import { verifyAdminPasscode } from "./adminPasscode";
 import { getOrcaRouterCredentialPoolStatus, getOrcaRouterSlotRequestCounts, invalidateOrcaRouterCredentialPool, ORCA_ROUTER_CREDENTIAL_POOL_SIZE, validateOrcaRouterCredential } from "./orcaRouterCredentials";
 import { FREEPI_CREDENTIAL_POOL_SIZE, invalidateFreepiCredentialPool, validateFreepiCredential } from "./freepiCredentials";
+import {
+  composeFreepiUsageReply,
+  getFreepiUsageSnapshot,
+  invalidateFreepiUsageCache,
+  refreshAllFreepiUsage,
+  refreshFreepiUsage,
+} from "./freepiUsage";
+import { FREEPI_ROUTING_PANEL_SIZE, recentRoutingEvents, routingEventCount } from "./freepiRouting";
 import { buildSpecialReferralCampaignUrl } from "../shared/referrals";
 import { listUserDodoPayments, listAllDodoPayments, syncDodoPaymentsFromApi } from "./dodoPaymentsGateway";
 import { getAllEffectiveModelPricing } from "./creditPricing";
@@ -2271,6 +2279,39 @@ ${input.intent ? `Requested Notification Type: ${input.intent}` : ""}`;
       slots: await listFreepiCredentialSlotSummaries(),
     })),
     /**
+     * What is left in each shared key, cached for half an hour.
+     *
+     * The reply carries a slot number and a short fingerprint; never a key.
+     * A slot nobody could read is one row with `ok: false`, so one dead key
+     * never blanks the whole panel.
+     */
+    freepiUsage: adminProcedure.query(async () => composeFreepiUsageReply(await getFreepiUsageSnapshot())),
+    /** One slot, read now, ignoring the cache. Twenty-second floor per slot. */
+    refreshFreepiUsage: adminProcedure
+      .input(z.object({ slot: z.number().int().min(0).max(FREEPI_CREDENTIAL_POOL_SIZE - 1) }))
+      .mutation(async ({ input }) => {
+        const result = await refreshFreepiUsage(input.slot);
+        if (!result.ok && result.reason === "no-slot") {
+          throw new TRPCError({ code: "NOT_FOUND", message: "That slot holds no key." });
+        }
+        return result;
+      }),
+    /** Every slot, read now. One button, one round. */
+    refreshAllFreepiUsage: adminProcedure.mutation(async () =>
+      composeFreepiUsageReply(await refreshAllFreepiUsage()),
+    ),
+    /**
+     * Which key served which request, newest first.
+     *
+     * A live window in memory: it empties on the next deploy, and the panel says
+     * so. Nothing here is a ledger, and nothing here can be a key.
+     */
+    freepiRouting: adminProcedure.query(async () => ({
+      windowSize: FREEPI_ROUTING_PANEL_SIZE,
+      total: routingEventCount(),
+      events: recentRoutingEvents(),
+    })),
+    /**
      * Saves one token into one slot, after free-pi itself confirmed it.
      *
      * This is the "add a token" and "replace an expired token" action in one:
@@ -2291,6 +2332,7 @@ ${input.intent ? `Requested Notification Type: ${input.intent}` : ""}`;
           updatedByUserId: ctx.user.id,
         });
         invalidateFreepiCredentialPool();
+        invalidateFreepiUsageCache(input.slot);
         await writeAuditEvent({
           actorUserId: ctx.user.id,
           action: input.replaced === true ? "provider.freepi.token_replaced" : "provider.freepi.token_added",
@@ -2305,6 +2347,7 @@ ${input.intent ? `Requested Notification Type: ${input.intent}` : ""}`;
       .mutation(async ({ ctx, input }) => {
         const slots = await removeFreepiCredentialSlot(input.slot);
         invalidateFreepiCredentialPool();
+        invalidateFreepiUsageCache(input.slot);
         await writeAuditEvent({
           actorUserId: ctx.user.id,
           action: "provider.freepi.token_removed",
