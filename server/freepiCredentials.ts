@@ -1,5 +1,5 @@
-import { loadFreepiCredentialSlotCiphertexts } from "./db";
-import { decryptFreepiCredential } from "./freepiCredentialVault";
+import { loadFreepiCredentialSlotCiphertexts, setFreepiCredentialSlot } from "./db";
+import { decryptFreepiCredential, freepiFingerprintSuffix, freepiTokenFingerprint } from "./freepiCredentialVault";
 
 /**
  * How many free-pi tokens the panel can hold.
@@ -113,6 +113,104 @@ export async function getFreepiCredentialPool(
   }
   cachedPool = { expiresAt: current + POOL_CACHE_MS, entries };
   return entries;
+}
+
+/** The one sentence a CLI shows when the pool already holds eight tokens. */
+export const FREEPI_POOL_FULL_MESSAGE =
+  "The free-pi token pool is full. Ask a Qronos admin to remove one in the admin panel.";
+
+/**
+ * The lowest slot that holds nothing.
+ *
+ * The pool must never grow by accident, so the numbering is fixed: slot 0 is
+ * always tried first, and only a free slot is ever written by a CLI.
+ */
+export function findNextFreeFreepiSlot(
+  usedSlots: readonly number[],
+  poolSize: number = FREEPI_CREDENTIAL_POOL_SIZE,
+): number | null {
+  const used = new Set(usedSlots);
+  for (let slot = 0; slot < poolSize; slot += 1) {
+    if (!used.has(slot)) return slot;
+  }
+  return null;
+}
+
+/**
+ * The slot that already holds this exact token, if any.
+ *
+ * Both sides are secrets that never leave this function, so a plain comparison
+ * is enough; the result is a slot number, never the token.
+ */
+export function findDuplicateFreepiSlot(
+  token: string,
+  entries: readonly FreepiCredentialSelection[],
+): number | null {
+  const wanted = token.trim();
+  for (const entry of entries) {
+    if (entry.token === wanted) return entry.slot;
+  }
+  return null;
+}
+
+export type SaveFreepiCredentialResult =
+  | { ok: true; slot: number; fingerprint: string; duplicate: boolean }
+  | { ok: false; reason: "full" | "unavailable"; message: string };
+
+export type SaveFreepiCredentialDeps = {
+  /** Seam for tests: the free-pi check. Throws a plain sentence when refused. */
+  validate?: (token: string) => Promise<void>;
+  /** Seam for tests: the slots that already exist. */
+  listSlots?: () => Promise<Array<{ slot: number }>>;
+  /** Seam for tests: decrypting the pool, for the duplicate check. */
+  pool?: () => Promise<FreepiCredentialSelection[]>;
+  /** Seam for tests: the write itself. */
+  save?: (input: { slot: number; token: string; label?: string | null; updatedByUserId: number }) => Promise<unknown>;
+  fetchImpl?: typeof fetch;
+};
+
+/**
+ * Add one token to the pool, in the lowest free slot.
+ *
+ * Rules:
+ *  - the token is checked with free-pi before anything is written;
+ *  - an existing slot is never replaced, so one user cannot destroy another
+ *    user's token by signing in again;
+ *  - the same token is never stored twice;
+ *  - a full pool is a clear refusal, not a silent overwrite.
+ */
+export async function saveFreepiCredential(
+  input: { token: string; label?: string | null; userId: number },
+  deps: SaveFreepiCredentialDeps = {},
+): Promise<SaveFreepiCredentialResult> {
+  const token = input.token.trim();
+  const validate = deps.validate ?? ((value: string) => validateFreepiCredential(value, { fetchImpl: deps.fetchImpl }));
+  const listSlots = deps.listSlots ?? (() => loadFreepiCredentialSlotCiphertexts().then((rows) => rows.map((row) => ({ slot: row.slot }))));
+  const pool = deps.pool ?? (() => getFreepiCredentialPool());
+  const save = deps.save ?? setFreepiCredentialSlot;
+
+  await validate(token);
+
+  const existing = await pool();
+  const duplicateSlot = findDuplicateFreepiSlot(token, existing);
+  if (duplicateSlot !== null) {
+    const entry = existing.find((candidate) => candidate.slot === duplicateSlot);
+    return {
+      ok: true,
+      slot: duplicateSlot,
+      fingerprint: entry ? freepiFingerprintSuffix(freepiTokenFingerprint(entry.token)) : freepiFingerprintSuffix(freepiTokenFingerprint(token)),
+      duplicate: true,
+    };
+  }
+
+  const free = findNextFreeFreepiSlot((await listSlots()).map((row) => row.slot));
+  if (free === null) {
+    return { ok: false, reason: "full", message: FREEPI_POOL_FULL_MESSAGE };
+  }
+
+  await save({ slot: free, token, label: input.label ?? null, updatedByUserId: input.userId });
+  invalidateFreepiCredentialPool();
+  return { ok: true, slot: free, fingerprint: freepiFingerprintSuffix(freepiTokenFingerprint(token)), duplicate: false };
 }
 
 /** Round-robin pick, used later by the proxy phase. Kept here so the order lives in one place. */

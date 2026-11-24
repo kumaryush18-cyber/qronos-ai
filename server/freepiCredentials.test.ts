@@ -9,8 +9,12 @@ vi.mock("./db", () => dbMocks);
 import {
   FREEPI_CREDENTIAL_POOL_SIZE,
   FREEPI_MIN_TOKEN_LENGTH,
+  FREEPI_POOL_FULL_MESSAGE,
+  findDuplicateFreepiSlot,
+  findNextFreeFreepiSlot,
   getFreepiCredentialPool,
   invalidateFreepiCredentialPool,
+  saveFreepiCredential,
   selectNextFreepiCredential,
   validateFreepiCredential,
 } from "./freepiCredentials";
@@ -153,5 +157,119 @@ describe("selectNextFreepiCredential", () => {
 
   it("the pool size is the eight slots the panel shows", () => {
     expect(FREEPI_CREDENTIAL_POOL_SIZE).toBe(8);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// A CLI login fills the lowest free slot, and never replaces a token
+// ---------------------------------------------------------------------------
+
+describe("findNextFreeFreepiSlot", () => {
+  it("starts at slot 0 when the pool is empty", () => {
+    expect(findNextFreeFreepiSlot([])).toBe(0);
+  });
+
+  it("takes the lowest gap, not the highest number plus one", () => {
+    expect(findNextFreeFreepiSlot([0, 2, 3])).toBe(1);
+  });
+
+  it("is null when every slot is taken", () => {
+    expect(findNextFreeFreepiSlot([0, 1, 2, 3, 4, 5, 6, 7])).toBeNull();
+  });
+
+  it("never proposes a slot outside the pool", () => {
+    expect(findNextFreeFreepiSlot([0, 1], 2)).toBeNull();
+  });
+});
+
+describe("findDuplicateFreepiSlot", () => {
+  it("finds the same token with surrounding spaces", () => {
+    expect(findDuplicateFreepiSlot("  eyJ-same  ", [{ token: "eyJ-same", slot: 4, label: null }])).toBe(4);
+  });
+
+  it("a different token is not a duplicate", () => {
+    expect(findDuplicateFreepiSlot("eyJ-other", [{ token: "eyJ-same", slot: 4, label: null }])).toBeNull();
+  });
+});
+
+describe("saveFreepiCredential", () => {
+  const token = "eyJ-a-real-length-token";
+
+  it("checks the token first, then writes the lowest free slot", async () => {
+    const order: string[] = [];
+    const saved: Array<{ slot: number }> = [];
+    const result = await saveFreepiCredential(
+      { token, label: "main", userId: 9 },
+      {
+        validate: async () => {
+          order.push("validate");
+        },
+        pool: async () => [{ token: "eyJ-old", slot: 0, label: null }],
+        listSlots: async () => [{ slot: 0 }],
+        save: async (input) => {
+          order.push("save");
+          saved.push({ slot: input.slot });
+        },
+      },
+    );
+    expect(order).toEqual(["validate", "save"]);
+    expect(saved).toEqual([{ slot: 1 }]);
+    expect(result).toMatchObject({ ok: true, slot: 1, duplicate: false });
+    expect(result.ok && result.fingerprint).toHaveLength(6);
+  });
+
+  it("a refused token is never written", async () => {
+    let wrote = false;
+    await expect(
+      saveFreepiCredential(
+        { token, userId: 9 },
+        {
+          validate: async () => {
+            throw new Error("free-pi refused this token.");
+          },
+          pool: async () => [],
+          listSlots: async () => [],
+          save: async () => {
+            wrote = true;
+          },
+        },
+      ),
+    ).rejects.toThrow("refused");
+    expect(wrote).toBe(false);
+  });
+
+  it("the same token twice saves once and answers duplicate", async () => {
+    let writes = 0;
+    const result = await saveFreepiCredential(
+      { token, userId: 9 },
+      {
+        validate: async () => undefined,
+        pool: async () => [{ token, slot: 3, label: null }],
+        listSlots: async () => [{ slot: 3 }],
+        save: async () => {
+          writes += 1;
+        },
+      },
+    );
+    expect(result).toMatchObject({ ok: true, slot: 3, duplicate: true });
+    expect(writes).toBe(0);
+  });
+
+  it("a full pool is a refusal, not an overwrite", async () => {
+    let writes = 0;
+    const full = Array.from({ length: 8 }, (_, slot) => ({ slot }));
+    const result = await saveFreepiCredential(
+      { token, userId: 9 },
+      {
+        validate: async () => undefined,
+        pool: async () => [],
+        listSlots: async () => full,
+        save: async () => {
+          writes += 1;
+        },
+      },
+    );
+    expect(result).toEqual({ ok: false, reason: "full", message: FREEPI_POOL_FULL_MESSAGE });
+    expect(writes).toBe(0);
   });
 });

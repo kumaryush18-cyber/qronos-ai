@@ -55,3 +55,14 @@ export function decryptFreepiCredential(
 export function freepiFingerprintSuffix(keyFingerprint: string): string {
   return keyFingerprint.slice(-6);
 }
+
+/**
+ * The fingerprint of a token that is not stored yet.
+ *
+ * Same digest as `encryptFreepiCredential`, so the panel and the CLI show the
+ * same six characters for the same token. The plain token never leaves this
+ * function.
+ */
+export function freepiTokenFingerprint(token: string): string {
+  return createHash("sha256").update(token.trim()).digest("hex").slice(-10);
+}
