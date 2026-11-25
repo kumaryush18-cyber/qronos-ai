@@ -2,7 +2,7 @@ import type { Express, Request, Response } from "express";
 import { randomUUID } from "node:crypto";
 import { fetchGravityAd } from "./gravityAds";
 import { fetchThradBid } from "./thradGateway";
-import { logAdMiss } from "./adsDiagnostics";
+import { logAdMiss, adMissLine } from "./adsDiagnostics";
 
 /**
  * Ad gateway providing endpoints for Qronos CLI and terminal sessions:
@@ -73,7 +73,7 @@ export function registerAdsGateway(app: Express) {
       if (!ad) {
         // One line that names both networks, so nobody has to guess which one ran.
         // `thrad=off` is the common case: its key is not in the deploy env list.
-        logAdMiss({
+        const miss = adMissLine({
           slot,
           source: "gravity",
           fill: 0,
@@ -84,6 +84,15 @@ export function registerAdsGateway(app: Express) {
             geoHeader: req.headers["cf-ipcountry"] ? "cf" : req.headers["x-country"] ? "x" : "default",
           },
         });
+        logAdMiss({
+          slot,
+          source: "gravity",
+          fill: 0,
+          keyPresent: Boolean(process.env.GRAVITY_API_KEY),
+        });
+        // Only a request that asked for it gets the reason back, so an ordinary
+        // user never receives a line about our ad plumbing.
+        if (req.headers["x-ad-debug"] === "1") res.setHeader("x-ad-miss", miss);
         return res.status(204).end();
       }
 
