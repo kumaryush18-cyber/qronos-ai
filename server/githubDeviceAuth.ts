@@ -1,5 +1,6 @@
 import type { Express, Request, Response } from "express";
 import { randomBytes } from "node:crypto";
+import { hashEmail } from "./adRequest";
 import {
   ensureCreditAccount,
   ensureDailyCodingTokens,
@@ -334,6 +335,9 @@ export function registerGitHubDeviceAuth(app: Express) {
         handle: user.name || user.email.split("@")[0] || "developer",
         remaining_usd_today: tokens > 0 ? tokens / 1_000_000 : 0,
         cap_usd_today: 10,
+        // A hash only. The raw address never leaves this server, and the ad
+        // network needs it to credit the user; Gravity hashes the same way.
+        email_hash: hashEmail((user as any).email) ?? null,
         tier: "established",
         credit_usd: paygDollars,
         allowance_credits: Math.max(tokens, 10_000_000),

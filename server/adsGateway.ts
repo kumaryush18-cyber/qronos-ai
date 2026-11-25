@@ -3,6 +3,31 @@ import { randomUUID } from "node:crypto";
 import { fetchGravityAd } from "./gravityAds";
 import { fetchThradBid } from "./thradGateway";
 import { logAdMiss, adMissLine } from "./adsDiagnostics";
+import { recordImpression } from "./adImpressions";
+import {
+  AD_MESSAGES_HEADER,
+  AD_USER_HASH_HEADER,
+  clientIpFrom,
+  decodeMessagesHeader,
+  emailHashOf,
+  sanitizeMessages,
+} from "./adRequest";
+
+/**
+ * A pixel URL we are willing to fire: https, and a host Gravity or Thrad owns.
+ * A bare host with no path is not an impression endpoint, so it is refused.
+ */
+function realImpUrl(raw: unknown): raw is string {
+  if (typeof raw !== "string" || !raw.trim()) return false;
+  try {
+    const url = new URL(raw);
+    if (url.protocol !== "https:") return false;
+    if (url.pathname === "/" && !url.search) return false;
+    return /(^|\.)trygravity\.(ai|com)$/.test(url.hostname) || /(^|\.)thrad\.ai$/.test(url.hostname);
+  } catch {
+    return false;
+  }
+}
 
 /**
  * Ad gateway providing endpoints for Qronos CLI and terminal sessions:
@@ -13,23 +38,28 @@ export function registerAdsGateway(app: Express) {
   // GET /ads/next - called by Qronos CLI between turns to fetch the next sponsor card
   const handleAdNext = async (req: Request, res: Response) => {
     try {
-      const clientIp = ((req.headers["x-forwarded-for"] as string) || req.socket.remoteAddress || "").split(",")[0]?.trim();
+      const clientIp = clientIpFrom(req.headers as Record<string, unknown>, req.socket.remoteAddress);
       const slot = (req.query.slot as string) || "inline";
       const userAgent = req.headers["user-agent"] || "";
-      const country = (req.headers["cf-ipcountry"] as string) || (req.headers["x-country"] as string) || "US";
+      const country = (req.headers["cf-ipcountry"] as string) || (req.headers["x-country"] as string) || "";
 
-      // Contextual prompt from query or headers if provided
+      // The CLI sends its real turns in one base64url header; a bare `prompt` is
+      // only kept for an old client that has nothing better to offer.
+      const conversation = decodeMessagesHeader(req.headers[AD_MESSAGES_HEADER]);
       const prompt = (req.query.prompt as string) || (req.headers["x-user-prompt"] as string) || "Coding and AI tools";
+      const messages = conversation.length > 0 ? conversation : sanitizeMessages([{ role: "user", content: prompt }]);
+      const emailHash = emailHashOf(req.headers[AD_USER_HASH_HEADER]);
+      const surface = (req.query.surface as string) === "web" ? "web" : "cli";
 
       // 1. Try Thrad programmatic ad if API key is configured
       if (process.env.THRAD_API_KEY) {
         const thradAd = await fetchThradBid(
           {
-            summary: prompt,
+            summary: messages[0]?.content || prompt,
             keywords: ["developer tools", "coding", "software engineering"],
-            messages: [{ role: "user", content: prompt }],
+            messages,
           },
-          { ip: clientIp, userAgent, country }
+          { ip: clientIp, userAgent, country: country || undefined }
         );
 
         if (thradAd) {
@@ -66,9 +96,13 @@ export function registerAdsGateway(app: Express) {
         }
       }
 
-      // 2. Fallback to Gravity sponsor network
-      const messages = [{ role: "user", content: prompt }];
-      const ad = await fetchGravityAd(messages, clientIp, incomingGravityContext, slot);
+      // 2. Fallback to Gravity sponsor network, with the real conversation and a
+      // placement id that actually exists in the dashboard.
+      const ad = await fetchGravityAd(messages, clientIp, incomingGravityContext, slot, {
+        surface,
+        headers: req.headers as Record<string, unknown>,
+        emailHash,
+      });
 
       if (!ad) {
         // One line that names both networks, so nobody has to guess which one ran.
@@ -80,8 +114,10 @@ export function registerAdsGateway(app: Express) {
           keyPresent: Boolean(process.env.GRAVITY_API_KEY),
           extra: {
             thrad: process.env.THRAD_API_KEY ? "on" : "off",
-            country,
-            geoHeader: req.headers["cf-ipcountry"] ? "cf" : req.headers["x-country"] ? "x" : "default",
+            country: country || "unknown",
+            geoHeader: req.headers["cf-ipcountry"] ? "cf" : req.headers["x-country"] ? "x" : "none",
+            msgs: String(messages.length),
+            surface,
           },
         });
         logAdMiss({
@@ -109,9 +145,12 @@ export function registerAdsGateway(app: Express) {
           cta: ad.cta || "Learn More",
           accent: "#c9ff73",
         },
-        click_url: ad.clickUrl || ad.url || "https://trygravity.ai",
+        click_url: ad.clickUrl || ad.url || "",
         source: "gravity",
-        imp_url: ad.impUrl || "https://trygravity.ai",
+        // Only a real pixel URL is returned. A made-up one would make the client
+        // fire an impression that never happened, which is the opposite of what
+        // the network asked for.
+        ...(realImpUrl(ad.impUrl) ? { imp_url: ad.impUrl } : {}),
         placement: slot,
       });
     } catch (err) {
@@ -120,13 +159,25 @@ export function registerAdsGateway(app: Express) {
     }
   };
 
-  // POST /ads/impression - best-effort impression tracking
+  // POST /ads/impression - one honest record per drawn ad
   const handleImpression = async (req: Request, res: Response) => {
     try {
-      // Return 200 OK
-      return res.status(200).json({ ok: true });
+      const body = (req.body || {}) as {
+        ad_id?: unknown;
+        placement?: unknown;
+        source?: unknown;
+        imp_fired?: unknown;
+      };
+      const counted = recordImpression({
+        adId: typeof body.ad_id === "string" ? body.ad_id : "",
+        slot: typeof body.placement === "string" ? body.placement : undefined,
+        source: typeof body.source === "string" ? body.source : "gravity",
+        pixelFired: body.imp_fired === true,
+      });
+      // A repeat is still a 200: the client did nothing wrong, it just repainted.
+      return res.status(200).json({ ok: true, counted });
     } catch {
-      return res.status(200).json({ ok: true });
+      return res.status(200).json({ ok: true, counted: false });
     }
   };
 
@@ -138,10 +189,21 @@ export function registerAdsGateway(app: Express) {
   // POST /api/ads/gravity - pure Gravity SDK ad route for Playground and Dashboard
   app.post("/api/ads/gravity", async (req: Request, res: Response) => {
     try {
-      const clientIp = ((req.headers["x-forwarded-for"] as string) || req.socket.remoteAddress || "").split(",")[0]?.trim();
-      const { messages = [], placement = "below_response", placement_id = "main" } = req.body || {};
+      const clientIp = clientIpFrom(req.headers as Record<string, unknown>, req.socket.remoteAddress);
+      const { messages: bodyMessages = [], placement = "below_response", placement_id, surface: bodySurface } = req.body || {};
 
-      const ad = await fetchGravityAd(messages, clientIp, undefined, placement === "inline_response" ? "inline" : "banner");
+      const ad = await fetchGravityAd(
+        sanitizeMessages(bodyMessages),
+        clientIp,
+        undefined,
+        placement === "inline_response" ? "inline" : "banner",
+        {
+          surface: bodySurface === "cli" ? "cli" : "web",
+          headers: req.headers as Record<string, unknown>,
+          emailHash: emailHashOf(req.headers[AD_USER_HASH_HEADER]),
+          placementId: typeof placement_id === "string" && placement_id.trim() ? placement_id.trim() : undefined,
+        },
+      );
       if (!ad) {
         return res.status(200).json({ ads: [] });
       }
@@ -159,7 +221,7 @@ export function registerAdsGateway(app: Express) {
             brandImage: ad.brandImage,
             favicon: ad.favicon,
             placement: ad.placement,
-            placement_id,
+            placement_id: ad.placement,
           },
         ],
       });

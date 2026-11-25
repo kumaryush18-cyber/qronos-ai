@@ -1,5 +1,15 @@
 import { Gravity } from "@gravity-ai/api";
 import { adsDebugEnabled, cleanUpstreamMessage, logAdMiss } from "./adsDiagnostics";
+import {
+  countryFrom,
+  placementConfig,
+  realDevice,
+  requestSummary,
+  sanitizeMessages,
+  type AdSlot,
+  type AdSurface,
+  type FakeMessage,
+} from "./adRequest";
 
 export interface GravityAdItem {
   adText: string;
@@ -39,59 +49,84 @@ function getGravityClients() {
   return { live };
 }
 
+export interface GravityAdOptions {
+  /** Which product asked: the terminal client or the website. */
+  surface?: AdSurface;
+  /** The request headers, so the device block can be the real one. */
+  headers?: Record<string, unknown>;
+  /** A pre-hashed email (64 hex). The raw address never reaches this file. */
+  emailHash?: string;
+  /** Overrides the env placement id, when a caller already resolved it. */
+  placementId?: string;
+}
+
 export async function fetchGravityAd(
   messages: Array<{ role: string; content: string }>,
   clientIp?: string,
   incomingGravityContext?: any,
-  slot: "inline" | "banner" | string = "inline"
+  slot: "inline" | "banner" | string = "inline",
+  options: GravityAdOptions = {},
 ): Promise<GravityAdItem | null> {
   try {
+    // The real turns, capped for size only. The SDK itself forwards the last two
+    // turns, so there is no reason to pre-chew the conversation into one line.
+    const realMessages: FakeMessage[] = sanitizeMessages(messages);
     const formattedMessages =
-      messages && messages.length > 0
-        ? messages.slice(-5).map((m) => ({
-            role: m.role === "assistant" ? "assistant" : "user",
-            content: String(m.content || "").slice(0, 500),
-          }))
-        : [{ role: "user", content: "AI application development, developer tools, and database infrastructure" }];
+      realMessages.length > 0
+        ? realMessages
+        : [{ role: "user" as const, content: "AI application development, developer tools, and database infrastructure" }];
 
-    // Forward the real CLI terminal pixel context or construct compliant fallback
+    const placement = placementConfig(options.surface, slot as AdSlot);
+    if (options.placementId) placement.placement_id = options.placementId;
+
+    // Forward the real CLI terminal pixel context; build an honest fallback from
+    // the client's own headers when there is none.
+    const country = countryFrom(options.headers);
+    const device = realDevice(options.headers, clientIp);
     const gravityContext = incomingGravityContext || {
       sessionId: `gr_sess_${Date.now()}`,
       user: {
         userId: `qronos_user_${(clientIp || "anon").replace(/[^a-zA-Z0-9]/g, "").slice(0, 32)}`,
       },
-      device: {
-        ua: "qronos-cli/1.0.0 (Linux; x86_64)",
-        ip: clientIp || "20.198.88.150",
-        device_type: "desktop",
-        os: "linux",
-      },
+      device,
+      ...(country ? { country } : {}),
     };
+    // A pixel context arrives without a device block and without identity. The
+    // two facts Gravity asked for are merged in, never overwritten.
+    if (incomingGravityContext && typeof incomingGravityContext === "object") {
+      if (!gravityContext.device) gravityContext.device = device;
+      else if (!gravityContext.device.ua) gravityContext.device.ua = device.ua;
+      if (!gravityContext.device.ip && device.ip) gravityContext.device.ip = device.ip;
+      if (country && !gravityContext.country) gravityContext.country = country;
+      if (options.emailHash) {
+        gravityContext.user = { ...(gravityContext.user || {}), hashed_email: options.emailHash };
+      }
+    }
 
+    const rawUserAgent = options.headers?.["user-agent"];
     const reqMock = {
       headers: {
         ...(clientIp ? { "x-forwarded-for": clientIp, "x-real-ip": clientIp } : {}),
+        ...(typeof rawUserAgent === "string" ? { "user-agent": rawUserAgent } : {}),
       },
       body: {
         gravity_context: gravityContext,
       },
     };
 
-    // Align with registered dashboard placement IDs ('inline_response' and 'below_response' with id 'main')
-    const placementType = slot === "inline" ? "inline_response" : "below_response";
-    const placementConfig = [{ placement: placementType, placement_id: "main" }];
+    const placementConfigList = [placement];
     const { live } = getGravityClients();
 
     // 1. Attempt Live Monetized Auction Only
     let fill = 0;
     let upstreamError: unknown;
     try {
-      const liveRes = await live.getAds(reqMock, formattedMessages, placementConfig);
+      const liveRes = await live.getAds(reqMock, formattedMessages, placementConfigList);
       const liveAds = liveRes?.ads || [];
       fill = liveAds.length;
       if (liveAds.length > 0) {
         if (adsDebugEnabled()) {
-          console.warn(`[ads] filled slot=${slot} source=gravity fill=${fill}`);
+          console.warn(`[ads] filled slot=${slot} source=gravity fill=${fill} ${requestSummary(formattedMessages, placement.placement_id)}`);
         }
         const ad = liveAds[0] as any;
         return {
@@ -104,7 +139,7 @@ export async function fetchGravityAd(
           brandImage: ad.brandImage || ad.image,
           impUrl: ad.impUrl || "https://trygravity.ai",
           clickUrl: ad.clickUrl || ad.url,
-          placement: ad.placement || placementType,
+          placement: ad.placement || placement.placement_id,
           isTest: false,
         };
       }
@@ -123,6 +158,12 @@ export async function fetchGravityAd(
       keyPresent: Boolean(process.env.GRAVITY_API_KEY),
       error: upstreamError,
       loud: Boolean(upstreamError),
+      extra: {
+        placement: placement.placement_id,
+        msgs: String(formattedMessages.length),
+        ...(country ? { country } : {}),
+        emailHash: options.emailHash ? "yes" : "no",
+      },
     });
 
     // No live billable sponsor returned: return null so no fake test ad is shown
