@@ -120,8 +120,13 @@ export async function fetchGravityAd(
     // 1. Attempt Live Monetized Auction Only
     let fill = 0;
     let upstreamError: unknown;
+    let upstreamStatus = 0;
     try {
       const liveRes = await live.getAds(reqMock, formattedMessages, placementConfigList);
+      // The SDK hands back the upstream status and any error text; both are the
+      // difference between "the network has nothing" and "the network refused us".
+      upstreamStatus = liveRes?.status ?? 0;
+      if (liveRes?.error) upstreamError = liveRes.error;
       const liveAds = liveRes?.ads || [];
       fill = liveAds.length;
       if (liveAds.length > 0) {
@@ -160,6 +165,7 @@ export async function fetchGravityAd(
       loud: Boolean(upstreamError),
       extra: {
         placement: placement.placement_id,
+        upstream: String(upstreamStatus),
         msgs: String(formattedMessages.length),
         ...(country ? { country } : {}),
         emailHash: options.emailHash ? "yes" : "no",
