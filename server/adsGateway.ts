@@ -10,6 +10,7 @@ import {
   clientIpFrom,
   decodeMessagesHeader,
   emailHashOf,
+  placementConfig,
   sanitizeMessages,
 } from "./adRequest";
 
@@ -118,6 +119,9 @@ export function registerAdsGateway(app: Express) {
             geoHeader: req.headers["cf-ipcountry"] ? "cf" : req.headers["x-country"] ? "x" : "none",
             msgs: String(messages.length),
             surface,
+            // Which placement id we actually asked for: the one fact that says
+            // whether an empty slot is our mistake or the network's.
+            placement: placementConfig(surface, slot).placement_id,
           },
         });
         logAdMiss({
