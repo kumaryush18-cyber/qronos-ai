@@ -1,6 +1,6 @@
 import type { Express, Request, Response } from "express";
 import { randomUUID } from "node:crypto";
-import { fetchGravityAd } from "./gravityAds";
+import { fetchGravityAdResult } from "./gravityAds";
 import { fetchThradBid } from "./thradGateway";
 import { logAdMiss, adMissLine } from "./adsDiagnostics";
 import { recordImpression } from "./adImpressions";
@@ -99,11 +99,12 @@ export function registerAdsGateway(app: Express) {
 
       // 2. Fallback to Gravity sponsor network, with the real conversation and a
       // placement id that actually exists in the dashboard.
-      const ad = await fetchGravityAd(messages, clientIp, incomingGravityContext, slot, {
+      const gravityResult = await fetchGravityAdResult(messages, clientIp, incomingGravityContext, slot, {
         surface,
         headers: req.headers as Record<string, unknown>,
         emailHash,
       });
+      const ad = gravityResult.ad;
 
       if (!ad) {
         // One line that names both networks, so nobody has to guess which one ran.
@@ -119,9 +120,10 @@ export function registerAdsGateway(app: Express) {
             geoHeader: req.headers["cf-ipcountry"] ? "cf" : req.headers["x-country"] ? "x" : "none",
             msgs: String(messages.length),
             surface,
-            // Which placement id we actually asked for: the one fact that says
-            // whether an empty slot is our mistake or the network's.
-            placement: placementConfig(surface, slot).placement_id,
+            // Which placement id we asked for, and what the network answered.
+            // 200 with fill 0 is "nothing to sell"; 401 is "refused this key".
+            placement: gravityResult.placementId,
+            upstream: String(gravityResult.upstream),
           },
         });
         logAdMiss({
@@ -196,7 +198,7 @@ export function registerAdsGateway(app: Express) {
       const clientIp = clientIpFrom(req.headers as Record<string, unknown>, req.socket.remoteAddress);
       const { messages: bodyMessages = [], placement = "below_response", placement_id, surface: bodySurface } = req.body || {};
 
-      const ad = await fetchGravityAd(
+      const gravityResult = await fetchGravityAdResult(
         sanitizeMessages(bodyMessages),
         clientIp,
         undefined,
@@ -208,7 +210,28 @@ export function registerAdsGateway(app: Express) {
           placementId: typeof placement_id === "string" && placement_id.trim() ? placement_id.trim() : undefined,
         },
       );
+      const ad = gravityResult.ad;
       if (!ad) {
+        // The website gets the same honest answer the terminal does, so a page
+        // that shows nothing says why when asked.
+        if (req.headers["x-ad-debug"] === "1") {
+          res.setHeader(
+            "x-ad-miss",
+            adMissLine({
+              slot: placement === "inline_response" ? "inline" : "banner",
+              source: "gravity",
+              fill: gravityResult.fill,
+              keyPresent: Boolean(process.env.GRAVITY_API_KEY),
+              error: gravityResult.error,
+              extra: {
+                placement: gravityResult.placementId,
+                upstream: String(gravityResult.upstream),
+                thrad: process.env.THRAD_API_KEY ? "on" : "off",
+                surface: bodySurface === "cli" ? "cli" : "web",
+              },
+            }),
+          );
+        }
         return res.status(200).json({ ads: [] });
       }
 

@@ -60,6 +60,20 @@ export interface GravityAdOptions {
   placementId?: string;
 }
 
+export interface GravityAdResult {
+  /** The creative, or null when the slot stayed empty. */
+  ad: GravityAdItem | null;
+  /** HTTP status the Gravity API answered with. 0 = never reached. */
+  upstream: number;
+  /** Gravity's own words when it refused us. Never a key. */
+  error?: string;
+  /** Which placement id we asked for. */
+  placementId: string;
+  /** How many ads came back. */
+  fill: number;
+}
+
+/** The old shape, kept for a caller that only wants the creative. */
 export async function fetchGravityAd(
   messages: Array<{ role: string; content: string }>,
   clientIp?: string,
@@ -67,6 +81,22 @@ export async function fetchGravityAd(
   slot: "inline" | "banner" | string = "inline",
   options: GravityAdOptions = {},
 ): Promise<GravityAdItem | null> {
+  const result = await fetchGravityAdResult(messages, clientIp, incomingGravityContext, slot, options);
+  return result.ad;
+}
+
+/**
+ * The same lookup, but it also reports what Gravity answered — the difference
+ * between "the network has nothing to sell" and "the network refused this
+ * key", and the only way to say either without guessing.
+ */
+export async function fetchGravityAdResult(
+  messages: Array<{ role: string; content: string }>,
+  clientIp?: string,
+  incomingGravityContext?: any,
+  slot: "inline" | "banner" | string = "inline",
+  options: GravityAdOptions = {},
+): Promise<GravityAdResult> {
   try {
     // The real turns, capped for size only. The SDK itself forwards the last two
     // turns, so there is no reason to pre-chew the conversation into one line.
@@ -135,17 +165,22 @@ export async function fetchGravityAd(
         }
         const ad = liveAds[0] as any;
         return {
-          adText: ad.adText || ad.text || "",
-          title: ad.title || ad.brandName || "Featured Partner",
-          cta: ad.cta || "Learn More",
-          brandName: ad.brandName || ad.brand || "Sponsored Partner",
-          url: ad.clickUrl || ad.url,
-          favicon: ad.favicon,
-          brandImage: ad.brandImage || ad.image,
-          impUrl: ad.impUrl || "https://trygravity.ai",
-          clickUrl: ad.clickUrl || ad.url,
-          placement: ad.placement || placement.placement_id,
-          isTest: false,
+          ad: {
+            adText: ad.adText || ad.text || "",
+            title: ad.title || ad.brandName || "Featured Partner",
+            cta: ad.cta || "Learn More",
+            brandName: ad.brandName || ad.brand || "Sponsored Partner",
+            url: ad.clickUrl || ad.url,
+            favicon: ad.favicon,
+            brandImage: ad.brandImage || ad.image,
+            impUrl: ad.impUrl,
+            clickUrl: ad.clickUrl || ad.url,
+            placement: ad.placement || placement.placement_id,
+            isTest: false,
+          },
+          upstream: upstreamStatus,
+          placementId: placement.placement_id,
+          fill,
         };
       }
     } catch (liveErr) {
@@ -173,9 +208,15 @@ export async function fetchGravityAd(
     });
 
     // No live billable sponsor returned: return null so no fake test ad is shown
-    return null;
+    return {
+      ad: null,
+      upstream: upstreamStatus,
+      ...(upstreamError ? { error: cleanUpstreamMessage(upstreamError) } : {}),
+      placementId: placement.placement_id,
+      fill,
+    };
   } catch (err) {
     console.warn("[Gravity Ads] Fetching ad error:", err);
-    return null;
+    return { ad: null, upstream: 0, error: cleanUpstreamMessage(err), placementId: "unknown", fill: 0 };
   }
 }
