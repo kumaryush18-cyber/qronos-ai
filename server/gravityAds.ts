@@ -1,4 +1,5 @@
 import { Gravity } from "@gravity-ai/api";
+import { adsDebugEnabled, cleanUpstreamMessage, logAdMiss } from "./adsDiagnostics";
 
 export interface GravityAdItem {
   adText: string;
@@ -82,10 +83,16 @@ export async function fetchGravityAd(
     const { live } = getGravityClients();
 
     // 1. Attempt Live Monetized Auction Only
+    let fill = 0;
+    let upstreamError: unknown;
     try {
       const liveRes = await live.getAds(reqMock, formattedMessages, placementConfig);
       const liveAds = liveRes?.ads || [];
+      fill = liveAds.length;
       if (liveAds.length > 0) {
+        if (adsDebugEnabled()) {
+          console.warn(`[ads] filled slot=${slot} source=gravity fill=${fill}`);
+        }
         const ad = liveAds[0] as any;
         return {
           adText: ad.adText || ad.text || "",
@@ -102,8 +109,21 @@ export async function fetchGravityAd(
         };
       }
     } catch (liveErr) {
-      console.warn("[Gravity Ads] Live auction attempt error:", liveErr);
+      upstreamError = liveErr;
+      console.warn("[Gravity Ads] Live auction attempt error:", cleanUpstreamMessage(liveErr));
     }
+
+    // An empty placement is the normal state of a healthy network, so it is one
+    // line, and only when `QRONOS_DEBUG_ADS=1`. A real error is always logged,
+    // because a rejected key looks exactly like an empty network otherwise.
+    logAdMiss({
+      slot,
+      source: "gravity",
+      fill,
+      keyPresent: Boolean(process.env.GRAVITY_API_KEY),
+      error: upstreamError,
+      loud: Boolean(upstreamError),
+    });
 
     // No live billable sponsor returned: return null so no fake test ad is shown
     return null;
