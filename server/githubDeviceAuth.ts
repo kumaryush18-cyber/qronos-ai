@@ -13,6 +13,7 @@ import {
 import { apiKeys, users } from "../drizzle/schema";
 import { and, eq } from "drizzle-orm";
 import { QRONOS_MODEL_CATALOGUE } from "./modelCatalogue";
+import { resolveCliVersionInfo } from "./cliVersionGate";
 
 interface DeviceSession {
   sessionId: string;
@@ -306,9 +307,12 @@ export function registerGitHubDeviceAuth(app: Express) {
       };
     });
 
+    const versionInfo = resolveCliVersionInfo();
     return res.status(200).json({
-      min: "1.0.0",
-      latest: "1.0.1",
+      // Below `min` the CLI updates itself and relaunches, so an old install can
+      // never talk to this gateway. See server/cliVersionGate.ts.
+      min: versionInfo.min,
+      latest: versionInfo.latest,
       model: "claude-sonnet-5.5",
       notice: "⚡ Welcome to Qronos CLI — autonomous AI coding agent. 10M tokens active.",
       models,
